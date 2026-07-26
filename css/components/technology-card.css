@@ -1,0 +1,188 @@
+.technology-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: var(--space-3);
+
+    min-height: 270px;
+    padding: var(--space-4);
+
+    color: var(--text);
+    background:
+        radial-gradient(
+            circle at 15% 0%,
+            color-mix(
+                in srgb,
+                var(--category-accent) 11%,
+                transparent
+            ),
+            transparent 46%
+        ),
+        var(--surface);
+
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+
+    transition:
+        transform var(--transition),
+        border-color var(--transition),
+        box-shadow var(--transition);
+}
+
+.technology-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+
+    background-image:
+        linear-gradient(
+            color-mix(
+                in srgb,
+                var(--category-accent) 5%,
+                transparent
+            ) 1px,
+            transparent 1px
+        ),
+        linear-gradient(
+            90deg,
+            color-mix(
+                in srgb,
+                var(--category-accent) 5%,
+                transparent
+            ) 1px,
+            transparent 1px
+        );
+
+    background-size: 26px 26px;
+    mask-image: linear-gradient(
+        to bottom,
+        black,
+        transparent 72%
+    );
+}
+
+.technology-card:hover {
+    transform: translateY(-6px);
+    border-color:
+        color-mix(
+            in srgb,
+            var(--category-accent) 65%,
+            transparent
+        );
+    box-shadow: var(--shadow-hover);
+}
+
+.technology-card-icon {
+    position: relative;
+    z-index: 1;
+
+    width: 72px;
+    height: 72px;
+
+    display: grid;
+    place-items: center;
+
+    color: var(--category-accent);
+    background:
+        color-mix(
+            in srgb,
+            var(--category-accent) 10%,
+            transparent
+        );
+
+    border: 1px solid
+        color-mix(
+            in srgb,
+            var(--category-accent) 30%,
+            transparent
+        );
+
+    border-radius: 22px;
+    clip-path: polygon(
+        25% 6%,
+        75% 6%,
+        100% 50%,
+        75% 94%,
+        25% 94%,
+        0 50%
+    );
+
+    transition:
+        transform var(--transition),
+        filter var(--transition);
+}
+
+.technology-card:hover .technology-card-icon {
+    transform: translateY(-2px) rotate(-3deg);
+    filter: drop-shadow(
+        0 0 16px
+        color-mix(
+            in srgb,
+            var(--category-accent) 42%,
+            transparent
+        )
+    );
+}
+
+.technology-card-symbol {
+    width: 38px;
+    height: 38px;
+
+    display: block;
+    background: currentColor;
+
+    -webkit-mask-image: var(--category-icon);
+    mask-image: var(--category-icon);
+
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+
+    -webkit-mask-position: center;
+    mask-position: center;
+
+    -webkit-mask-size: contain;
+    mask-size: contain;
+}
+
+.technology-card-body {
+    position: relative;
+    z-index: 1;
+}
+
+.technology-card-body h3 {
+    margin-bottom: var(--space-1);
+    font-size: var(--font-size-xl);
+}
+
+.technology-card-body p {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.technology-card-footer {
+    position: relative;
+    z-index: 1;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--border);
+
+    color: var(--category-accent);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-bold);
+}
+
+.technology-card-footer span:last-child {
+    transition: transform var(--transition);
+}
+
+.technology-card:hover
+.technology-card-footer span:last-child {
+    transform: translateX(5px);
+}

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 9 Migration B — legacy image URL compatibility</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 9 Migration B — legacy image URL compatibility</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        // A fixed, known SUPABASE_URL — lets every test case construct
+        // legacy URLs that are unambiguously "ours" vs "someone else's",
+        // independent of whatever the real project's URL happens to be.
+        const configSrc = `
+            export const SUPABASE_URL = "https://ourproject.supabase.co";
+            export const SUPABASE_KEY = "test-key";
+        `;
+
+        const signCalls = [];
+
+        const supabaseSrc = `
+            function makeBucket() {
+                return {
+                    createSignedUrl: async (path, expiry) => {
+                        globalThis.__signCalls.push(["single", path]);
+                        if (path === "path/that/fails-to-sign.jpg") {
+                            return { data: null, error: { message: "Object not found" } };
+                        }
+                        return { data: { signedUrl: "https://ourproject.supabase.co/storage/v1/object/sign/project-images/" + path + "?token=mock" }, error: null };
+                    },
+                    createSignedUrls: async (paths, expiry) => {
+                        globalThis.__signCalls.push(["batch", paths]);
+                        return {
+                            data: paths.map(p => ({
+                                path: p,
+                                signedUrl: p === "path/that/fails-to-sign.jpg" ? null : "https://ourproject.supabase.co/storage/v1/object/sign/project-images/" + p + "?token=mock",
+                                error: p === "path/that/fails-to-sign.jpg" ? { message: "Object not found" } : null
+                            })),
+                            error: null
+                        };
+                    }
+                };
+            }
+            export const supabase = {
+                storage: { from: (bucket) => makeBucket() }
+            };
+        `;
+        globalThis.__signCalls = signCalls;
+
+        const rewrites = {
+            '"../core/supabase.js"': blobUrl(supabaseSrc),
+            '"../core/config.js"': blobUrl(configSrc)
+        };
+
+        const realSrc = await (await fetch("../js/repositories/mediaRepository.js")).text();
+        let rewritten = realSrc;
+        for (const [from, to] of Object.entries(rewrites)) {
+            rewritten = rewritten.replaceAll(from, `"${to}"`);
+        }
+
+        const {
+            resolveImageUrl,
+            resolveBuildImageUrls,
+            resolveAvatarUrl,
+            resolveAvatarUrls
+        } = await import(blobUrl(rewritten));
+
+        const OWN_LEGACY_URL = "https://ourproject.supabase.co/storage/v1/object/public/project-images/builds/legacy-cover.png";
+        const OWN_LEGACY_PATH = "builds/legacy-cover.png";
+        const OWN_LEGACY_URL_ENCODED = "https://ourproject.supabase.co/storage/v1/object/public/project-images/projects/draft-1/my%20image.jpg";
+        const OWN_LEGACY_PATH_DECODED = "projects/draft-1/my image.jpg";
+        const EXTERNAL_URL = "https://some-other-cdn.example.com/images/foo.jpg";
+        const DIFFERENT_SUPABASE_PROJECT_URL = "https://a-totally-different-project.supabase.co/storage/v1/object/public/project-images/builds/x.png";
+
+        // --- resolveImageUrl -------------------------------------------------
+
+        signCalls.length = 0;
+        const bareResult = await resolveImageUrl("projects/draft-2/cover.jpg");
+        test("resolveImageUrl: a bare path is signed normally", bareResult === "https://ourproject.supabase.co/storage/v1/object/sign/project-images/projects/draft-2/cover.jpg?token=mock", bareResult);
+        test("resolveImageUrl: bare-path case calls the single-sign endpoint with the unmodified path", signCalls[0]?.[0] === "single" && signCalls[0]?.[1] === "projects/draft-2/cover.jpg", JSON.stringify(signCalls));
+
+        signCalls.length = 0;
+        const legacyResult = await resolveImageUrl(OWN_LEGACY_URL);
+        test("resolveImageUrl: our own bucket's legacy public URL is extracted and signed", legacyResult === "https://ourproject.supabase.co/storage/v1/object/sign/project-images/builds/legacy-cover.png?token=mock", legacyResult);
+        test("resolveImageUrl: the extracted (not the original) path is what gets signed", signCalls[0]?.[1] === OWN_LEGACY_PATH, JSON.stringify(signCalls));
+
+        signCalls.length = 0;
+        const encodedResult = await resolveImageUrl(OWN_LEGACY_URL_ENCODED);
+        test("resolveImageUrl: a URL-encoded legacy path is decoded before signing", signCalls[0]?.[1] === OWN_LEGACY_PATH_DECODED, JSON.stringify(signCalls));
+        test("resolveImageUrl: the decoded path signs successfully", encodedResult.includes("sign/project-images/projects/draft-1/"), encodedResult);
+
+        signCalls.length = 0;
+        const externalResult = await resolveImageUrl(EXTERNAL_URL);
+        test("resolveImageUrl: an external (non-Supabase) URL is returned unchanged", externalResult === EXTERNAL_URL, externalResult);
+        test("resolveImageUrl: no signing call is made for an external URL", signCalls.length === 0, JSON.stringify(signCalls));
+
+        signCalls.length = 0;
+        const otherProjectResult = await resolveImageUrl(DIFFERENT_SUPABASE_PROJECT_URL);
+        test("resolveImageUrl: a different Supabase project's public URL is left unchanged (not mistaken for our own)", otherProjectResult === DIFFERENT_SUPABASE_PROJECT_URL, otherProjectResult);
+        test("resolveImageUrl: no signing call is made for a different project's URL", signCalls.length === 0, JSON.stringify(signCalls));
+
+        test("resolveImageUrl: empty/null value resolves to empty string", (await resolveImageUrl(null)) === "" && (await resolveImageUrl("")) === "");
+
+        signCalls.length = 0;
+        const failedSignResult = await resolveImageUrl(
+            "https://ourproject.supabase.co/storage/v1/object/public/project-images/path/that/fails-to-sign.jpg"
+        );
+        test("resolveImageUrl: a legacy path that fails to sign resolves to empty string, not a thrown error", failedSignResult === "", failedSignResult);
+
+        // --- resolveBuildImageUrls (batch) ------------------------------------
+
+        signCalls.length = 0;
+        const builds = [
+            { id: "b1", image_url: "projects/draft-3/cover.jpg" },       // bare
+            { id: "b2", image_url: OWN_LEGACY_URL },                     // our legacy URL
+            { id: "b3", image_url: EXTERNAL_URL },                       // external
+            { id: "b4", image_url: null },                               // none
+            { id: "b5", image_url: "projects/draft-3/cover.jpg" }        // duplicate bare path
+        ];
+        const resolvedBuilds = await resolveBuildImageUrls(builds);
+
+        test("resolveBuildImageUrls: preserves array order and length", resolvedBuilds.map(b => b.id).join(",") === "b1,b2,b3,b4,b5");
+        test("resolveBuildImageUrls: bare path signed", resolvedBuilds[0].image_url.includes("sign/project-images/projects/draft-3/cover.jpg"));
+        test("resolveBuildImageUrls: legacy own-bucket URL extracted + signed", resolvedBuilds[1].image_url.includes("sign/project-images/builds/legacy-cover.png"));
+        test("resolveBuildImageUrls: external URL passed through unchanged", resolvedBuilds[2].image_url === EXTERNAL_URL);
+        test("resolveBuildImageUrls: null image_url resolves to empty string", resolvedBuilds[3].image_url === "");
+        test("resolveBuildImageUrls: duplicate bare path also correctly signed", resolvedBuilds[4].image_url.includes("sign/project-images/projects/draft-3/cover.jpg"));
+        test("resolveBuildImageUrls: batch-signs (not one call per build) and dedupes the repeated path", signCalls.length === 1 && signCalls[0][0] === "batch" && signCalls[0][1].length === 2, JSON.stringify(signCalls));
+
+        // --- resolveAvatarUrl / resolveAvatarUrls -----------------------------
+
+        signCalls.length = 0;
+        const avatarPathResult = await resolveAvatarUrl({ id: "u1", avatar_path: "avatars/u1/500.jpg", avatar_url: "https://should-be-ignored.example.com/x.jpg" });
+        test("resolveAvatarUrl: avatar_path takes precedence over avatar_url when both are present", avatarPathResult.includes("sign/project-images/avatars/u1/500.jpg"), avatarPathResult);
+
+        signCalls.length = 0;
+        const legacyAvatarUrlResult = await resolveAvatarUrl({ id: "u2", avatar_path: null, avatar_url: "https://ourproject.supabase.co/storage/v1/object/public/project-images/avatars/u2/500.jpg" });
+        test("resolveAvatarUrl: a legacy own-bucket avatar_url (no avatar_path yet) is extracted and signed", legacyAvatarUrlResult.includes("sign/project-images/avatars/u2/500.jpg"), legacyAvatarUrlResult);
+
+        const externalAvatarResult = await resolveAvatarUrl({ id: "u3", avatar_path: null, avatar_url: EXTERNAL_URL });
+        test("resolveAvatarUrl: an external avatar_url is returned unchanged", externalAvatarResult === EXTERNAL_URL, externalAvatarResult);
+
+        test("resolveAvatarUrl: no avatar at all resolves to empty string", (await resolveAvatarUrl({ id: "u4" })) === "");
+
+        signCalls.length = 0;
+        const profiles = [
+            { id: "p1", avatar_path: "avatars/p1/500.jpg", avatar_url: null },
+            { id: "p2", avatar_path: null, avatar_url: "https://ourproject.supabase.co/storage/v1/object/public/project-images/avatars/p2/500.jpg" },
+            { id: "p3", avatar_path: null, avatar_url: EXTERNAL_URL },
+            { id: "p4", avatar_path: null, avatar_url: null }
+        ];
+        const avatarUrlByProfileId = await resolveAvatarUrls(profiles);
+
+        test("resolveAvatarUrls: avatar_path profile signed", avatarUrlByProfileId.get("p1")?.includes("sign/project-images/avatars/p1/500.jpg"));
+        test("resolveAvatarUrls: legacy avatar_url profile extracted + signed", avatarUrlByProfileId.get("p2")?.includes("sign/project-images/avatars/p2/500.jpg"));
+        test("resolveAvatarUrls: external avatar_url profile unchanged", avatarUrlByProfileId.get("p3") === EXTERNAL_URL);
+        test("resolveAvatarUrls: no-avatar profile resolves to empty string", avatarUrlByProfileId.get("p4") === "");
+        test("resolveAvatarUrls: batches both the avatar_path and the extracted legacy path into one signing call", signCalls.length === 1 && signCalls[0][0] === "batch" && signCalls[0][1].length === 2, JSON.stringify(signCalls));
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`legacyImageUrlCompatibility.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

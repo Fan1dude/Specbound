@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../assets/brand/logo/favicon.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In | Specbound</title>
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+
+<div id="toastContainer" class="toast-container"></div>
+
+<body>
+
+    <nav class="navbar" id="navbar"></nav>
+
+    <main class="auth-page" id="main">
+        <section class="auth-card card card-padding">
+            <p class="hero-badge">SPECBOUND</p>
+            <h1>Sign in</h1>
+
+            <p class="auth-subtitle">
+                Sign in to upload and manage your projects.
+            </p>
+
+            <form id="loginForm" class="auth-form">
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input id="email" type="email" placeholder="you@example.com" required autocomplete="email">
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input id="password" type="password" placeholder="Password" required autocomplete="current-password">
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="loginSubmit">
+                    Sign In
+                </button>
+            </form>
+
+            <p class="auth-switch">
+                Don't have an account?
+                <a href="signup.html">Create one</a>
+            </p>
+        </section>
+    </main>
+
+    <footer class="footer" id="footer"></footer>
+
+    <script type="module" src="../js/pages/login/app.js"></script>
+</body>
+</html>

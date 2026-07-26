@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 5C — revision view rendering</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 5C — revision view rendering</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <!-- Minimal DOM matching pages/build/build.html's element ids. -->
+    <h1 id="buildTitle"></h1>
+    <p id="buildCategory"></p>
+    <p id="buildDescription"></p>
+    <span id="buildStatus"></span>
+    <span id="buildUpdated"></span>
+    <a id="buildBuilder" href="#"></a>
+    <h3 id="creatorName"></h3>
+    <a id="creatorProfileLink" href="#"></a>
+    <div class="creator-avatar"></div>
+    <img id="buildImage">
+    <p id="overviewStatus"></p>
+    <p id="overviewVersion"></p>
+    <p id="overviewProgress"></p>
+    <p id="overviewUpdated"></p>
+    <a id="editBuildBtn" class="btn" href="#"></a>
+    <button id="restoreRevisionBtn" class="btn" hidden></button>
+    <p id="restoreRevisionHint" hidden>This revision was published before snapshot history existed and cannot be restored.</p>
+    <div id="revisionBanner" hidden>
+        <strong id="revisionBannerVersion"></strong>
+        <a id="revisionBannerLatestLink" href="#"></a>
+    </div>
+    <div id="buildSpecifications"></div>
+    <div id="buildResources"></div>
+    <div id="revisionTimeline"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        const mediaRepoSrc = `
+            export async function resolveImageUrl(value) {
+                if (!value) return "";
+                return "https://signed.example/" + encodeURIComponent(value) + "?token=mock";
+            }
+        `;
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        const mediaRepoUrl = blobUrl(mediaRepoSrc);
+
+        async function loadRewritten(path) {
+            const src = await (await fetch(path)).text();
+            const rewritten = src.replace(
+                '"../../repositories/mediaRepository.js"',
+                `"${mediaRepoUrl}"`
+            );
+            return import(blobUrl(rewritten));
+        }
+
+        const { renderRevisionView } = await loadRewritten("../js/pages/build/renderBuild.js");
+        const { renderSpecifications } = await import("../js/pages/build/renderSpecifications.js");
+        const { renderResources } = await import("../js/pages/build/renderResources.js");
+        const { renderTimeline } = await loadRewritten("../js/pages/build/renderTimeline.js");
+
+        const build = { id: "b1", slug: "my-project", title: "Current Title", status: "building", user_id: "u1" };
+
+        // --- Case A: revision WITH a captured snapshot --------------------
+        const fullRevision = {
+            id: "rev-1",
+            version: "1.0",
+            created_at: "2026-01-01T00:00:00Z",
+            snapshot_title: "Snapshot Title v1.0",
+            snapshot_description: "Snapshot description as of v1.0.",
+            category: "pc_build",
+            specifications: { cpu: "Ryzen 5" },
+            resources: [{ label: "Datasheet", url: "https://example.com/ds" }]
+        };
+
+        const revisionMedia = [
+            { id: "m1", storage_path: "projects/x/1.jpg", display_order: 0, is_cover: false },
+            { id: "m2", storage_path: "projects/x/2.jpg", display_order: 1, is_cover: true }
+        ];
+
+        const snapshotA = await renderRevisionView(build, fullRevision, revisionMedia, { canRestore: true });
+        renderSpecifications(snapshotA.specifications);
+        renderResources(snapshotA.resources);
+
+        test("snapshot title is used, not the build's current title", document.getElementById("buildTitle").textContent === "Snapshot Title v1.0", document.getElementById("buildTitle").textContent);
+        test("snapshot category is formatted", document.getElementById("buildCategory").textContent === "PC Build", document.getElementById("buildCategory").textContent);
+        test("snapshot description is shown", document.getElementById("buildDescription").textContent === "Snapshot description as of v1.0.");
+        test("cover resolves to the is_cover=true media item, not the first item", document.getElementById("buildImage").src.includes(encodeURIComponent("projects/x/2.jpg")), document.getElementById("buildImage").src);
+        test("overview version is normalized", document.getElementById("overviewVersion").textContent === "v1.0");
+        test("Edit action is hidden on a historical revision view", document.getElementById("editBuildBtn").hidden === true);
+        test("Restore button is shown when canRestore=true", document.getElementById("restoreRevisionBtn").hidden === false);
+        test("Restore button is enabled for a revision with a captured snapshot", document.getElementById("restoreRevisionBtn").disabled === false);
+        test("the restore hint stays hidden when the button is enabled", document.getElementById("restoreRevisionHint").hidden === true);
+        test("Revision banner is shown with the right version", document.getElementById("revisionBanner").hidden === false && document.getElementById("revisionBannerVersion").textContent === "v1.0");
+        test("Revision banner's latest link points back to the plain slug URL", document.getElementById("revisionBannerLatestLink").getAttribute("href") === "build.html?slug=my-project");
+        test("specifications render from the snapshot (not null)", document.getElementById("buildSpecifications").textContent.includes("Ryzen 5"));
+        test("resources render from the snapshot (not null)", document.getElementById("buildResources").textContent.includes("Datasheet"));
+
+        // --- canRestore=false hides the button --------------------------
+        document.getElementById("restoreRevisionBtn").hidden = false; // reset
+        await renderRevisionView(build, fullRevision, revisionMedia, { canRestore: false });
+        test("Restore button is hidden when canRestore=false", document.getElementById("restoreRevisionBtn").hidden === true);
+
+        // --- Case B: revision WITHOUT a captured snapshot (pre-5C) -------
+        const preRevision = {
+            id: "rev-0",
+            version: "0.9",
+            created_at: "2025-06-01T00:00:00Z",
+            snapshot_title: "", // the "not recorded" signal
+            snapshot_description: "",
+            category: null,
+            specifications: {},
+            resources: []
+        };
+
+        const snapshotB = await renderRevisionView(build, preRevision, [], { canRestore: false });
+        renderSpecifications(snapshotB.specifications);
+        renderResources(snapshotB.resources);
+
+        // Owner viewing a pre-5C revision: Restore stays visible (so it's
+        // clear the action exists) but disabled, with an explanation —
+        // restoring it would otherwise silently blank the draft's title/
+        // description/category, since there's no snapshot to restore from.
+        document.getElementById("restoreRevisionBtn").hidden = false; // reset
+        document.getElementById("restoreRevisionBtn").disabled = false;
+        document.getElementById("restoreRevisionHint").hidden = true;
+        await renderRevisionView(build, preRevision, [], { canRestore: true });
+        test("Restore button is disabled (not hidden) for a pre-5C revision with no snapshot", document.getElementById("restoreRevisionBtn").hidden === false && document.getElementById("restoreRevisionBtn").disabled === true);
+        // Not a title/tooltip attribute — disabled buttons generally don't
+        // show those on hover, so this has to be visible text.
+        test("a visible hint (not a title attribute) explains why restore is disabled", document.getElementById("restoreRevisionHint").hidden === false && document.getElementById("restoreRevisionHint").textContent.includes("cannot be restored"), document.getElementById("restoreRevisionHint").textContent);
+
+        test("pre-5C revision: title falls back to the build's current title (not blank)", document.getElementById("buildTitle").textContent === "Current Title");
+        test("pre-5C revision: category shows an honest gap notice, not a formatted category", document.getElementById("buildCategory").textContent === "Not recorded for this revision");
+        test("pre-5C revision: specifications value passed to renderSpecifications is null", snapshotB.specifications === null);
+        test("pre-5C revision: renderSpecifications(null) shows the gap notice, not \"no specifications added\"", document.getElementById("buildSpecifications").textContent.includes("not recorded"));
+        test("pre-5C revision: renderResources(null) shows the gap notice, not \"no resources added\"", document.getElementById("buildResources").textContent.includes("not recorded"));
+        test("pre-5C revision: no cover media falls back to the placeholder", document.getElementById("buildImage").src.includes("default-cover.svg"));
+
+        // --- Timeline links each entry to ?revision={id} -----------------
+        await renderTimeline(
+            [
+                { id: "rev-1", version: "1.0", created_at: "2026-01-01T00:00:00Z", title: "Initial publish" },
+                { id: "rev-2", version: "1.1", created_at: "2026-01-02T00:00:00Z", title: "Documentation update" }
+            ],
+            "my-project"
+        );
+
+        const versionLinks = Array.from(document.querySelectorAll(".journal-version"));
+        test("timeline renders a link per revision", versionLinks.length === 2, `got ${versionLinks.length}`);
+        test(
+            "each timeline entry links to its own revision id, newest first",
+            versionLinks[0]?.getAttribute("href") === "build.html?slug=my-project&revision=rev-2" &&
+                versionLinks[1]?.getAttribute("href") === "build.html?slug=my-project&revision=rev-1",
+            versionLinks.map(a => a.getAttribute("href")).join(" | ")
+        );
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`revisionView.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

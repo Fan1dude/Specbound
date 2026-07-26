@@ -1,0 +1,34 @@
+.tabs {
+    display: flex;
+    gap: var(--space-1);
+
+    overflow-x: auto;
+
+    border-bottom: 1px solid var(--border);
+}
+
+.tab {
+    flex: 0 0 auto;
+
+    padding: 14px 4px;
+    margin-right: var(--space-2);
+
+    color: var(--text-secondary);
+    border-bottom: 2px solid transparent;
+
+    font-weight: var(--font-weight-semibold);
+}
+
+.tab:hover {
+    color: var(--text);
+}
+
+.tab.is-active,
+.tab[aria-selected="true"] {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.tab-panel[hidden] {
+    display: none;
+}

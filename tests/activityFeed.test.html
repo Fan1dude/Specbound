@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 7D — activity feed</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 7D — activity feed</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="tabsWrap">
+        <button type="button" id="activityFeedFollowingTab" data-scope="following" hidden>Following</button>
+        <button type="button" id="activityFeedExploreTab" data-scope="explore">Explore</button>
+    </div>
+    <div id="activityFeedGrid"></div>
+    <button type="button" id="activityFeedLoadMore" hidden>Load More</button>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        // --- Mock state -----------------------------------------------------
+        const calls = [];
+        let pageQueue = [];
+        let pageError = null;
+        const knownProfiles = {
+            "user-a": { id: "user-a", username: "alice" },
+            "user-b": { id: "user-b", username: "bob" }
+        };
+        const knownBuilds = {
+            "build-1": { id: "build-1", title: "Robot Arm", slug: "robot-arm", user_id: "user-a", category: "robotics", status: "building", visibility: "public" },
+            "build-2": { id: "build-2", title: "Desk Setup", slug: "desk-setup", user_id: "user-b", category: "setup", status: "completed", visibility: "public" }
+            // "build-missing" intentionally absent, to test the drop-silently case
+        };
+
+        globalThis.__mock = {
+            calls,
+            get pageQueue() { return pageQueue; },
+            get pageError() { return pageError; }
+        };
+
+        const activityRepoSrc = `
+            export async function getActivityFeed(args) {
+                globalThis.__mock.calls.push(["getActivityFeed", args]);
+                if (globalThis.__mock.pageError) throw new Error(globalThis.__mock.pageError);
+                return globalThis.__mock.pageQueue.shift() || [];
+            }
+        `;
+
+        const buildRepoSrc = `
+            const known = ${JSON.stringify(knownBuilds)};
+            export async function getBuildsByIds(ids) {
+                globalThis.__mock.calls.push(["getBuildsByIds", ids]);
+                return ids.map(id => known[id]).filter(Boolean);
+            }
+        `;
+
+        const profileRepoSrc = `
+            const known = ${JSON.stringify(knownProfiles)};
+            export async function attachBuildProfiles(builds) {
+                globalThis.__mock.calls.push(["attachBuildProfiles", builds.length]);
+                return builds.map(b => ({ ...b, profiles: known[b.user_id] || null }));
+            }
+        `;
+
+        const mediaRepoSrc = `
+            export async function resolveBuildImageUrls(builds) {
+                return builds;
+            }
+        `;
+
+        // BlueprintCard.js and notificationFormat.js have no imports of
+        // their own, so the real files are used as-is (via absolute URLs)
+        // rather than mocked — same reasoning as profile.test.html.
+        const blueprintCardUrl = new URL("../js/components/BlueprintCard.js", location.href).href;
+        const notificationFormatUrl = new URL("../js/utils/notificationFormat.js", location.href).href;
+
+        const rewrites = {
+            '"../../repositories/activityRepository.js"': blobUrl(activityRepoSrc),
+            '"../../repositories/buildRepository.js"': blobUrl(buildRepoSrc),
+            '"../../repositories/profileRepository.js"': blobUrl(profileRepoSrc),
+            '"../../repositories/mediaRepository.js"': blobUrl(mediaRepoSrc),
+            '"../../components/BlueprintCard.js"': blueprintCardUrl,
+            '"../../utils/notificationFormat.js"': notificationFormatUrl
+        };
+
+        const realSrc = await (await fetch("../js/pages/home/renderActivityFeed.js")).text();
+        let rewritten = realSrc;
+        for (const [from, to] of Object.entries(rewrites)) {
+            rewritten = rewritten.replaceAll(from, `"${to}"`);
+        }
+
+        const { renderActivityFeed } = await import(blobUrl(rewritten));
+
+        function waitFor(predicate, timeoutMs = 2000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                const check = () => {
+                    if (predicate()) return resolve();
+                    if (Date.now() - start > timeoutMs) return reject(new Error("timed out: " + predicate.toString()));
+                    setTimeout(check, 10);
+                };
+                check();
+            });
+        }
+
+        function makeActivity(id, buildId, type, daysAgo = 0) {
+            return {
+                id, build_id: buildId, user_id: knownBuilds[buildId]?.user_id || "user-a",
+                activity_type: type, version: "v1.0",
+                created_at: new Date(Date.now() - daysAgo * 86400000).toISOString()
+            };
+        }
+
+        // renderActivityFeed() attaches its click listeners to these
+        // persistent buttons every time it's called (matching the real
+        // app, which only ever calls it once per page load). Since this
+        // test calls it many times to exercise different scenarios, each
+        // fresh call must start from listener-free nodes — cloning and
+        // replacing strips every previously-bound listener. Returns fresh
+        // references to grid/loadMoreBtn/followingTab/exploreTab.
+        function resetDom() {
+            const oldFollowing = document.getElementById("activityFeedFollowingTab");
+            const oldExplore = document.getElementById("activityFeedExploreTab");
+            const oldLoadMore = document.getElementById("activityFeedLoadMore");
+            const oldGrid = document.getElementById("activityFeedGrid");
+
+            const newFollowing = oldFollowing.cloneNode(true);
+            const newExplore = oldExplore.cloneNode(true);
+            const newLoadMore = oldLoadMore.cloneNode(true);
+            const newGrid = oldGrid.cloneNode(true);
+
+            newFollowing.hidden = true;
+            newFollowing.classList.remove("is-active");
+            newExplore.classList.remove("is-active");
+            newLoadMore.hidden = true;
+            newGrid.innerHTML = "";
+
+            oldFollowing.replaceWith(newFollowing);
+            oldExplore.replaceWith(newExplore);
+            oldLoadMore.replaceWith(newLoadMore);
+            oldGrid.replaceWith(newGrid);
+
+            return {
+                grid: newGrid,
+                loadMoreBtn: newLoadMore,
+                followingTab: newFollowing,
+                exploreTab: newExplore
+            };
+        }
+
+        // --- Case 1: signed out — Following tab stays hidden, defaults to explore ---
+        let { grid, loadMoreBtn, followingTab, exploreTab } = resetDom();
+        pageQueue = [[makeActivity("a1", "build-1", "new_project")]];
+        calls.length = 0;
+
+        await renderActivityFeed(null);
+
+        test("signed out: Following tab stays hidden", followingTab.hidden === true);
+        test("signed out: defaults to the explore scope", calls.some(c => c[0] === "getActivityFeed" && c[1].scope === "explore"));
+        test("signed out: Explore tab is marked active", exploreTab.classList.contains("is-active"));
+
+        // --- Case 2: signed in — Following tab appears and is the default ----
+        ({ grid, loadMoreBtn, followingTab, exploreTab } = resetDom());
+        pageQueue = [[makeActivity("a1", "build-1", "new_project")]];
+        calls.length = 0;
+
+        await renderActivityFeed({ id: "user-me" });
+
+        test("signed in: Following tab becomes visible", followingTab.hidden === false);
+        test("signed in: defaults to the following scope", calls.some(c => c[0] === "getActivityFeed" && c[1].scope === "following"));
+        test("signed in: Following tab is marked active by default", followingTab.classList.contains("is-active"));
+
+        // --- Case 3: card content — label, real BlueprintCard, correct build ---
+        test("a new_project activity shows the 'New Project' label", grid.textContent.includes("New Project"));
+        test("the real BlueprintCard renders for the activity's build", grid.querySelector(".blueprint-card") !== null);
+        test("the card attributes the correct builder (alice), not 'Unknown Creator'", grid.textContent.replace(/\s+/g, " ").includes("By alice") && !grid.textContent.includes("Unknown Creator"));
+
+        // --- Case 4: a new_revision activity shows 'New Update' ---------------
+        ({ grid, loadMoreBtn, followingTab, exploreTab } = resetDom());
+        pageQueue = [[makeActivity("a2", "build-2", "new_revision")]];
+        calls.length = 0;
+        await renderActivityFeed({ id: "user-me" });
+
+        test("a new_revision activity shows the 'New Update' label", grid.textContent.includes("New Update"));
+
+        // --- Case 5: switching tabs (via click) reloads with the new scope ---
+        // Reuses this same renderActivityFeed instance's live listeners —
+        // does NOT call renderActivityFeed again, since that's the actual
+        // behavior being tested (clicking a tab, not re-invoking the module).
+        pageQueue = [[makeActivity("a3", "build-1", "new_project")]];
+        calls.length = 0;
+        exploreTab.click();
+
+        await waitFor(() => calls.some(c => c[0] === "getActivityFeed"));
+
+        test("clicking the Explore tab switches scope and reloads", calls.some(c => c[0] === "getActivityFeed" && c[1].scope === "explore"));
+        test("clicking the Explore tab marks it active and Following inactive", exploreTab.classList.contains("is-active") && !followingTab.classList.contains("is-active"));
+
+        // --- Case 6: a build that no longer resolves is silently dropped -----
+        ({ grid, loadMoreBtn, followingTab, exploreTab } = resetDom());
+        pageQueue = [[makeActivity("a4", "build-1", "new_project"), makeActivity("a5", "build-missing", "new_project")]];
+        calls.length = 0;
+        await renderActivityFeed({ id: "user-me" });
+
+        test("an activity whose build can't be resolved is dropped, not shown broken", grid.querySelectorAll(".activity-feed-card").length === 1);
+
+        // --- Case 7: a full page implies more, Load More appends the next ----
+        ({ grid, loadMoreBtn, followingTab, exploreTab } = resetDom());
+        const fullPage = Array.from({ length: 20 }, (_, i) => makeActivity(`p${i}`, "build-1", "new_project", i));
+        pageQueue = [fullPage];
+        calls.length = 0;
+        await renderActivityFeed({ id: "user-me" });
+
+        test("a full page (20) shows Load More", loadMoreBtn.hidden === false);
+        test("renders 20 activity cards", grid.querySelectorAll(".activity-feed-card").length === 20);
+
+        pageQueue = [[makeActivity("p20", "build-2", "new_revision")]];
+        calls.length = 0;
+        loadMoreBtn.click();
+
+        await waitFor(() => calls.some(c => c[0] === "getActivityFeed"));
+        await waitFor(() => grid.querySelectorAll(".activity-feed-card").length === 21);
+
+        test("Load More appends the next page", grid.querySelectorAll(".activity-feed-card").length === 21);
+        test("the next page request includes both cursor fields (composite keyset)", calls.some(c => c[0] === "getActivityFeed" && typeof c[1].beforeCreatedAt === "string" && typeof c[1].beforeId === "string"));
+        test("a partial page (< page size) hides Load More", loadMoreBtn.hidden === true);
+
+        // --- Case 8: empty state differs by scope -----------------------------
+        ({ grid, loadMoreBtn, followingTab, exploreTab } = resetDom());
+        pageQueue = [[]];
+        await renderActivityFeed({ id: "user-me" }); // defaults to following
+        test("empty Following feed shows a follow-oriented empty state", grid.textContent.includes("Following feed is empty"));
+
+        pageQueue = [[]];
+        calls.length = 0;
+        exploreTab.click();
+        await waitFor(() => calls.some(c => c[0] === "getActivityFeed"));
+        await waitFor(() => !grid.textContent.includes("Following feed is empty"));
+        test("empty Explore feed shows a generic empty state, not the Following one", grid.textContent.includes("No activity yet") && !grid.textContent.includes("Following feed is empty"));
+
+        // --- Case 9: load failure shows a visible error, not a blank/stuck grid ---
+        ({ grid, loadMoreBtn, followingTab, exploreTab } = resetDom());
+        pageError = "network down";
+        await renderActivityFeed(null);
+        test("a load failure shows a visible error message", grid.textContent.toLowerCase().includes("could not load"));
+        pageError = null;
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`activityFeed.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

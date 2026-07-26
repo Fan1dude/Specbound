@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../assets/brand/logo/favicon.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Account | Specbound</title>
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+
+<body>
+
+    <nav class="navbar" id="navbar"></nav>
+
+    <main class="auth-page" id="main">
+        <section class="auth-card card card-padding">
+            <p class="hero-badge">SPECBOUND</p>
+            <h1>Create your account</h1>
+
+            <p class="auth-subtitle">
+                Document your builds and share your progress with other creators.
+            </p>
+
+            <form id="signupForm" class="auth-form">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input
+                        id="username"
+                        type="text"
+                        placeholder="yourname"
+                        required
+                        minlength="3"
+                        maxlength="30"
+                        pattern="[a-zA-Z0-9_]+"
+                        autocomplete="username"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input id="email" type="email" placeholder="you@example.com" required autocomplete="email">
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input
+                        id="password"
+                        type="password"
+                        placeholder="At least 8 characters"
+                        required
+                        minlength="8"
+                        autocomplete="new-password"
+                    >
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="signupSubmit">
+                    Create Account
+                </button>
+            </form>
+
+            <p class="auth-switch">
+                Already have an account?
+                <a href="login.html">Sign in</a>
+            </p>
+        </section>
+    </main>
+
+    <footer class="footer" id="footer"></footer>
+
+    <script type="module" src="../js/pages/signup/app.js"></script>
+</body>
+</html>

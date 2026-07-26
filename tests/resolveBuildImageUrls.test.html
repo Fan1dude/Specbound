@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>mediaRepository.resolveBuildImageUrls</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>mediaRepository.resolveBuildImageUrls</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        const { resolveBuildImageUrls } = await import("../js/repositories/mediaRepository.js");
+
+        // Real getMediaSignedUrl will hit the real supabase client and
+        // likely reject in this sandbox (no session) — that's fine,
+        // resolveImageUrl already swallows signing failures to "", which
+        // is exactly the behavior being verified: a build list render
+        // must never throw just because one image failed to sign.
+        const builds = [
+            { id: "b1", title: "Legacy", image_url: "https://old.supabase.co/full-url.jpg" },
+            { id: "b2", title: "New", image_url: "projects/draft-1/media-1.jpg" },
+            { id: "b3", title: "No image", image_url: null }
+        ];
+
+        const resolved = await resolveBuildImageUrls(builds);
+
+        test("returns same length/order as input", resolved.length === 3 && resolved.map(b => b.id).join(",") === "b1,b2,b3", JSON.stringify(resolved.map(b => b.id)));
+        test("does not mutate the original array's objects", builds[1].image_url === "projects/draft-1/media-1.jpg");
+        test("full URL passes through unchanged", resolved[0].image_url === "https://old.supabase.co/full-url.jpg", resolved[0].image_url);
+        test("bare path resolves without throwing (empty string on signing failure, not an exception)", typeof resolved[1].image_url === "string", typeof resolved[1].image_url);
+        test("null image_url resolves to empty string, not null/undefined", resolved[2].image_url === "", JSON.stringify(resolved[2].image_url));
+        test("non-image fields are preserved", resolved[0].title === "Legacy" && resolved[2].title === "No image");
+
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`resolveBuildImageUrls.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

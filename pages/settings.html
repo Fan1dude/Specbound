@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../assets/brand/logo/favicon.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Settings | Specbound</title>
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+
+    <nav id="navbar" class="navbar"></nav>
+
+    <main class="settings-page" id="main">
+
+        <section class="settings-hero">
+            <p class="hero-badge">ACCOUNT SETTINGS</p>
+
+            <h1>Manage Your Builder Profile</h1>
+
+            <p class="hero-description">
+                Customize how other builders see you across Specbound.
+            </p>
+        </section>
+
+        <section class="settings-card">
+
+            <h2>Profile</h2>
+
+            <div id="settingsLoadError" class="settings-load-error" hidden></div>
+
+            <div class="settings-grid">
+
+                <div class="form-group full-width avatar-field">
+                    <label for="avatar">Avatar</label>
+
+                    <div class="avatar-field-row">
+                        <div class="avatar profile-avatar avatar-preview" id="avatarPreview">?</div>
+
+                        <div>
+                            <input
+                                type="file"
+                                id="avatar"
+                                accept="image/jpeg,image/png,image/webp"
+                            >
+                            <p class="text-muted avatar-hint">
+                                JPEG, PNG, or WebP. At least 500×500 pixels.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="displayName">Display Name</label>
+                    <input id="displayName" type="text">
+                </div>
+
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input id="username" type="text">
+                </div>
+
+                <div class="form-group full-width">
+                    <label for="bio">Bio</label>
+                    <textarea id="bio" rows="5"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="location">Location</label>
+                    <input id="location" type="text">
+                </div>
+
+                <div class="form-group">
+                    <label for="website">Website</label>
+                    <input id="website" type="url">
+                </div>
+
+                <div class="form-group">
+                    <label for="github">GitHub</label>
+                    <input id="github" type="url">
+                </div>
+
+                <div class="form-group">
+                    <label for="youtube">YouTube</label>
+                    <input id="youtube" type="url">
+                </div>
+
+            </div>
+
+            <button id="saveProfile" class="btn btn-primary">
+                Save Changes
+            </button>
+
+        </section>
+
+    </main>
+
+    <footer id="footer" class="footer"></footer>
+
+    <script type="module" src="../js/pages/settings/app.js"></script>
+
+</body>
+</html>

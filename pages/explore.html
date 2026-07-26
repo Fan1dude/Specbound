@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../assets/brand/logo/favicon.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta
+        name="description"
+        content="Discover technology Blueprints, active Projects, and completed Builds on Specbound."
+    >
+
+    <title>Explore | Specbound</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet"
+    >
+
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <main class="explore-page" id="main">
+
+        <header class="explore-header">
+            <p class="hero-badge">Discovery</p>
+
+            <h1>Explore Specbound.</h1>
+
+            <p>
+                Discover plans, follow active projects, and browse completed
+                technology builds from creators across the platform.
+            </p>
+
+            <div class="explore-search">
+                <label class="sr-only" for="exploreSearch">
+                    Search Blueprints
+                </label>
+
+                <input
+                    id="exploreSearch"
+                    type="search"
+                    placeholder="Search projects, creators, technologies, and specifications..."
+                    autocomplete="off"
+                >
+
+                <div
+                    id="searchSuggestions"
+                    class="search-suggestions"
+                    hidden
+                ></div>
+            </div>
+
+            <div class="lifecycle-filters" aria-label="Project stage filters">
+                <button
+                    class="lifecycle-filter active"
+                    type="button"
+                    data-lifecycle="all"
+                    aria-pressed="true"
+                >
+                    All
+                </button>
+
+                <button
+                    class="lifecycle-filter"
+                    type="button"
+                    data-lifecycle="planning"
+                    aria-pressed="false"
+                >
+                    Blueprints
+                </button>
+
+                <button
+                    class="lifecycle-filter"
+                    type="button"
+                    data-lifecycle="project"
+                    aria-pressed="false"
+                >
+                    Active Projects
+                </button>
+
+                <button
+                    class="lifecycle-filter"
+                    type="button"
+                    data-lifecycle="completed"
+                    aria-pressed="false"
+                >
+                    Completed Builds
+                </button>
+            </div>
+        </header>
+
+        <section class="explore-layout">
+
+            <aside class="filter-panel">
+                <div class="filter-panel-header">
+                    <div>
+                        <p class="filter-eyebrow">Refine</p>
+                        <h2>Filters</h2>
+                    </div>
+
+                    <button
+                        id="clearFilters"
+                        class="filter-clear"
+                        type="button"
+                    >
+                        Clear all
+                    </button>
+                </div>
+
+                <div class="filter-section">
+                    <h3>Technology</h3>
+
+                    <div class="filter-option-list">
+                        <button
+                            class="filter-pill active"
+                            type="button"
+                            data-category="all"
+                            aria-pressed="true"
+                        >
+                            All Technologies
+                        </button>
+
+                        <button
+                            class="filter-pill"
+                            type="button"
+                            data-category="pc_build"
+                            aria-pressed="false"
+                        >
+                            PC Builds
+                        </button>
+
+                        <button
+                            class="filter-pill"
+                            type="button"
+                            data-category="setup"
+                            aria-pressed="false"
+                        >
+                            Desk Setups
+                        </button>
+
+                        <button
+                            class="filter-pill"
+                            type="button"
+                            data-category="arduino"
+                            aria-pressed="false"
+                        >
+                            Arduino
+                        </button>
+
+                        <button
+                            class="filter-pill"
+                            type="button"
+                            data-category="robotics"
+                            aria-pressed="false"
+                        >
+                            Robotics
+                        </button>
+
+                        <button
+                            class="filter-pill"
+                            type="button"
+                            data-category="3d_printer"
+                            aria-pressed="false"
+                        >
+                            3D Printing
+                        </button>
+
+                        <button
+                            class="filter-pill"
+                            type="button"
+                            data-category="homelab"
+                            aria-pressed="false"
+                        >
+                            Home Labs
+                        </button>
+                    </div>
+                </div>
+
+                <div class="filter-section">
+                    <label for="statusFilter">Status</label>
+
+                    <select id="statusFilter">
+                        <option value="all">All Statuses</option>
+                        <option value="planning">Blueprint</option>
+                        <option value="building">Project</option>
+                        <option value="in_progress">Project — In Progress</option>
+                        <option value="completed">Completed Build</option>
+                        <option value="paused">Paused</option>
+                    </select>
+                </div>
+
+                <div
+                    id="technologyFilters"
+                    class="technology-filters"
+                    aria-live="polite"
+>
+                    <div class="filter-section technology-filter-message">
+                        <p>
+                            Choose a technology to see its specific filters.
+                        </p>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="catalog">
+                <div class="catalog-toolbar">
+                    <div>
+                        <p class="catalog-label">Discovery Feed</p>
+                        <h2 id="resultCount">Loading Blueprints...</h2>
+                    </div>
+
+                    <div class="catalog-sort">
+                        <label for="sortFilter">Sort</label>
+
+                        <select id="sortFilter">
+                            <option value="newest">Newest</option>
+                            <option value="oldest">Oldest</option>
+                            <option value="az">A–Z</option>
+                            <option value="completed">
+                                Completed First
+                            </option>
+                            <option value="progress">
+                                Highest Progress
+                            </option>
+                        </select>
+                    </div>
+                </div>
+
+                <div
+                    id="exploreGrid"
+                    class="catalog-grid"
+                ></div>
+            </section>
+
+        </section>
+    </main>
+
+    <footer class="footer" id="footer"></footer>
+
+    <script
+        type="module"
+        src="../js/pages/explore/app.js"
+    ></script>
+</body>
+</html>

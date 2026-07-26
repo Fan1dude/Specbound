@@ -1,0 +1,60 @@
+.builder-menu {
+    position: relative;
+}
+
+.builder-button {
+    color: var(--text);
+    font-weight: 700;
+}
+
+.builder-dropdown {
+    position: absolute;
+    right: 0;
+    top: 140%;
+    min-width: 210px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 10px;
+    box-shadow: var(--shadow-lg);
+    display: none;
+    z-index: 999;
+}
+
+.builder-dropdown.show-dropdown {
+    display: block;
+}
+
+.builder-dropdown a {
+    display: block;
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.builder-dropdown a:hover {
+    background: var(--surface-2);
+    color: var(--text);
+}
+
+.builder-dropdown hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 8px 0;
+}
+
+/* Placed in this file (not navbar.css) deliberately — dropdown.css is
+   @import-ed after navbar.css in styles.css, so an override for this
+   same selector placed there would be silently shadowed by the
+   unconditional `.builder-dropdown` rule above (same specificity, later
+   source order wins). Matches the notification-bell dropdown's own
+   self-contained mobile override. */
+@media (max-width: 900px) {
+    .builder-dropdown {
+        position: static;
+        width: 100%;
+        margin-top: 4px;
+        box-shadow: none;
+    }
+}

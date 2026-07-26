@@ -1,0 +1,46 @@
+.blueprint-feed {
+    width: 100%;
+}
+
+.blueprint-feed-grid {
+    display: grid;
+    grid-template-columns:
+        repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-3);
+}
+
+.blueprint-feed-horizontal {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(280px, 340px);
+    gap: var(--space-3);
+
+    overflow-x: auto;
+    padding-bottom: var(--space-2);
+
+    scroll-snap-type: x proximity;
+}
+
+.blueprint-feed-horizontal .blueprint-card {
+    scroll-snap-align: start;
+}
+
+.blueprint-feed-compact {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+}
+
+.blueprint-feed-empty {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 650px) {
+    .blueprint-feed-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .blueprint-feed-horizontal {
+        grid-auto-columns: minmax(260px, 88vw);
+    }
+}

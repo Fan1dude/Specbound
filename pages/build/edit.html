@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../../assets/brand/logo/favicon.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Editor | Specbound</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="../../css/styles.css">
+</head>
+<body>
+
+    <nav class="navbar" id="navbar"></nav>
+
+    <main class="editor-page" id="main">
+
+        <section class="editor-header">
+            <div class="editor-header-status">
+                <span id="editorPublishBadge" class="badge">Draft</span>
+                <span id="editorSaveStatus" class="editor-save-status" role="status" aria-live="polite">Loading...</span>
+            </div>
+
+            <div class="editor-header-top">
+                <h1 id="editorTitle">Loading project...</h1>
+
+                <div class="editor-header-actions">
+                    <button
+                        type="button"
+                        id="editorUnpublishBtn"
+                        class="btn btn-secondary"
+                        hidden
+                    >
+                        Unpublish
+                    </button>
+
+                    <button
+                        type="button"
+                        id="editorPublishBtn"
+                        class="btn btn-primary"
+                        disabled
+                    >
+                        Publish
+                    </button>
+                </div>
+            </div>
+
+            <p
+                id="editorPublishHint"
+                class="editor-publish-hint"
+                hidden
+            >
+                Complete the readiness checklist below before publishing.
+            </p>
+
+            <div
+                id="editorReadiness"
+                class="editor-readiness"
+                role="status"
+            ></div>
+
+            <a
+                id="editorViewLiveLink"
+                class="editor-view-live-link"
+                href="#"
+                hidden
+            >
+                View live project →
+            </a>
+        </section>
+
+        <div
+            id="draftRecoveryBanner"
+            class="editor-recovery-banner"
+            role="status"
+            hidden
+        >
+            <p>
+                We found unsaved changes from an earlier session that never
+                reached the server. Restore them?
+            </p>
+
+            <div class="editor-recovery-actions">
+                <button type="button" id="recoveryRestoreBtn" class="btn btn-secondary btn-small">
+                    Restore
+                </button>
+
+                <button type="button" id="recoveryDiscardBtn" class="btn btn-ghost btn-small">
+                    Discard
+                </button>
+            </div>
+        </div>
+
+        <div class="tabs" role="tablist" id="editorTabs">
+            <button
+                class="tab is-active"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                aria-controls="panel-overview"
+                data-section="overview"
+            >
+                Overview
+            </button>
+
+            <button
+                class="tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="panel-specifications"
+                data-section="specifications"
+            >
+                Specifications
+            </button>
+
+            <button
+                class="tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="panel-resources"
+                data-section="resources"
+            >
+                Resources
+            </button>
+
+            <button
+                class="tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="panel-gallery"
+                data-section="gallery"
+            >
+                Gallery
+            </button>
+        </div>
+
+        <section
+            id="panel-overview"
+            class="tab-panel editor-panel"
+            role="tabpanel"
+        >
+            <div class="card card-padding editor-form">
+
+                <div class="form-group">
+                    <label for="fieldTitle">Project Title</label>
+                    <input id="fieldTitle" type="text" placeholder="Project title" autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label for="fieldDescription">Description</label>
+                    <textarea
+                        id="fieldDescription"
+                        rows="6"
+                        placeholder="What is this project? What are you building and why?"
+                        autocomplete="off"
+                    ></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="fieldCategory">Technology</label>
+                    <select id="fieldCategory" autocomplete="off">
+                        <option value="pc_build">PC Builds</option>
+                        <option value="setup">Desk Setups</option>
+                        <option value="arduino">Arduino</option>
+                        <option value="robotics">Robotics</option>
+                        <option value="3d_printer">3D Printing</option>
+                        <option value="homelab">Home Labs</option>
+                    </select>
+                </div>
+
+            </div>
+        </section>
+
+        <section
+            id="panel-specifications"
+            class="tab-panel editor-panel"
+            role="tabpanel"
+            hidden
+        >
+            <div class="card card-padding">
+                <div id="specificationsFields"></div>
+            </div>
+        </section>
+
+        <section
+            id="panel-resources"
+            class="tab-panel editor-panel"
+            role="tabpanel"
+            hidden
+        >
+            <div class="card card-padding">
+                <div class="section-heading">
+                    <h2>Resources</h2>
+                    <p>Links to datasheets, references, repositories, or anything worth pointing to.</p>
+                </div>
+
+                <div id="resourcesList" class="resources-list"></div>
+
+                <button type="button" id="addResourceBtn" class="btn btn-secondary">
+                    Add Resource
+                </button>
+            </div>
+        </section>
+
+        <section
+            id="panel-gallery"
+            class="tab-panel editor-panel editor-panel-wide"
+            role="tabpanel"
+            hidden
+        >
+            <div class="card card-padding">
+                <div class="section-heading">
+                    <h2>Gallery</h2>
+                    <p>Upload images of your project. The starred image is used as the cover.</p>
+                </div>
+
+                <label class="upload-zone" for="galleryFileInput">
+                    <input
+                        id="galleryFileInput"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        multiple
+                    >
+
+                    <div>
+                        <div class="upload-zone-icon" aria-hidden="true">↑</div>
+                        <h3>Upload images</h3>
+                        <p id="galleryUploadStatus">
+                            JPEG, PNG, or WebP. You can select multiple files.
+                        </p>
+                    </div>
+                </label>
+
+                <div id="galleryGrid" class="gallery-grid"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="footer" id="footer"></footer>
+
+    <script type="module" src="../../js/pages/editor/app.js"></script>
+</body>
+</html>

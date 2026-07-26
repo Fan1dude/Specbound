@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 8D — ComponentAutocomplete (ARIA combobox)</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 8D — ComponentAutocomplete (ARIA combobox)</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <input id="spec-cpu" type="text">
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function waitFor(predicate, timeoutMs = 2000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                const check = () => {
+                    if (predicate()) return resolve();
+                    if (Date.now() - start > timeoutMs) return reject(new Error("timed out: " + predicate.toString()));
+                    setTimeout(check, 10);
+                };
+                check();
+            });
+        }
+
+        const componentRepoSrc = `
+            export async function searchComponents({ query }) {
+                if (query === "empty") return [];
+                return [
+                    { id: "c1", canonical_name: "Ryzen 5 7600X", manufacturer: "AMD" },
+                    { id: "c2", canonical_name: "Ryzen 7 9800X3D", manufacturer: "AMD" }
+                ];
+            }
+        `;
+
+        const rewrites = {
+            '"../repositories/componentRepository.js"': blobUrl(componentRepoSrc)
+        };
+
+        const realSrc = await (await fetch("../js/components/ComponentAutocomplete.js")).text();
+        let rewritten = realSrc;
+        for (const [from, to] of Object.entries(rewrites)) {
+            rewritten = rewritten.replaceAll(from, `"${to}"`);
+        }
+
+        const { setupComponentAutocomplete } = await import(blobUrl(rewritten));
+
+        const input = document.getElementById("spec-cpu");
+        setupComponentAutocomplete({ input: "#spec-cpu", technologyId: "pc_build", componentType: "cpu" });
+
+        const results_el = document.querySelector(".component-autocomplete-results");
+
+        // --- Case 1: static ARIA wiring set up at setup time ---
+        test("results container gets role=listbox", results_el.getAttribute("role") === "listbox");
+        test("results container id is derived from the input's id", results_el.id === "spec-cpu-listbox");
+        test("input's aria-controls points at the results container", input.getAttribute("aria-controls") === results_el.id);
+        test("input has role=combobox", input.getAttribute("role") === "combobox");
+
+        // --- Case 2: typing opens results with option ids + aria-selected ---
+        input.value = "ryzen";
+        input.dispatchEvent(new Event("input"));
+
+        await waitFor(() => results_el.querySelectorAll(".component-autocomplete-option").length === 2);
+
+        const options = Array.from(results_el.querySelectorAll(".component-autocomplete-option"));
+        test("each option has a stable, listbox-namespaced id", options[0].id === "spec-cpu-listbox-option-0" && options[1].id === "spec-cpu-listbox-option-1");
+        test("each option starts aria-selected=false", options.every(o => o.getAttribute("aria-selected") === "false"));
+        test("input has no aria-activedescendant before any option is highlighted", input.getAttribute("aria-activedescendant") === null);
+
+        // --- Case 3: ArrowDown sets aria-activedescendant on the input ---
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+
+        test("ArrowDown marks the first option aria-selected=true", options[0].getAttribute("aria-selected") === "true");
+        test("the second option stays aria-selected=false", options[1].getAttribute("aria-selected") === "false");
+        test("input's aria-activedescendant now points at the highlighted option", input.getAttribute("aria-activedescendant") === options[0].id);
+
+        // --- Case 4: a second ArrowDown moves activedescendant to the next option ---
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+
+        test("aria-activedescendant follows focus to the second option", input.getAttribute("aria-activedescendant") === options[1].id);
+        test("the first option is no longer aria-selected", options[0].getAttribute("aria-selected") === "false");
+
+        // --- Case 5: Escape closes results and clears aria-activedescendant ---
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+
+        test("Escape hides the results", results_el.hidden === true);
+        test("Escape clears aria-activedescendant", input.getAttribute("aria-activedescendant") === null);
+        test("Escape sets aria-expanded=false", input.getAttribute("aria-expanded") === "false");
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`componentAutocomplete.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+.spec-grid{
+
+    display:grid;
+
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+
+    gap:20px;
+
+}
+
+.spec-item{
+
+    background:var(--surface);
+
+    border:1px solid var(--border);
+
+    border-radius:var(--radius-md);
+
+    padding:24px;
+
+}
+
+.spec-item h3{
+
+    color:var(--text-secondary);
+
+    font-size:.9rem;
+
+    text-transform:uppercase;
+
+    letter-spacing:.08em;
+
+    margin-bottom:10px;
+
+}
+
+.spec-item p{
+
+    font-size:1.1rem;
+
+    font-weight:600;
+
+}

@@ -1,0 +1,134 @@
+:root {
+    /* Brand colors */
+    --color-bg: #090b11;
+    --color-bg-elevated: #0f131c;
+    --color-surface: #141923;
+    --color-surface-2: #1b2230;
+    --color-surface-3: #222b3a;
+
+    /* WCAG 1.4.11 (non-text, 3:1) needs more than these two rgba alphas
+       gave against --color-bg (measured ~1.19:1 / ~1.43:1 during the
+       Milestone 8D audit) — bumped just enough to clear 3:1, still the
+       same hue/usage (input borders, card edges, dividers). */
+    --color-border: rgba(255, 255, 255, 0.35);
+    --color-border-strong: rgba(255, 255, 255, 0.45);
+
+    --color-text: #ffffff;
+    --color-text-secondary: rgba(255, 255, 255, 0.72);
+    --color-text-muted: rgba(255, 255, 255, 0.46);
+
+    --color-primary: #4f7dff;
+    --color-primary-hover: #6a91ff;
+    --color-primary-soft: rgba(79, 125, 255, 0.12);
+
+    /* --color-primary is also used as plain foreground text/icon/outline
+       color (badges, links, focus ring) — those already pass WCAG AA at
+       its current value, so it's intentionally left unchanged rather
+       than darkened. White text ON --color-primary as a background is
+       the thing that actually fails (measured ~3.68:1, needs 4.5:1),
+       so that one specific use gets its own token instead: darkening
+       the shared --color-primary would fix the button but drop the
+       already-passing foreground/link uses below AA. Consumers: only
+       .btn-primary and the other white-on-primary-background controls
+       (see MILESTONE_8D_ARCHITECTURE.md finding C1) — everything else
+       keeps using --color-primary directly. */
+    --color-primary-strong: #466ee0;
+    --color-primary-strong-hover: #506dbf;
+
+    --color-success: #34d399;
+    --color-warning: #fbbf24;
+    --color-danger: #ef4444;
+    --color-danger-hover: #f56767;
+    --color-info: #22d3ee;
+
+    /* Same reasoning as --color-primary-strong above — --color-danger is
+       also used as plain foreground text (form hints, error toasts),
+       which already passes AA and is left untouched. This darker pair is
+       only for white-text-on-danger-background controls. */
+    --color-danger-strong: #d53d3d;
+    --color-danger-strong-hover: #bf5050;
+
+    /* Existing aliases — keep older CSS working */
+    --bg: var(--color-bg);
+    --surface: var(--color-surface);
+    --surface-2: var(--color-surface-2);
+    --border: var(--color-border);
+    --text: var(--color-text);
+    --text-secondary: var(--color-text-secondary);
+    --text-muted: var(--color-text-muted);
+    --primary: var(--color-primary);
+    --primary-hover: var(--color-primary-hover);
+    --primary-strong: var(--color-primary-strong);
+    --primary-strong-hover: var(--color-primary-strong-hover);
+    --success: var(--color-success);
+    --warning: var(--color-warning);
+    --danger: var(--color-danger);
+    --danger-hover: var(--color-danger-hover);
+    --danger-strong: var(--color-danger-strong);
+    --danger-strong-hover: var(--color-danger-strong-hover);
+
+    /* Typography */
+    --font-family: "Inter", system-ui, sans-serif;
+
+    --font-size-xs: 0.75rem;
+    --font-size-sm: 0.875rem;
+    --font-size-md: 1rem;
+    --font-size-lg: 1.125rem;
+    --font-size-xl: 1.375rem;
+    --font-size-2xl: 1.75rem;
+    --font-size-3xl: 2.4rem;
+    --font-size-display: clamp(3.4rem, 7vw, 6.5rem);
+
+    --line-height-tight: 1;
+    --line-height-heading: 1.12;
+    --line-height-body: 1.7;
+
+    --font-weight-regular: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    --font-weight-extrabold: 800;
+
+    /* Spacing — 8px system */
+    --space-1: 0.5rem;
+    --space-2: 1rem;
+    --space-3: 1.5rem;
+    --space-4: 2rem;
+    --space-5: 3rem;
+    --space-6: 4rem;
+    --space-7: 5rem;
+    --space-8: 6rem;
+    --space-9: 7.5rem;
+
+    /* Radius */
+    --radius-xs: 8px;
+    --radius-sm: 12px;
+    --radius-md: 16px;
+    --radius-lg: 24px;
+    --radius-xl: 36px;
+    --radius-pill: 999px;
+
+    /* Shadows */
+    --shadow-sm: 0 6px 20px rgba(0, 0, 0, 0.18);
+    --shadow-md: 0 10px 34px rgba(0, 0, 0, 0.24);
+    --shadow-lg: 0 22px 70px rgba(0, 0, 0, 0.38);
+    --shadow-hover: 0 18px 55px rgba(79, 125, 255, 0.18);
+
+    /* Motion */
+    --duration-fast: 150ms;
+    --duration-normal: 220ms;
+    --duration-slow: 350ms;
+
+    --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --transition:
+        var(--duration-normal)
+        var(--ease-standard);
+
+    /* Layout */
+    --container-sm: 760px;
+    --container-md: 1040px;
+    --container-lg: 1240px;
+    --container-xl: 1400px;
+
+    --navbar-height: 76px;
+}

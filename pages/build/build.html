@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../../assets/brand/logo/favicon.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta
+        name="description"
+        content="View a technology build, its specifications, creator, and build journey on Specbound."
+    >
+
+    <title>Blueprint | Specbound</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet"
+    >
+
+    <link rel="stylesheet" href="../../css/styles.css">
+</head>
+
+<body>
+
+    <nav
+        class="navbar"
+        id="navbar"
+        aria-label="Main navigation"
+    ></nav>
+
+    <main class="build-page" id="main">
+
+        <!-- Blueprint Hero -->
+        <section class="blueprint-hero">
+
+            <div class="blueprint-cover">
+
+                <img
+                    id="buildImage"
+                    src=""
+                    alt="Blueprint cover image"
+                >
+
+                <div
+                    class="blueprint-overlay"
+                    aria-hidden="true"
+                ></div>
+
+                <div class="blueprint-hero-content">
+
+                    <div class="blueprint-hero-topline">
+
+                        <p
+                            class="hero-badge"
+                            id="buildCategory"
+                        >
+                            Loading...
+                        </p>
+
+                        <span
+                            id="buildStatus"
+                            class="badge badge-blue"
+                        >
+                            Loading
+                        </span>
+
+                    </div>
+
+                    <h1 id="buildTitle">
+                        Loading...
+                    </h1>
+
+                    <p
+                        id="buildDescription"
+                        class="blueprint-hero-description"
+                    >
+                        Loading build description...
+                    </p>
+
+                    <div class="blueprint-hero-footer">
+
+                        <a
+                            id="buildBuilder"
+                            class="build-builder"
+                            href="#"
+                        >
+                            Built by ...
+                        </a>
+
+                        <span id="buildUpdated">
+                            Updated recently
+                        </span>
+
+                        <div class="like-action">
+                            <button
+                                type="button"
+                                id="likeBtn"
+                                class="like-btn"
+                                aria-pressed="false"
+                                aria-label="Like this project"
+                                aria-describedby="likeHint"
+                                disabled
+                            >
+                                <span class="like-icon" aria-hidden="true">&#9829;</span>
+                                <span id="likeCount">0</span>
+                            </button>
+
+                            <p id="likeHint" class="like-hint" role="status" aria-live="polite" hidden></p>
+                        </div>
+
+                        <div class="save-action">
+                            <button
+                                type="button"
+                                id="saveBtn"
+                                class="save-btn"
+                                aria-pressed="false"
+                                aria-describedby="saveHint"
+                                disabled
+                            >
+                                Save
+                            </button>
+
+                            <p id="saveHint" class="save-hint" role="status" aria-live="polite" hidden></p>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+        <div
+            id="revisionBanner"
+            class="revision-banner"
+            role="status"
+            hidden
+        >
+            <p>
+                Viewing <strong id="revisionBannerVersion">v1.0</strong> — an older revision.
+                Published history is never changed by viewing or restoring it.
+            </p>
+
+            <a id="revisionBannerLatestLink" class="btn btn-secondary btn-small" href="#">
+                View Latest
+            </a>
+        </div>
+
+        <!-- Main Layout -->
+        <section class="build-layout">
+
+            <!-- Creator Sidebar -->
+            <aside class="creator-card card">
+
+                <div class="creator-avatar">
+                    S
+                </div>
+
+                <p class="creator-label">
+                    Creator
+                </p>
+
+                <h2>
+                    <a id="creatorName" href="#">
+                        Loading...
+                    </a>
+                </h2>
+
+                <p class="creator-role">
+                    Technology Creator
+                </p>
+
+                <a
+                    id="creatorProfileLink"
+                    class="btn btn-secondary btn-small"
+                    href="#"
+                >
+                    View Profile
+                </a>
+
+            </aside>
+
+            <!-- Blueprint Content -->
+            <div class="build-main-content">
+
+                <!-- Overview -->
+                <section class="build-section blueprint-overview-section">
+
+                    <div class="section-heading">
+
+                        <p class="hero-badge">
+                            Overview
+                        </p>
+
+                        <h2>
+                            Blueprint Overview
+                        </h2>
+
+                    </div>
+
+                    <div class="blueprint-overview-grid">
+
+                        <article class="overview-card card">
+                            <p class="overview-label">
+                                Status
+                            </p>
+
+                            <p
+                                id="overviewStatus"
+                                class="overview-value"
+                            >
+                                Loading...
+                            </p>
+                        </article>
+
+                        <article class="overview-card card">
+                            <p class="overview-label">
+                                Current Version
+                            </p>
+
+                            <p
+                                id="overviewVersion"
+                                class="overview-value"
+                            >
+                                v1.0
+                            </p>
+                        </article>
+
+                        <article class="overview-card card">
+                            <p class="overview-label">
+                                Progress
+                            </p>
+
+                            <p
+                                id="overviewProgress"
+                                class="overview-value"
+                            >
+                                0%
+                            </p>
+                        </article>
+
+                        <article class="overview-card card">
+                            <p class="overview-label">
+                                Last Updated
+                            </p>
+
+                            <p
+                                id="overviewUpdated"
+                                class="overview-value"
+                            >
+                                Recently
+                            </p>
+                        </article>
+
+                        <article class="overview-card card">
+                            <p class="overview-label">
+                                Views
+                            </p>
+
+                            <p
+                                id="overviewViews"
+                                class="overview-value"
+                            >
+                                0
+                            </p>
+                        </article>
+
+                    </div>
+
+                </section>
+
+                <!-- Specifications -->
+                <section class="build-section">
+
+                    <div class="section-heading">
+
+                        <p class="hero-badge">
+                            Components
+                        </p>
+
+                        <h2>
+                            Hardware Blueprint
+                        </h2>
+
+                    </div>
+
+                    <div
+                        id="buildSpecifications"
+                        class="spec-grid"
+                    ></div>
+
+                </section>
+
+                <!-- Resources -->
+                <section class="build-section">
+
+                    <div class="section-heading">
+
+                        <p class="hero-badge">
+                            Links
+                        </p>
+
+                        <h2>
+                            Resources
+                        </h2>
+
+                    </div>
+
+                    <div
+                        id="buildResources"
+                        class="resource-links"
+                    ></div>
+
+                </section>
+
+                <!-- Build Journey -->
+                <section class="build-section">
+
+                    <div class="build-section-header">
+
+                        <div class="section-heading">
+
+                            <p class="hero-badge">
+                                Project
+                            </p>
+
+                            <h2>
+                                Project Log
+                            </h2>
+
+                            <p class="section-description">
+                                follow every update, decision, and milestone from the original blueprint to the completed build.
+                            </p>
+
+                        </div>
+
+                        <div class="build-actions">
+
+                            <a
+                                id="editBuildBtn"
+                                class="btn btn-secondary"
+                                href="#"
+                                hidden
+                            >
+                                Edit Project
+                            </a>
+
+                            <div class="restore-action">
+                                <button
+                                    type="button"
+                                    id="restoreRevisionBtn"
+                                    class="btn btn-primary"
+                                    hidden
+                                >
+                                    Restore This Revision
+                                </button>
+
+                                <p
+                                    id="restoreRevisionHint"
+                                    class="restore-hint"
+                                    hidden
+                                >
+                                    This revision was published before snapshot history existed and cannot be restored.
+                                </p>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div
+                        id="revisionTimeline"
+                        class="revision-timeline"
+                    ></div>
+
+                </section>
+
+                <!-- Comments -->
+                <section class="build-section">
+
+                    <div class="section-heading">
+
+                        <p class="hero-badge">
+                            Discussion
+                        </p>
+
+                        <h2>
+                            Comments
+                        </h2>
+
+                    </div>
+
+                    <div id="commentComposeArea" class="comment-compose-area"></div>
+
+                    <div id="commentsList" class="comments-list" role="status" aria-live="polite"></div>
+
+                    <div class="comments-load-more-wrap">
+                        <button type="button" id="commentsLoadMore" class="btn btn-secondary" hidden>
+                            Load More
+                        </button>
+                    </div>
+
+                </section>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    <footer
+        class="footer"
+        id="footer"
+    ></footer>
+
+    <script
+        type="module"
+        src="../../js/pages/build/app.js"
+    ></script>
+
+</body>
+</html>

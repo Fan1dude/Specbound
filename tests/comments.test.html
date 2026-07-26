@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 6A — comments</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 6A — comments</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="commentComposeArea"></div>
+    <div id="commentsList"></div>
+    <button type="button" id="commentsLoadMore" hidden>Load More</button>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        // --- Mock state -----------------------------------------------------
+        const calls = [];
+        const toastMessages = [];
+        let mockComments = [];
+        let createShouldFail = false;
+        let deleteShouldFail = false;
+
+        globalThis.__mock = {
+            calls, toastMessages,
+            get mockComments() { return mockComments; },
+            get createShouldFail() { return createShouldFail; },
+            get deleteShouldFail() { return deleteShouldFail; }
+        };
+
+        const commentRepoSrc = `
+            export async function getBuildComments(buildId, options = {}) {
+                globalThis.__mock.calls.push(["getBuildComments", buildId, options]);
+                let pool = globalThis.__mock.mockComments;
+                if (options.after) {
+                    pool = pool.filter(c => c.created_at > options.after);
+                }
+                return pool.slice(0, options.limit || 50);
+            }
+            export async function createComment(buildId, body) {
+                globalThis.__mock.calls.push(["createComment", buildId, body]);
+                if (globalThis.__mock.createShouldFail) throw new Error("Comment is too long (2000 characters max).");
+                return { id: "new-comment", build_id: buildId, user_id: "user-me", body, created_at: "2026-02-01T00:00:00Z" };
+            }
+            export async function deleteComment(commentId) {
+                globalThis.__mock.calls.push(["deleteComment", commentId]);
+                if (globalThis.__mock.deleteShouldFail) throw new Error("Only the comment author or the project owner can delete this comment.");
+                return { id: commentId, deleted_at: "2026-02-01T00:00:00Z" };
+            }
+        `;
+
+        const profileRepoSrc = `
+            export async function getProfilesByIds(ids) {
+                globalThis.__mock.calls.push(["getProfilesByIds", ids]);
+                const known = {
+                    "user-a": { id: "user-a", username: "alice", display_name: "Alice", avatar_path: null, avatar_url: null },
+                    "user-b": { id: "user-b", username: "bob", display_name: "Bob", avatar_path: "avatars/user-b/500.jpg", avatar_url: null },
+                    "user-me": { id: "user-me", username: "me", display_name: "Me", avatar_path: null, avatar_url: null }
+                };
+                return ids.map(id => known[id]).filter(Boolean);
+            }
+        `;
+
+        const mediaRepoSrc = `
+            export async function resolveAvatarUrls(profiles) {
+                globalThis.__mock.calls.push(["resolveAvatarUrls", profiles.length]);
+                return new Map(profiles.map(profile => [
+                    profile.id,
+                    profile?.avatar_path ? "https://signed.example/" + encodeURIComponent(profile.avatar_path) : ""
+                ]));
+            }
+        `;
+
+        const toastSrc = `
+            export function showToast(message, type) {
+                globalThis.__mock.toastMessages.push({ message, type });
+            }
+        `;
+
+        const rewrites = {
+            '"../../repositories/commentRepository.js"': blobUrl(commentRepoSrc),
+            '"../../repositories/profileRepository.js"': blobUrl(profileRepoSrc),
+            '"../../repositories/mediaRepository.js"': blobUrl(mediaRepoSrc),
+            '"../../core/toast.js"': blobUrl(toastSrc)
+        };
+
+        const realSrc = await (await fetch("../js/pages/build/renderComments.js")).text();
+        let rewritten = realSrc;
+        for (const [from, to] of Object.entries(rewrites)) {
+            rewritten = rewritten.replaceAll(from, `"${to}"`);
+        }
+
+        const { renderComments } = await import(blobUrl(rewritten));
+
+        const build = { id: "build-1", user_id: "user-b" }; // "bob" owns the build
+
+        // renderComments() attaches its Load More click listener directly
+        // to the persistent #commentsLoadMore button (never innerHTML-
+        // replaced, unlike the list/compose areas) — calling renderComments
+        // repeatedly against this same test DOM would stack listeners from
+        // every prior call onto that one button. Cloning it fresh before
+        // each render strips any listeners bound by earlier calls.
+        function resetLoadMoreButton() {
+            const old = document.getElementById("commentsLoadMore");
+            const fresh = old.cloneNode(true);
+            old.replaceWith(fresh);
+            return fresh;
+        }
+
+        function waitFor(predicate, timeoutMs = 2000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                const check = () => {
+                    if (predicate()) return resolve();
+                    if (Date.now() - start > timeoutMs) return reject(new Error("timed out: " + predicate.toString()));
+                    setTimeout(check, 10);
+                };
+                check();
+            });
+        }
+
+        // --- Case 1: signed out — no compose form, sign-in prompt shown ----
+        mockComments = [];
+        resetLoadMoreButton();
+        await renderComments(build, null);
+
+        test("signed out: no comment form is rendered", document.getElementById("commentForm") === null);
+        test("signed out: a sign-in prompt is shown instead", document.getElementById("commentComposeArea").textContent.includes("Sign in"));
+        test("empty comments: an empty-state message is shown, not a blank list", document.getElementById("commentsList").textContent.includes("No comments yet"));
+
+        // --- Case 2: signed in, existing comments — list renders correctly ---
+        calls.length = 0;
+        mockComments = [
+            { id: "c1", build_id: "build-1", user_id: "user-a", body: "First comment", created_at: "2026-01-01T00:00:00Z" },
+            { id: "c2", build_id: "build-1", user_id: "user-b", body: "Second comment (owner)", created_at: "2026-01-02T00:00:00Z" }
+        ];
+
+        const currentUser = { id: "user-a" }; // "alice" — authored c1, does not own the build
+
+        resetLoadMoreButton();
+        await renderComments(build, currentUser);
+
+        test("signed in: a comment form is rendered", document.getElementById("commentForm") !== null);
+        test("comments load with the build id", calls.some(c => c[0] === "getBuildComments" && c[1] === "build-1"));
+
+        const items = Array.from(document.querySelectorAll(".comment-item"));
+        test("renders one item per comment, in the order returned", items.length === 2, `got ${items.length}`);
+        test("first item shows the correct author username", items[0].querySelector(".comment-author").textContent.trim() === "alice");
+        test("second item shows the correct author username", items[1].querySelector(".comment-author").textContent.trim() === "bob");
+        test("comment body text is rendered", items[0].querySelector(".comment-body").textContent.includes("First comment"));
+
+        // Avatar: alice has no avatar_path/avatar_url -> falls back to an initial letter (no <img>)
+        test("author with no avatar falls back to an initial-letter avatar", items[0].querySelector(".comment-avatar img") === null && items[0].querySelector(".comment-avatar").textContent.trim() === "A");
+        // Avatar: bob has avatar_path -> resolves to a signed URL <img>
+        test("author with avatar_path resolves to a signed URL image", items[1].querySelector(".comment-avatar img")?.getAttribute("src")?.includes("avatars%2Fuser-b%2F500.jpg"), items[1].querySelector(".comment-avatar img")?.getAttribute("src"));
+
+        // Delete visibility: alice (current user) can delete her own comment (c1) and cannot delete bob's (c2)...
+        // ...EXCEPT bob owns the build, so as the viewer "alice" (not the owner), she should NOT see a delete button on c2.
+        test("current user sees a delete button on their own comment", items[0].querySelector(".comment-delete-btn") !== null);
+        test("current user does NOT see a delete button on someone else's comment (and isn't the build owner)", items[1].querySelector(".comment-delete-btn") === null);
+
+        // --- Case 3: empty submit shows a visible hint, does not call createComment ---
+        calls.length = 0;
+        const textarea = document.getElementById("commentBody");
+        const form = document.getElementById("commentForm");
+        const hint = document.getElementById("commentFormHint");
+
+        textarea.value = "   "; // whitespace only
+        form.dispatchEvent(new Event("submit", { cancelable: true }));
+        await new Promise(r => setTimeout(r, 50));
+
+        test("submitting an empty/whitespace-only comment shows a visible hint (not a title attribute)", hint.hidden === false && hint.textContent.length > 0, hint.textContent);
+        test("submitting an empty comment does not call createComment", !calls.some(c => c[0] === "createComment"));
+
+        // --- Case 4: successful post — clears textarea, appends to list, toasts ---
+        calls.length = 0;
+        toastMessages.length = 0;
+        textarea.value = "A brand new comment";
+        form.dispatchEvent(new Event("submit", { cancelable: true }));
+
+        await waitFor(() => calls.some(c => c[0] === "createComment"));
+        await waitFor(() => document.querySelectorAll(".comment-item").length === 3);
+
+        test("posting calls createComment with the build id and trimmed body", calls.find(c => c[0] === "createComment")?.[1] === "build-1" && calls.find(c => c[0] === "createComment")?.[2] === "A brand new comment");
+        test("the textarea clears after a successful post", textarea.value === "");
+        test("the new comment appears in the list", document.querySelectorAll(".comment-item").length === 3);
+        test("a success toast is shown", toastMessages.some(t => t.type === "success"));
+
+        // --- Case 5: failed post surfaces the server's error message ---------
+        calls.length = 0;
+        toastMessages.length = 0;
+        createShouldFail = true;
+        textarea.value = "This one will fail";
+        form.dispatchEvent(new Event("submit", { cancelable: true }));
+
+        await waitFor(() => toastMessages.length > 0);
+
+        test("a failed post surfaces the actual server error message via toast, not a silent failure", toastMessages.some(t => t.type === "error" && t.message.includes("too long")), JSON.stringify(toastMessages));
+        test("the submit button is re-enabled after a failed post", document.getElementById("commentSubmitBtn").disabled === false);
+        createShouldFail = false;
+
+        // --- Case 6: delete flow — confirm gate + success ---------------------
+        calls.length = 0;
+        toastMessages.length = 0;
+        const originalConfirm = window.confirm;
+
+        window.confirm = () => false;
+        document.querySelector(".comment-delete-btn").click();
+        await new Promise(r => setTimeout(r, 50));
+        test("cancelling the delete confirm makes zero deleteComment calls", !calls.some(c => c[0] === "deleteComment"));
+
+        window.confirm = () => true;
+        const countBefore = document.querySelectorAll(".comment-item").length;
+        document.querySelector(".comment-delete-btn").click();
+        await waitFor(() => calls.some(c => c[0] === "deleteComment"));
+        await waitFor(() => document.querySelectorAll(".comment-item").length === countBefore - 1);
+
+        test("confirmed delete calls deleteComment", calls.some(c => c[0] === "deleteComment"));
+        test("the deleted comment is removed from the list", document.querySelectorAll(".comment-item").length === countBefore - 1);
+        test("a success toast is shown for delete", toastMessages.some(t => t.type === "success"));
+
+        window.confirm = originalConfirm;
+
+        // --- Case 7: pagination — Load More fetches the next page and appends ---
+        calls.length = 0;
+        toastMessages.length = 0;
+
+        const bigBatch = [];
+        for (let i = 1; i <= 55; i++) {
+            const n = String(i).padStart(2, "0");
+            bigBatch.push({
+                id: `p${n}`,
+                build_id: "build-1",
+                user_id: "user-a",
+                body: `Comment number ${i}`,
+                created_at: `2026-03-01T00:${n}:00Z`
+            });
+        }
+        mockComments = bigBatch;
+
+        resetLoadMoreButton();
+        await renderComments(build, currentUser);
+
+        test("first page renders only PAGE_SIZE (50) comments, not all 55", document.querySelectorAll(".comment-item").length === 50, `got ${document.querySelectorAll(".comment-item").length}`);
+        test("Load More is visible when a full page was returned", document.getElementById("commentsLoadMore").hidden === false);
+
+        calls.length = 0;
+        document.getElementById("commentsLoadMore").click();
+        await waitFor(() => document.querySelectorAll(".comment-item").length === 55);
+
+        const loadMoreCall = calls.find(c => c[0] === "getBuildComments");
+        test("Load More requests the next page using an ascending 'after' cursor (last-loaded comment's created_at)", loadMoreCall?.[2]?.after === "2026-03-01T00:50:00Z", JSON.stringify(loadMoreCall));
+        test("clicking Load More appends the remaining comments without dropping the first page", document.querySelectorAll(".comment-item").length === 55);
+        test("Load More hides itself once the last (partial) page has been loaded", document.getElementById("commentsLoadMore").hidden === true);
+
+        // Appended items must get their own working delete-button listeners too.
+        window.confirm = () => true;
+        const lastItem = document.querySelector('.comment-item[data-id="p55"]');
+        const deleteBtnOnAppendedItem = lastItem?.querySelector(".comment-delete-btn");
+        test("an appended (page-2) comment's delete button is present and bound", deleteBtnOnAppendedItem !== null);
+        window.confirm = originalConfirm;
+
+        // --- Case 8: load failure shows a visible message, not a blank/silent list ---
+        const failRepoSrc = `
+            export async function getBuildComments() { throw new Error("network down"); }
+            export async function createComment() { throw new Error("not used"); }
+            export async function deleteComment() { throw new Error("not used"); }
+        `;
+        const failRewritten = realSrc
+            .replaceAll('"../../repositories/commentRepository.js"', `"${blobUrl(failRepoSrc)}"`)
+            .replaceAll('"../../repositories/profileRepository.js"', `"${rewrites['"../../repositories/profileRepository.js"']}"`)
+            .replaceAll('"../../repositories/mediaRepository.js"', `"${rewrites['"../../repositories/mediaRepository.js"']}"`)
+            .replaceAll('"../../core/toast.js"', `"${rewrites['"../../core/toast.js"']}"`);
+        const { renderComments: renderCommentsFailing } = await import(blobUrl(failRewritten));
+
+        resetLoadMoreButton();
+        await renderCommentsFailing(build, currentUser);
+        test("a comment load failure shows a visible error message, not a blank list", document.getElementById("commentsList").textContent.toLowerCase().includes("could not load"));
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`comments.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

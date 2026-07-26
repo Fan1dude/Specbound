@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../assets/brand/logo/favicon.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Workshop | Specbound</title>
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+
+    <nav class="navbar" id="navbar"></nav>
+
+    <main class="workshop-page" id="main">
+
+        <section class="workshop-hero">
+            <p class="hero-badge">MY WORKSHOP</p>
+            <h1 id="workshopGreeting">Welcome back.</h1>
+            <p class="hero-description">
+                Manage your projects, track progress, and continue documenting your work.
+            </p>
+        </section>
+
+        <section class="workshop-continue" id="workshopContinue">
+            <div class="skeleton-card">
+                <div class="skeleton skeleton-title"></div>
+                <div class="skeleton skeleton-text"></div>
+            </div>
+        </section>
+
+        <section class="workshop-section" id="workshopDraftsSection" hidden>
+            <div class="section-heading">
+                <p class="hero-badge">In Progress</p>
+                <h2>Drafts</h2>
+            </div>
+
+            <div id="workshopDrafts" class="draft-grid"></div>
+        </section>
+
+        <section class="workshop-section">
+            <div class="section-heading split-heading">
+                <div>
+                    <p class="hero-badge">My Projects</p>
+                    <h2 id="workshopProjectCount">Loading...</h2>
+                </div>
+
+                <a href="upload.html" class="btn btn-secondary">
+                    New Project
+                </a>
+            </div>
+
+            <div id="workshopProjects" class="project-grid"></div>
+        </section>
+
+        <section class="workshop-section" id="workshopSavedSection">
+            <div class="section-heading">
+                <p class="hero-badge">Bookmarked</p>
+                <h2 id="workshopSavedCount">Saved Projects</h2>
+            </div>
+
+            <div id="workshopSaved" class="project-grid"></div>
+        </section>
+
+        <section class="workshop-section workshop-actions-section">
+            <div class="section-heading">
+                <p class="hero-badge">Quick Actions</p>
+                <h2>Manage Your Account</h2>
+            </div>
+
+            <div class="workshop-actions">
+                <a href="upload.html" class="btn btn-secondary">Upload Project</a>
+                <a href="settings.html" class="btn btn-secondary">Settings</a>
+                <a href="#" id="workshopProfileLink" class="btn btn-secondary">View Public Profile</a>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="footer" id="footer"></footer>
+
+    <script type="module" src="../js/pages/workshop/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../assets/brand/logo/favicon.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Creator Profile | Specbound</title>
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <main class="profile-page" id="main">
+        <section class="profile-hero">
+            <div class="profile-avatar" id="profileAvatar">?</div>
+
+            <div class="profile-hero-info">
+                <p class="hero-badge">Creator</p>
+                <h1 id="profileUsername">Loading...</h1>
+
+                <p id="profileDisplayName" class="profile-display-name" hidden></p>
+                <p id="profileBio">Hardware Creator</p>
+
+                <div id="profileMeta" class="profile-meta"></div>
+                <div id="profileLinks" class="profile-links"></div>
+
+                <div class="profile-follow-row">
+                    <div id="profileFollowCounts" class="profile-follow-counts"></div>
+
+                    <div class="follow-action">
+                        <button
+                            type="button"
+                            id="followBtn"
+                            class="follow-btn"
+                            aria-pressed="false"
+                            aria-describedby="followHint"
+                            hidden
+                        >
+                            Follow
+                        </button>
+
+                        <p id="followHint" class="follow-hint" role="status" aria-live="polite" hidden></p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="profile-stats" id="profileStats">
+            <p class="text-secondary">Loading stats...</p>
+        </section>
+
+        <section class="profile-section">
+            <div class="section-heading">
+                <p class="hero-badge">Projects</p>
+                <h2>Published Projects</h2>
+            </div>
+
+            <div id="profileBuilds" class="project-grid">
+                <p class="text-secondary">Loading projects...</p>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer" id="footer"></footer>
+
+    <script type="module" src="../js/pages/profile/app.js"></script>
+</body>
+</html>

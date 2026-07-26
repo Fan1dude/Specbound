@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 7C — profile follow button</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 7C — profile follow button</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="profileFollowCounts"></div>
+    <button type="button" id="followBtn" aria-pressed="false" hidden>Follow</button>
+    <p id="followHint" hidden></p>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        // --- Mock state -----------------------------------------------------
+        const calls = [];
+        const toastMessages = [];
+        let mockHasFollowed = false;
+        let hasFollowedShouldFail = false;
+        let setFollowShouldFail = false;
+        let setFollowErrorMessage = "Could not update your follow status.";
+        let setFollowResultOverride = null;
+
+        globalThis.__mock = {
+            calls, toastMessages,
+            get mockHasFollowed() { return mockHasFollowed; },
+            get hasFollowedShouldFail() { return hasFollowedShouldFail; },
+            get setFollowShouldFail() { return setFollowShouldFail; },
+            get setFollowErrorMessage() { return setFollowErrorMessage; },
+            get setFollowResultOverride() { return setFollowResultOverride; }
+        };
+
+        const followRepoSrc = `
+            export async function hasFollowed(followerId, followingId) {
+                globalThis.__mock.calls.push(["hasFollowed", followerId, followingId]);
+                if (globalThis.__mock.hasFollowedShouldFail) throw new Error("network down");
+                return globalThis.__mock.mockHasFollowed;
+            }
+            export async function setFollow(followingId, followed) {
+                globalThis.__mock.calls.push(["setFollow", followingId, followed]);
+                if (globalThis.__mock.setFollowShouldFail) throw new Error(globalThis.__mock.setFollowErrorMessage);
+                const override = globalThis.__mock.setFollowResultOverride;
+                if (override) return override;
+                return { followed, followersCount: followed ? 11 : 10, followingCount: 3 };
+            }
+        `;
+
+        const toastSrc = `
+            export function showToast(message, type) {
+                globalThis.__mock.toastMessages.push({ message, type });
+            }
+        `;
+
+        const rewrites = {
+            '"../../repositories/followRepository.js"': blobUrl(followRepoSrc),
+            '"../../core/toast.js"': blobUrl(toastSrc)
+        };
+
+        const realSrc = await (await fetch("../js/pages/profile/renderFollow.js")).text();
+        let rewritten = realSrc;
+        for (const [from, to] of Object.entries(rewrites)) {
+            rewritten = rewritten.replaceAll(from, `"${to}"`);
+        }
+
+        const { renderFollow } = await import(blobUrl(rewritten));
+
+        const button = document.getElementById("followBtn");
+        const hint = document.getElementById("followHint");
+        const countsEl = document.getElementById("profileFollowCounts");
+
+        function waitFor(predicate, timeoutMs = 2000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                const check = () => {
+                    if (predicate()) return resolve();
+                    if (Date.now() - start > timeoutMs) return reject(new Error("timed out: " + predicate.toString()));
+                    setTimeout(check, 10);
+                };
+                check();
+            });
+        }
+
+        const otherProfile = { id: "user-a", followers_count: 10, following_count: 3 };
+        const ownProfile = { id: "user-me", followers_count: 5, following_count: 2 };
+        const viewer = { id: "user-me" };
+
+        // --- Case 1: counts always render, regardless of viewer -------------
+        await renderFollow(otherProfile, null);
+
+        test("followers count renders from profile.followers_count", countsEl.textContent.includes("10") && countsEl.textContent.includes("Followers"));
+        test("following count renders from profile.following_count", countsEl.textContent.includes("3") && countsEl.textContent.includes("Following"));
+        test("both counts are real links (clicking opens the corresponding list)", countsEl.querySelectorAll("a.profile-follow-count").length === 2);
+
+        // --- Case 2: signed out — button visible but disabled, sign-in hint ---
+        test("signed out: button is visible (not hidden)", button.hidden === false);
+        test("signed out: button is disabled", button.disabled === true);
+        test("signed out: a visible sign-in hint is shown", !hint.hidden && hint.textContent.includes("Sign in"));
+        test("signed out: no hasFollowed call is made", !calls.some(c => c[0] === "hasFollowed"));
+
+        // --- Case 3: viewing your own profile — no control at all -----------
+        calls.length = 0;
+        await renderFollow(ownProfile, viewer);
+
+        test("own profile: the button is hidden entirely", button.hidden === true);
+        test("own profile: no hint is shown either", hint.hidden === true);
+        test("own profile: no hasFollowed call is made (nothing to check)", !calls.some(c => c[0] === "hasFollowed"));
+
+        // --- Case 4: signed in, viewing someone else, not yet following -----
+        calls.length = 0;
+        mockHasFollowed = false;
+
+        await renderFollow(otherProfile, viewer);
+
+        test("signed in + other profile: button is visible and enabled", button.hidden === false && button.disabled === false);
+        test("signed in + other profile: no hint shown", hint.hidden === true);
+        test("not-yet-following: button reads 'Follow'", button.textContent.trim() === "Follow");
+        test("initial follow status is checked for the signed-in viewer against this profile", calls.some(c => c[0] === "hasFollowed" && c[1] === "user-me" && c[2] === "user-a"));
+
+        // --- Case 5: click to follow — optimistic, then reconciled -----------
+        calls.length = 0;
+        button.click();
+
+        test("optimistic update: button reads 'Following' immediately on click", button.textContent.trim() === "Following" && button.classList.contains("is-following"));
+        test("optimistic update: followers count increments immediately on click", countsEl.textContent.includes("11"));
+        test("optimistic update: button is disabled while the request is in flight", button.disabled === true);
+
+        await waitFor(() => calls.some(c => c[0] === "setFollow"));
+        await waitFor(() => button.disabled === false);
+
+        test("following calls setFollow(profileId, true)", calls.some(c => c[0] === "setFollow" && c[1] === "user-a" && c[2] === true));
+        test("after success, state is reconciled from the server's authoritative followed value", button.classList.contains("is-following") === true);
+        test("after success, the followers count reflects the server's authoritative value", countsEl.textContent.includes("11"));
+
+        // --- Case 6: click again to unfollow ----------------------------------
+        calls.length = 0;
+        button.click();
+
+        test("optimistic update: button reads 'Follow' immediately on second click", button.textContent.trim() === "Follow");
+        test("optimistic update: followers count decrements immediately", countsEl.textContent.includes("10"));
+
+        await waitFor(() => calls.some(c => c[0] === "setFollow"));
+        await waitFor(() => button.disabled === false);
+
+        test("unfollowing calls setFollow(profileId, false)", calls.some(c => c[0] === "setFollow" && c[1] === "user-a" && c[2] === false));
+
+        // --- Case 7: failed follow request rolls back the optimistic UI ------
+        calls.length = 0;
+        toastMessages.length = 0;
+        setFollowShouldFail = true;
+        setFollowErrorMessage = "You cannot follow yourself.";
+
+        const followingBeforeFailure = button.classList.contains("is-following");
+        const countsBeforeFailure = countsEl.textContent;
+
+        button.click();
+        await waitFor(() => toastMessages.length > 0);
+
+        test("a failed request rolls back the optimistic follow state", button.classList.contains("is-following") === followingBeforeFailure);
+        test("a failed request rolls back the optimistic followers count", countsEl.textContent === countsBeforeFailure);
+        test("a failed request surfaces the actual server error via toast", toastMessages.some(t => t.type === "error" && t.message === "You cannot follow yourself."));
+        test("the button is re-enabled after a failed request", button.disabled === false);
+
+        setFollowShouldFail = false;
+
+        // --- Case 8: hasFollowed failing fails soft ---------------------------
+        calls.length = 0;
+        hasFollowedShouldFail = true;
+
+        await renderFollow(otherProfile, viewer);
+
+        test("a failed initial follow-status check does not throw and defaults to not-following", button.classList.contains("is-following") === false);
+        test("the button is still usable after a failed initial status check", button.disabled === false);
+
+        hasFollowedShouldFail = false;
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`renderFollow.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

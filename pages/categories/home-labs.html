@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../../assets/brand/logo/favicon.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Labs | Specbound</title>
+    <link rel="stylesheet" href="../../css/styles.css">
+</head>
+<body>
+
+    <nav class="navbar" id="navbar"></nav>
+
+    <main class="content-page" id="main">
+        <p class="hero-badge">TECHNOLOGY</p>
+        <h1>Home Labs</h1>
+        <p class="hero-description">Servers • Networking • Self-Hosting</p>
+
+        <p>
+            Browse home lab projects documented by the Specbound community —
+            servers, networking, and self-hosting builds.
+        </p>
+
+        <a class="btn btn-primary" href="../explore.html">Browse All Projects</a>
+    </main>
+
+    <footer class="footer" id="footer"></footer>
+
+    <script type="module">
+        import { loadNavbar, loadFooter } from "../../js/core/layout.js";
+
+        loadNavbar("../../");
+        loadFooter("../../");
+    </script>
+
+</body>
+</html>

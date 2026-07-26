@@ -1,0 +1,191 @@
+.container {
+    width: min(1200px, 92%);
+    margin: 0 auto;
+}
+
+.landing-hero {
+    min-height: 78vh;
+    display: flex;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.landing-hero .container {
+    display: grid;
+    grid-template-columns: 1.1fr .9fr;
+    gap: 64px;
+    align-items: center;
+}
+
+.hero-content {
+    max-width: 760px;
+}
+
+.hero-description {
+    max-width: 720px;
+    margin: 22px 0 28px;
+    font-size: 1.1rem;
+}
+
+.hero-actions {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.hero-visual {
+    display: flex;
+    justify-content: center;
+}
+
+.home-block {
+    padding: 80px 0;
+}
+
+.built-for-grid,
+.why-grid,
+.project-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 24px;
+}
+
+.why-card {
+    padding: 28px;
+}
+
+.why-number {
+    color: var(--primary);
+    font-weight: 900;
+    margin-bottom: 12px;
+}
+
+@media (max-width: 900px) {
+    .landing-hero .container {
+        grid-template-columns: 1fr;
+    }
+
+    .hero-visual {
+        display: none;
+    }
+}
+
+.hero-visual .blueprint-card {
+    width: 360px;
+    height: 360px;
+    border-radius: 36px;
+    border: 1px solid rgba(79,125,255,.25);
+    background:
+        linear-gradient(rgba(79,125,255,.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(79,125,255,.08) 1px, transparent 1px),
+        rgba(79,125,255,.06);
+    background-size: 28px 28px;
+    box-shadow: 0 0 80px rgba(79,125,255,.18);
+    position: relative;
+}
+
+.hero-visual .blueprint-card span {
+    position: absolute;
+    background: var(--primary);
+    border-radius: 18px;
+    box-shadow: 0 0 40px rgba(79,125,255,.55);
+}
+
+.hero-visual .blueprint-card span:nth-child(1) {
+    width: 150px;
+    height: 56px;
+    top: 95px;
+    left: 105px;
+}
+
+.hero-visual .blueprint-card span:nth-child(2) {
+    width: 56px;
+    height: 160px;
+    top: 120px;
+    left: 152px;
+}
+
+.hero-visual .blueprint-card span:nth-child(3) {
+    width: 170px;
+    height: 56px;
+    top: 190px;
+    left: 95px;
+}
+
+.split-heading{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:end;
+
+    margin-bottom:36px;
+
+}
+
+.view-all{
+
+    color:var(--primary);
+
+    text-decoration:none;
+
+    font-weight:700;
+
+}
+
+.view-all:hover{
+
+    text-decoration:underline;
+
+}
+
+.activity-feed-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 28px;
+}
+
+.activity-feed-tab {
+    padding: 10px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-weight: 700;
+}
+
+.activity-feed-tab:hover {
+    color: var(--text);
+}
+
+.activity-feed-tab.is-active {
+    background: var(--primary-strong);
+    border-color: var(--primary-strong);
+    color: #fff;
+}
+
+.activity-feed-tab[hidden] {
+    display: none;
+}
+
+.activity-feed-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.activity-feed-label {
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.activity-feed-load-more-wrap {
+    display: flex;
+    justify-content: center;
+    margin-top: 32px;
+}

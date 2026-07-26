@@ -1,0 +1,112 @@
+.follow-list-page {
+    width: min(680px, 92%);
+    margin: 0 auto;
+    padding: 72px 0 120px;
+}
+
+.follow-list-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: 32px;
+}
+
+.follow-list-hero h1 {
+    font-size: clamp(2.2rem, 5vw, 3rem);
+    line-height: 1;
+    letter-spacing: -.04em;
+    margin-top: 8px;
+}
+
+.follow-list-back {
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+}
+
+.follow-list-back:hover {
+    color: var(--text);
+}
+
+.follow-list {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.follow-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.follow-row:last-child {
+    border-bottom: none;
+}
+
+.follow-row-profile {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    color: var(--text);
+}
+
+.follow-row-avatar {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: var(--radius-md);
+    background: rgba(79,125,255,.14);
+    border: 1px solid rgba(79,125,255,.25);
+    color: var(--primary);
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    overflow: hidden;
+}
+
+.follow-row-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.follow-row-username {
+    font-weight: 700;
+}
+
+.follow-row-btn {
+    flex-shrink: 0;
+}
+
+.follow-row-btn.is-following {
+    background: transparent;
+    color: var(--text);
+    border-color: var(--border);
+}
+
+.follow-list-load-more-wrap {
+    display: flex;
+    justify-content: center;
+    margin-top: 24px;
+}
+
+@media (max-width: 500px) {
+    .follow-list-hero {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .follow-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+}

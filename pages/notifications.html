@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../assets/brand/logo/favicon.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notifications | Specbound</title>
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <main class="notifications-page" id="main">
+        <section class="notifications-hero">
+            <div>
+                <p class="hero-badge">Inbox</p>
+                <h1>Notifications</h1>
+            </div>
+
+            <button type="button" id="notificationsMarkAllRead" class="btn btn-secondary">
+                Mark all read
+            </button>
+        </section>
+
+        <div id="notificationsList" class="notifications-list">
+            <p class="text-secondary">Loading notifications...</p>
+        </div>
+
+        <div class="notifications-load-more-wrap">
+            <button type="button" id="notificationsLoadMore" class="btn btn-secondary" hidden>
+                Load More
+            </button>
+        </div>
+    </main>
+
+    <footer class="footer" id="footer"></footer>
+
+    <script type="module" src="../js/pages/notifications/app.js"></script>
+</body>
+</html>

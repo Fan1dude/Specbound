@@ -1,0 +1,27 @@
+/* ---------- Global Animations ---------- */
+
+* {
+    transition:
+        background-color var(--transition),
+        color var(--transition),
+        border-color var(--transition),
+        transform var(--transition),
+        opacity var(--transition),
+        box-shadow var(--transition);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeIn .35s ease;
+}

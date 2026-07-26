@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="assets/brand/logo/favicon.svg">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="description"
+        content="Discover, document, and share technology projects on Specbound."
+    >
+
+    <title>Specbound | Document Every Build</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet"
+    >
+
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+
+<body>
+
+    <!-- Navbar -->
+    <nav
+        class="navbar"
+        id="navbar"
+        aria-label="Main navigation"
+    ></nav>
+
+    <main id="main">
+
+        <!-- Hero -->
+        <section class="landing-hero">
+
+            <div class="hero-bg-grid" aria-hidden="true"></div>
+            <div class="hero-bg-glow" aria-hidden="true"></div>
+
+            <div class="container">
+
+                <div class="hero-content">
+
+                    <p class="hero-badge">
+                        For Technology Creators
+                    </p>
+
+                    <h1>
+                        Document<br>
+                        Every Build.
+                    </h1>
+
+                    <p class="hero-description">
+                        Discover technology projects, document your progress,
+                        and inspire the next generation of creators.
+                    </p>
+
+                    <div class="hero-actions">
+
+                        <a
+                            href="#trending"
+                            class="btn btn-primary btn-large"
+                        >
+                            Explore Blueprints
+                        </a>
+
+                        <a
+                            href="pages/upload.html"
+                            class="btn btn-secondary btn-large"
+                        >
+                            Create Blueprint
+                        </a>
+
+                    </div>
+
+                </div>
+
+                <div class="hero-visual" aria-hidden="true">
+
+                    <div class="blueprint-card">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- Featured Spotlight -->
+        <section class="home-block featured">
+
+            <div class="container">
+
+                <div class="section-heading">
+
+                    <p class="hero-badge">
+                        Spotlight
+                    </p>
+
+                    <h2>
+                        Featured Spotlight
+                    </h2>
+
+                </div>
+
+                <div class="featured-card card card-featured">
+
+                    <button
+                        class="slide-arrow left"
+                        id="prevFeatured"
+                        type="button"
+                        aria-label="Show previous featured blueprint"
+                    >
+                        ←
+                    </button>
+
+                    <div
+                        class="featured-image"
+                        id="featuredImage"
+                    >
+                        <div class="featured-placeholder">
+                            Loading featured projects...
+                        </div>
+                    </div>
+
+                    <div class="featured-info">
+
+                        <p class="featured-label">
+                            Featured Blueprint
+                        </p>
+
+                        <h2 id="featuredTitle">
+                            Loading...
+                        </h2>
+
+                        <p id="featuredCategory">
+                            Category
+                        </p>
+
+                        <a
+                            id="featuredCreator"
+                            class="featured-creator"
+                            href="#"
+                        >
+                            Built by Creator
+                        </a>
+
+                        <p id="featuredUpdated">
+                            Updated recently
+                        </p>
+
+                        <div class="progress-box">
+
+                            <p>Completion</p>
+
+                            <div
+                                class="progress-bar"
+                                role="progressbar"
+                                aria-label="Blueprint completion"
+                                aria-valuemin="0"
+                                aria-valuemax="100"
+                                aria-valuenow="0"
+                            >
+                                <div class="progress-fill"></div>
+                            </div>
+
+                            <span id="featuredProgress">
+                                0%
+                            </span>
+
+                        </div>
+
+                        <p
+                            class="version"
+                            id="featuredVersion"
+                        >
+                            Current Version v1.0
+                        </p>
+
+                        <a
+                            href="#"
+                            class="btn btn-primary"
+                            id="featuredLink"
+                        >
+                            View Blueprint
+                        </a>
+
+                    </div>
+
+                    <button
+                        class="slide-arrow right"
+                        id="nextFeatured"
+                        type="button"
+                        aria-label="Show next featured blueprint"
+                    >
+                        →
+                    </button>
+
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- Explore Technologies -->
+        <section class="home-block built-for-section">
+
+            <div class="container">
+
+                <div class="section-heading">
+
+                    <p class="hero-badge">
+                        Explore Technologies
+                    </p>
+
+                    <h2>
+                        Find your community.
+                    </h2>
+
+                    <p>
+                        Browse projects across PC building, Arduino, robotics,
+                        3D printing, workspaces, home labs, and more.
+                    </p>
+
+                </div>
+
+                <div
+                    id="technologyGrid"
+                    class="built-for-grid"
+                ></div>
+
+            </div>
+
+        </section>
+
+        <!-- Activity Feed -->
+        <section
+            class="home-block projects-section"
+            id="activityFeedSection"
+        >
+
+            <div class="container">
+
+                <div class="section-heading split-heading">
+
+                    <div>
+
+                        <p class="hero-badge">
+                            Activity
+                        </p>
+
+                        <h2>
+                            Latest Activity
+                        </h2>
+
+                    </div>
+
+                    <a
+                        href="pages/explore.html"
+                        class="view-all"
+                    >
+                        View All →
+                    </a>
+
+                </div>
+
+                <div class="activity-feed-tabs" id="activityFeedTabs" role="tablist">
+                    <button
+                        type="button"
+                        class="activity-feed-tab"
+                        id="activityFeedFollowingTab"
+                        data-scope="following"
+                        role="tab"
+                        aria-selected="false"
+                        aria-controls="activityFeedGrid"
+                        hidden
+                    >
+                        Following
+                    </button>
+
+                    <button
+                        type="button"
+                        class="activity-feed-tab"
+                        id="activityFeedExploreTab"
+                        data-scope="explore"
+                        role="tab"
+                        aria-selected="true"
+                        aria-controls="activityFeedGrid"
+                    >
+                        Explore
+                    </button>
+                </div>
+
+                <div
+                    id="activityFeedGrid"
+                    role="tabpanel"
+                    class="project-grid"
+                ></div>
+
+                <div class="activity-feed-load-more-wrap">
+                    <button type="button" id="activityFeedLoadMore" class="btn btn-secondary" hidden>
+                        Load More
+                    </button>
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer
+        class="footer"
+        id="footer"
+    ></footer>
+
+    <script
+        type="module"
+        src="js/pages/home/app.js"
+    ></script>
+
+</body>
+
+</html>

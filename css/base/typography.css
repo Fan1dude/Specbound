@@ -1,0 +1,57 @@
+/* ---------- Headings ---------- */
+
+h1 {
+    font-size: clamp(3rem, 7vw, 5.5rem);
+    font-weight: 800;
+    line-height: .95;
+    letter-spacing: -.05em;
+}
+
+h2 {
+    font-size: clamp(2rem, 5vw, 3rem);
+    font-weight: 700;
+    line-height: 1.05;
+}
+
+h3 {
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+
+h4 {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+/* ---------- Text ---------- */
+
+p {
+    color: var(--text-secondary);
+    line-height: 1.7;
+}
+
+small {
+    color: var(--text-muted);
+}
+
+/* ---------- Labels ---------- */
+
+label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+/* ---------- Utilities ---------- */
+
+.text-center {
+    text-align: center;
+}
+
+.text-muted {
+    color: var(--text-muted);
+}
+
+.text-secondary {
+    color: var(--text-secondary);
+}

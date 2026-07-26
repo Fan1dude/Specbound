@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 6B — searchBuilds() query construction</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 6B — searchBuilds() query construction</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        // --- Mock supabase client -------------------------------------------
+        // Captures every call made against it so the actual strings
+        // searchBuilds() builds (the thing that can't be verified without a
+        // live PostgREST instance) are at least internally verifiable: what
+        // gets sent for a given input, byte for byte.
+        const calls = [];
+        let profilesResponse = { data: [], error: null };
+        let buildsResponse = { data: [], error: null };
+
+        globalThis.__mock = {
+            calls,
+            get profilesResponse() { return profilesResponse; },
+            get buildsResponse() { return buildsResponse; }
+        };
+
+        // Every reference inside here has to go through globalThis.__mock,
+        // not a bare closed-over variable — .toString() below captures
+        // only the source text, not the lexical closure, so a bare
+        // identifier (like a top-level "calls") is undefined once this
+        // runs inside the separate blob module it gets transplanted into.
+        function makeBuilder(table) {
+            const state = { table };
+
+            const builder = {
+                select(cols) { state.select = cols; return builder; },
+                ilike(col, pattern) {
+                    globalThis.__mock.calls.push([table, "ilike", col, pattern]);
+                    state.ilike = { col, pattern };
+                    return builder;
+                },
+                eq(col, value) {
+                    globalThis.__mock.calls.push([table, "eq", col, value]);
+                    return builder;
+                },
+                or(condition) {
+                    globalThis.__mock.calls.push([table, "or", condition]);
+                    return builder;
+                },
+                order() { return builder; },
+                limit() { return builder; },
+                then(resolve) {
+                    const response = table === "profiles" ? globalThis.__mock.profilesResponse : globalThis.__mock.buildsResponse;
+                    resolve(response);
+                }
+            };
+
+            return builder;
+        }
+
+        const supabaseSrc = `
+            export const supabase = {
+                from(table) {
+                    return (${makeBuilder.toString()})(table);
+                }
+            };
+        `;
+
+        const realSrc = await (await fetch("../js/repositories/buildRepository.js")).text();
+        const rewritten = realSrc.replaceAll('"../core/supabase.js"', `"${blobUrl(supabaseSrc)}"`);
+        const { searchBuilds } = await import(blobUrl(rewritten));
+
+        // --- Case 1: plain query — no special characters ---------------------
+        calls.length = 0;
+        profilesResponse = { data: [{ id: "user-1" }], error: null };
+        buildsResponse = { data: [{ id: "b1" }], error: null };
+
+        await searchBuilds("arduino");
+
+        const profilesIlike = calls.find(c => c[0] === "profiles" && c[1] === "ilike");
+        test("plain query: profiles ilike pattern is %query%", profilesIlike?.[3] === "%arduino%", profilesIlike?.[3]);
+
+        const buildsOr = calls.find(c => c[0] === "builds" && c[1] === "or");
+        test("plain query: or() includes title/description/category ilike conditions", buildsOr?.[2].includes('title.ilike."%arduino%"') && buildsOr?.[2].includes('description.ilike."%arduino%"') && buildsOr?.[2].includes('category.ilike."%arduino%"'), buildsOr?.[2]);
+        test("plain query: or() includes the matched user id from the profiles lookup", buildsOr?.[2].includes("user_id.in.(user-1)"), buildsOr?.[2]);
+
+        test(
+            "results are always filtered to visibility=public",
+            calls.some(c => c[0] === "builds" && c[1] === "eq" && c[2] === "visibility" && c[3] === "public"),
+            JSON.stringify(calls.filter(c => c[0] === "builds"))
+        );
+
+        // --- Case 2: no matching usernames — no user_id.in clause added ------
+        calls.length = 0;
+        profilesResponse = { data: [], error: null };
+
+        await searchBuilds("nomatch");
+
+        const orNoUsers = calls.find(c => c[0] === "builds" && c[1] === "or");
+        test("no matching usernames: or() has no user_id.in clause at all", !orNoUsers?.[2].includes("user_id.in"), orNoUsers?.[2]);
+
+        // --- Case 3: LIKE special characters are escaped ---------------------
+        calls.length = 0;
+        profilesResponse = { data: [], error: null };
+
+        await searchBuilds("50%_off");
+
+        const percentIlike = calls.find(c => c[0] === "profiles" && c[1] === "ilike");
+        test("a literal % and _ in the query are backslash-escaped for ILIKE", percentIlike?.[3] === "%50\\%\\_off%", percentIlike?.[3]);
+
+        // --- Case 4: characters special to PostgREST's or() DSL are safely quoted ---
+        calls.length = 0;
+        profilesResponse = { data: [], error: null };
+
+        await searchBuilds("foo,bar(baz)");
+
+        const orComma = calls.find(c => c[0] === "builds" && c[1] === "or");
+        // The whole ilike value must be wrapped in double quotes so the
+        // comma/parens inside it are not parsed as DSL structure — i.e. the
+        // condition list must NOT have been split apart by the query's own
+        // internal commas/parens.
+        test(
+            "a query containing commas and parens does not fracture the or() condition list",
+            orComma?.[2].includes('title.ilike."%foo,bar(baz)%"'),
+            orComma?.[2]
+        );
+
+        // --- Case 5: whitespace-only / empty query never issues a query at all ---
+        calls.length = 0;
+        const emptyResult = await searchBuilds("   ");
+        test("a whitespace-only query returns [] without calling the database at all", calls.length === 0 && Array.isArray(emptyResult) && emptyResult.length === 0, JSON.stringify(calls));
+
+        // --- Case 6: query is trimmed before use ------------------------------
+        calls.length = 0;
+        profilesResponse = { data: [], error: null };
+        await searchBuilds("   raspberry pi   ");
+
+        const trimmedIlike = calls.find(c => c[0] === "profiles" && c[1] === "ilike");
+        test("leading/trailing whitespace is trimmed before building the pattern", trimmedIlike?.[3] === "%raspberry pi%", trimmedIlike?.[3]);
+
+        // --- Case 7: a profiles-query error propagates (surfaced to the caller) ---
+        calls.length = 0;
+        profilesResponse = { data: null, error: { message: "profiles lookup failed" } };
+        let threw = false;
+        try {
+            await searchBuilds("anything");
+        } catch (error) {
+            threw = error.message === "profiles lookup failed";
+        }
+        test("a profiles query error is thrown, not silently swallowed", threw);
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`searchBuilds.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

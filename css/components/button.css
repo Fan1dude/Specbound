@@ -1,0 +1,81 @@
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 18px;
+    border-radius: var(--radius-sm);
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+/* The [hidden] attribute selector has the same specificity as .btn above,
+   so without this override the browser's built-in [hidden] { display: none }
+   rule loses to display: inline-flex and a "hidden" button stays visible
+   (same trap as .editor-recovery-banner[hidden] in editor.css). */
+.btn[hidden] {
+    display: none;
+}
+
+/* No :disabled styling existed at all before this — a disabled button
+   (e.g. Publish, gated on readiness) looked visually identical to an
+   enabled one, with only the native no-op click behavior distinguishing
+   them. That reads as "the button doesn't work" rather than "the button
+   is correctly refusing input." */
+.btn:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.btn-primary {
+    background: var(--primary-strong);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: var(--primary-strong-hover);
+    transform: translateY(-2px);
+}
+
+.btn-secondary {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+    border-color: rgba(79,125,255,.4);
+    transform: translateY(-2px);
+}
+
+.btn-ghost {
+    color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+    color: var(--text);
+    background: var(--surface);
+}
+
+.btn-danger {
+    background: var(--danger-strong);
+    color: white;
+}
+
+.btn-danger:hover {
+    background: var(--danger-strong-hover);
+    transform: translateY(-2px);
+}
+
+.btn-small {
+    padding: 9px 13px;
+    font-size: .85rem;
+    min-height: 44px;
+}
+
+.btn-large {
+    padding: 16px 24px;
+    font-size: 1rem;
+}

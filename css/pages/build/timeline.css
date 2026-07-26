@@ -1,0 +1,124 @@
+.journal-list {
+    display: grid;
+    gap: 28px;
+}
+
+.journal-list-collapsed .journal-entry:nth-child(n + 4) {
+    display: none;
+}
+
+.journal-entry {
+    padding: 30px;
+    overflow: hidden;
+}
+
+.journal-entry-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 24px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--border);
+}
+
+.journal-version {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+
+    margin-bottom: 10px;
+    color: var(--primary);
+    font-size: .82rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    text-decoration: none;
+}
+
+.journal-version:hover {
+    text-decoration: underline;
+}
+
+.journal-type {
+    display: inline-flex;
+    padding: 7px 11px;
+    border-radius: 999px;
+    background: rgba(79, 125, 255, .1);
+    color: var(--primary);
+    font-size: .82rem;
+    font-weight: 700;
+}
+
+.journal-date {
+    color: var(--text-muted);
+    font-size: .9rem;
+    white-space: nowrap;
+}
+
+.journal-entry-body {
+    padding: 26px 0;
+}
+
+.journal-entry-body h3 {
+    margin-bottom: 14px;
+    font-size: 1.65rem;
+}
+
+.journal-description {
+    max-width: 720px;
+    white-space: pre-line;
+}
+
+.journal-image {
+    width: 100%;
+    max-height: 560px;
+    margin-top: 24px;
+    border-radius: var(--radius-md);
+    object-fit: cover;
+}
+
+.journal-metadata {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+}
+
+.journal-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 11px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: .82rem;
+    font-weight: 600;
+}
+
+.journal-toggle-area {
+    display: grid;
+    justify-items: center;
+    gap: 14px;
+    margin-top: 30px;
+}
+
+.journal-summary {
+    color: var(--text-muted);
+    font-size: .9rem;
+}
+
+@media (max-width: 600px) {
+    .journal-entry {
+        padding: 22px;
+    }
+
+    .journal-entry-header {
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .journal-date {
+        white-space: normal;
+    }
+}

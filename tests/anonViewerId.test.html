@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 7A — anonymous viewer id</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 7A — anonymous viewer id</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        const STORAGE_KEY = "specbound:anon-viewer-id";
+        localStorage.removeItem(STORAGE_KEY);
+
+        // No mocking needed — this module only touches localStorage/crypto,
+        // both real browser globals, so the real file is imported directly.
+        const { getAnonViewerId } = await import("../js/core/anonViewerId.js");
+
+        // --- Case 1: first call generates and persists an id -----------------
+        const first = getAnonViewerId();
+
+        test("returns a non-empty string", typeof first === "string" && first.length > 0);
+        test("looks like a UUID", /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(first), first);
+        test("persists the id to localStorage under the expected key", localStorage.getItem(STORAGE_KEY) === first);
+
+        // --- Case 2: a second call in the same session returns the same id ---
+        const second = getAnonViewerId();
+
+        test("a second call returns the exact same id, not a new one", second === first);
+
+        // --- Case 3: an id already in storage is reused, not regenerated -----
+        localStorage.setItem(STORAGE_KEY, "11111111-2222-3333-4444-555555555555");
+        const third = getAnonViewerId();
+
+        test("an existing stored id is reused as-is", third === "11111111-2222-3333-4444-555555555555");
+
+        // --- Case 4: storage being unavailable degrades to a one-off id, not a throw ---
+        const originalGetItem = Storage.prototype.getItem;
+        const originalSetItem = Storage.prototype.setItem;
+
+        Storage.prototype.getItem = () => { throw new Error("storage disabled"); };
+        Storage.prototype.setItem = () => { throw new Error("storage disabled"); };
+
+        let fourthError = null;
+        let fourth = null;
+
+        try {
+            fourth = getAnonViewerId();
+        } catch (error) {
+            fourthError = error;
+        }
+
+        Storage.prototype.getItem = originalGetItem;
+        Storage.prototype.setItem = originalSetItem;
+
+        test("storage being unavailable does not throw", fourthError === null, String(fourthError));
+        test("storage being unavailable still returns a usable id", typeof fourth === "string" && fourth.length > 0);
+
+        localStorage.removeItem(STORAGE_KEY);
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`anonViewerId.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

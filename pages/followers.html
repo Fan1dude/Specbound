@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../assets/brand/logo/favicon.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Followers | Specbound</title>
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <main class="follow-list-page" id="main">
+        <section class="follow-list-hero">
+            <div>
+                <p class="hero-badge">Community</p>
+                <h1 id="followListHeading">Followers</h1>
+            </div>
+
+            <a href="#" id="followListProfileLink" class="follow-list-back">
+                &larr; Back to profile
+            </a>
+        </section>
+
+        <div id="followListContainer" class="follow-list">
+            <p class="text-secondary">Loading...</p>
+        </div>
+
+        <div class="follow-list-load-more-wrap">
+            <button type="button" id="followListLoadMore" class="btn btn-secondary" hidden>
+                Load More
+            </button>
+        </div>
+    </main>
+
+    <footer class="footer" id="footer"></footer>
+
+    <script type="module" src="../js/pages/followers/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 7C — followers/following list</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 7C — followers/following list</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="followListContainer"></div>
+    <button type="button" id="followListLoadMore" hidden>Load More</button>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        // --- Mock state -----------------------------------------------------
+        const calls = [];
+        const toastMessages = [];
+        let pageQueue = [];
+        let pageError = null;
+        let followedIds = [];
+        let setFollowShouldFail = false;
+
+        globalThis.__mock = {
+            calls, toastMessages,
+            get pageQueue() { return pageQueue; },
+            get pageError() { return pageError; },
+            get followedIds() { return followedIds; },
+            get setFollowShouldFail() { return setFollowShouldFail; }
+        };
+
+        const followRepoSrc = `
+            export async function getFollowersPage(userId, args) {
+                globalThis.__mock.calls.push(["getFollowersPage", userId, args]);
+                if (globalThis.__mock.pageError) throw new Error(globalThis.__mock.pageError);
+                return globalThis.__mock.pageQueue.shift() || [];
+            }
+            export async function getFollowingPage(userId, args) {
+                globalThis.__mock.calls.push(["getFollowingPage", userId, args]);
+                if (globalThis.__mock.pageError) throw new Error(globalThis.__mock.pageError);
+                return globalThis.__mock.pageQueue.shift() || [];
+            }
+            export async function getFollowedIds(followerId, targetIds) {
+                globalThis.__mock.calls.push(["getFollowedIds", followerId, targetIds]);
+                return globalThis.__mock.followedIds;
+            }
+            export async function setFollow(targetId, followed) {
+                globalThis.__mock.calls.push(["setFollow", targetId, followed]);
+                if (globalThis.__mock.setFollowShouldFail) throw new Error("Could not update your follow status.");
+                return { followed, followersCount: 0, followingCount: 0 };
+            }
+        `;
+
+        const profileRepoSrc = `
+            export async function getProfilesByIds(ids) {
+                globalThis.__mock.calls.push(["getProfilesByIds", ids]);
+                const known = {
+                    "user-a": { id: "user-a", username: "alice" },
+                    "user-b": { id: "user-b", username: "bob" },
+                    "user-me": { id: "user-me", username: "me" }
+                };
+                return ids.map(id => known[id]).filter(Boolean);
+            }
+        `;
+
+        const mediaRepoSrc = `
+            export async function resolveAvatarUrls(profiles) {
+                return new Map(profiles.map(profile => [profile.id, ""]));
+            }
+        `;
+
+        const toastSrc = `
+            export function showToast(message, type) {
+                globalThis.__mock.toastMessages.push({ message, type });
+            }
+        `;
+
+        const rewrites = {
+            '"../../repositories/followRepository.js"': blobUrl(followRepoSrc),
+            '"../../repositories/profileRepository.js"': blobUrl(profileRepoSrc),
+            '"../../repositories/mediaRepository.js"': blobUrl(mediaRepoSrc),
+            '"../../core/toast.js"': blobUrl(toastSrc)
+        };
+
+        const realSrc = await (await fetch("../js/pages/followList/renderFollowList.js")).text();
+        let rewritten = realSrc;
+        for (const [from, to] of Object.entries(rewrites)) {
+            rewritten = rewritten.replaceAll(from, `"${to}"`);
+        }
+
+        const { renderFollowList } = await import(blobUrl(rewritten));
+
+        const listEl = document.getElementById("followListContainer");
+        const loadMoreBtn = document.getElementById("followListLoadMore");
+        const viewer = { id: "user-me" };
+
+        function waitFor(predicate, timeoutMs = 2000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                const check = () => {
+                    if (predicate()) return resolve();
+                    if (Date.now() - start > timeoutMs) return reject(new Error("timed out: " + predicate.toString()));
+                    setTimeout(check, 10);
+                };
+                check();
+            });
+        }
+
+        function makeRow(idKey, id, daysAgo = 0) {
+            return { [idKey]: id, created_at: new Date(Date.now() - daysAgo * 86400000).toISOString() };
+        }
+
+        // --- Case 1: followers list — a full page implies more exist ---------
+        const fullFollowerPage = Array.from({ length: 20 }, (_, i) => makeRow("follower_id", `f${i}`, i));
+        // Route unknown ids through the mock profile lookup gracefully (falls
+        // back to "Specbound Member" since they're not in the `known` map) —
+        // real ids used here are user-a/user-b for the assertions that check
+        // actual usernames.
+        pageQueue = [fullFollowerPage];
+        followedIds = [];
+        calls.length = 0;
+
+        await renderFollowList("followers", "user-x", viewer);
+
+        test("renders one row per follower", document.querySelectorAll(".follow-row").length === 20, `got ${document.querySelectorAll(".follow-row").length}`);
+        test("calls getFollowersPage (not getFollowingPage) for type=followers", calls.some(c => c[0] === "getFollowersPage") && !calls.some(c => c[0] === "getFollowingPage"));
+        test("a full page shows Load More", loadMoreBtn.hidden === false);
+        test("batch-fetches profiles in one call, not one per row", calls.filter(c => c[0] === "getProfilesByIds").length === 1);
+        test("batch-checks the viewer's follow status in one call, not one per row", calls.filter(c => c[0] === "getFollowedIds").length === 1);
+
+        // --- Case 2: real usernames render, and each row gets a Follow button ---
+        pageQueue = [[makeRow("follower_id", "user-a"), makeRow("follower_id", "user-b")]];
+        followedIds = ["user-a"]; // viewer already follows alice, not bob
+        calls.length = 0;
+
+        await renderFollowList("followers", "user-x", viewer);
+
+        const rows = document.querySelectorAll(".follow-row");
+        test("real usernames are rendered from the batch profile lookup", listEl.textContent.includes("alice") && listEl.textContent.includes("bob"));
+        test("a followed row's button reads 'Following'", document.querySelector('.follow-row-btn[data-id="user-a"]').textContent.trim() === "Following");
+        test("a not-yet-followed row's button reads 'Follow'", document.querySelector('.follow-row-btn[data-id="user-b"]').textContent.trim() === "Follow");
+
+        // --- Case 3: the viewer's own row gets no Follow button --------------
+        pageQueue = [[makeRow("follower_id", "user-me"), makeRow("follower_id", "user-a")]];
+        followedIds = [];
+        calls.length = 0;
+
+        await renderFollowList("followers", "user-x", viewer);
+
+        test("the viewer's own row in the list has no Follow button", document.querySelector('.follow-row-btn[data-id="user-me"]') === null);
+        test("other rows still get a Follow button", document.querySelector('.follow-row-btn[data-id="user-a"]') !== null);
+
+        // --- Case 4: signed out — no Follow buttons anywhere, still shows usernames ---
+        pageQueue = [[makeRow("follower_id", "user-a")]];
+        calls.length = 0;
+
+        await renderFollowList("followers", "user-x", null);
+
+        test("signed out: no Follow buttons render at all", document.querySelectorAll(".follow-row-btn").length === 0);
+        test("signed out: no getFollowedIds call is made", !calls.some(c => c[0] === "getFollowedIds"));
+        test("signed out: usernames still render", listEl.textContent.includes("alice"));
+
+        // --- Case 5: clicking a row's Follow button toggles it, reconciled ---
+        pageQueue = [[makeRow("following_id", "user-a")]];
+        followedIds = [];
+        calls.length = 0;
+
+        await renderFollowList("following", "user-x", viewer);
+
+        test("calls getFollowingPage (not getFollowersPage) for type=following", calls.some(c => c[0] === "getFollowingPage") && !calls.some(c => c[0] === "getFollowersPage"));
+
+        const rowBtn = document.querySelector('.follow-row-btn[data-id="user-a"]');
+        calls.length = 0;
+        rowBtn.click(); // a real <button>, safe to click directly (unlike the row's <a> profile link)
+
+        test("optimistic: button reads 'Following' immediately on click", rowBtn.textContent.trim() === "Following");
+
+        await waitFor(() => calls.some(c => c[0] === "setFollow"));
+
+        test("clicking calls setFollow(id, true)", calls.some(c => c[0] === "setFollow" && c[1] === "user-a" && c[2] === true));
+
+        // --- Case 6: a failed unfollow click rolls back that row only --------
+        // The row is "Following" after Case 5's successful click — this
+        // click attempts to unfollow, which fails, so it should roll back
+        // to "Following" (its state right before this click), not "Follow".
+        setFollowShouldFail = true;
+        toastMessages.length = 0;
+        calls.length = 0;
+        rowBtn.click();
+
+        await waitFor(() => toastMessages.length > 0);
+
+        test("a failed row click rolls back to its prior state ('Following')", rowBtn.textContent.trim() === "Following");
+        test("a failed row click surfaces an error toast", toastMessages.some(t => t.type === "error"));
+
+        setFollowShouldFail = false;
+
+        // --- Case 7: Load More appends the next page --------------------------
+        pageQueue = [Array.from({ length: 20 }, (_, i) => makeRow("following_id", `g${i}`, i)), [makeRow("following_id", "h0")]];
+        followedIds = [];
+        calls.length = 0;
+
+        await renderFollowList("following", "user-x", viewer);
+        test("first page renders 20 rows", document.querySelectorAll(".follow-row").length === 20);
+
+        calls.length = 0;
+        loadMoreBtn.click();
+        await waitFor(() => calls.some(c => c[0] === "getFollowingPage"));
+        await waitFor(() => document.querySelectorAll(".follow-row").length === 21);
+
+        test("Load More appends the next page", document.querySelectorAll(".follow-row").length === 21);
+        test("the second page request includes a cursor", calls.some(c => c[0] === "getFollowingPage" && typeof c[2]?.before === "string"));
+
+        // --- Case 8: empty state, worded per type -----------------------------
+        pageQueue = [[]];
+        await renderFollowList("followers", "user-x", viewer);
+        test("empty followers list shows 'No followers yet.'", listEl.textContent.includes("No followers yet."));
+
+        pageQueue = [[]];
+        await renderFollowList("following", "user-x", viewer);
+        test("empty following list shows 'Not following anyone yet.'", listEl.textContent.includes("Not following anyone yet."));
+
+        // --- Case 9: load failure shows a visible error, not a blank/stuck list ---
+        pageError = "network down";
+        await renderFollowList("followers", "user-x", viewer);
+        test("a load failure shows a visible error message", listEl.textContent.toLowerCase().includes("could not load"));
+        pageError = null;
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`followList.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

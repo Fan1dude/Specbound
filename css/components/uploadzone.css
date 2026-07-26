@@ -1,0 +1,48 @@
+.upload-zone {
+    min-height: 220px;
+
+    display: grid;
+    place-items: center;
+
+    padding: var(--space-4);
+
+    text-align: center;
+
+    background: var(--color-bg-elevated);
+    border: 1px dashed var(--color-border-strong);
+    border-radius: var(--radius-lg);
+
+    cursor: pointer;
+}
+
+.upload-zone:hover,
+.upload-zone.is-dragging {
+    border-color: var(--primary);
+    background: var(--color-primary-soft);
+}
+
+.upload-zone-icon {
+    width: 54px;
+    height: 54px;
+
+    display: grid;
+    place-items: center;
+
+    margin: 0 auto var(--space-2);
+
+    color: var(--primary);
+    background: var(--color-primary-soft);
+    border-radius: var(--radius-md);
+}
+
+.upload-zone h3 {
+    margin-bottom: var(--space-1);
+}
+
+.upload-zone p {
+    max-width: 480px;
+}
+
+.upload-zone input[type="file"] {
+    display: none;
+}

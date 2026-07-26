@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 5D — editor publish/unpublish button states</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 5D — editor publish/unpublish button states</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <!-- Minimal DOM matching pages/build/edit.html's element ids. -->
+    <h1 id="editorTitle"></h1>
+    <span id="editorSaveStatus"></span>
+    <span id="editorPublishBadge" class="badge">Draft</span>
+    <button id="editorUnpublishBtn" class="btn" hidden>Unpublish</button>
+    <button id="editorPublishBtn" class="btn" disabled>Publish</button>
+    <p id="editorPublishHint" hidden>Complete the readiness checklist below before publishing.</p>
+    <a id="editorViewLiveLink" href="#" hidden>View live project →</a>
+    <div id="editorReadiness"></div>
+    <input id="fieldTitle" value="A Valid Project Title">
+    <textarea id="fieldDescription">This description is long enough to pass validation.</textarea>
+    <select id="fieldCategory"><option value="pc_build" selected>PC Build</option></select>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        // --- Mock state -----------------------------------------------------
+        const calls = [];
+        const toastMessages = [];
+        let publishedBuildId = null; // null = never published
+        let mockVisibility = "public";
+        let publishShouldFail = false;
+        let unpublishShouldFail = false;
+
+        globalThis.__mock = {
+            calls, toastMessages,
+            get publishedBuildId() { return publishedBuildId; },
+            get mockVisibility() { return mockVisibility; },
+            get publishShouldFail() { return publishShouldFail; },
+            get unpublishShouldFail() { return unpublishShouldFail; }
+        };
+
+        const layoutSrc = `export function loadNavbar() {} export function loadFooter() {}`;
+        const authSrc = `export async function requireAuth() { return { id: "user-1" }; }`;
+        const toastSrc = `export function showToast(message, type) { globalThis.__mock.toastMessages.push({ message, type }); }`;
+        const draftRepoSrc = `
+            export async function getDraft() {
+                return {
+                    id: "draft-1",
+                    title: "A Valid Project Title",
+                    description: "This description is long enough to pass validation.",
+                    category: "pc_build",
+                    updated_at: "2026-01-01T00:00:00Z",
+                    published_build_id: globalThis.__mock.publishedBuildId
+                };
+            }
+            export async function updateDraft(id, fields) { return { id, ...fields }; }
+        `;
+        const publishRepoSrc = `
+            export async function publishDraft(draftId) {
+                globalThis.__mock.calls.push(["publishDraft", draftId]);
+                if (globalThis.__mock.publishShouldFail) throw new Error("publish failed");
+                return { id: "build-1", slug: "my-project", visibility: "public" };
+            }
+            export async function setBuildVisibility(buildId, visibility) {
+                globalThis.__mock.calls.push(["setBuildVisibility", buildId, visibility]);
+                if (globalThis.__mock.unpublishShouldFail) throw new Error("unpublish failed");
+                return { id: buildId, visibility };
+            }
+        `;
+        const buildRepoSrc = `
+            export async function getBuildById(id) {
+                return { id, slug: "my-project", visibility: globalThis.__mock.mockVisibility };
+            }
+        `;
+        const autosaveSrc = `
+            export function createAutosaveController() {
+                return { scheduleSave() {}, flushNow: async () => {}, hasPendingChanges: () => false };
+            }
+        `;
+        const noopSectionSrc = `export function noop() { return { applyFields() {} }; }`;
+        const overviewSrc = `export function renderOverviewSection() { return { applyFields() {} }; }`;
+        const specSrc = `export function renderSpecificationsSection() { return { applyFields() {} }; }`;
+        const resourcesSrc = `export function renderResourcesSection() { return { applyFields() {} }; }`;
+        const gallerySrc = `
+            export async function renderGallerySection(draft, onMediaChange) {
+                globalThis.__mock.triggerMediaChange = onMediaChange;
+                onMediaChange(1);
+            }
+        `;
+        const tabsSrc = `export function setupEditorTabs() {}`;
+        const statusSrc = `export function setEditorStatus() {}`;
+        const recoverySrc = `export function maybeShowRecoveryBanner() {}`;
+
+        const editorOrigin = new URL("../js/pages/editor/", location.href).href;
+
+        const rewrites = {
+            '"./renderReadinessChecklist.js"': new URL("renderReadinessChecklist.js", editorOrigin).href,
+            '"../../core/layout.js"': blobUrl(layoutSrc),
+            '"../../core/auth.js"': blobUrl(authSrc),
+            '"../../core/toast.js"': blobUrl(toastSrc),
+            '"../../repositories/draftRepository.js"': blobUrl(draftRepoSrc),
+            '"../../repositories/publishRepository.js"': blobUrl(publishRepoSrc),
+            '"../../repositories/buildRepository.js"': blobUrl(buildRepoSrc),
+            '"../../services/draftAutosave.js"': blobUrl(autosaveSrc),
+            '"./renderOverviewSection.js"': blobUrl(overviewSrc),
+            '"./renderSpecificationsSection.js"': blobUrl(specSrc),
+            '"./renderResourcesSection.js"': blobUrl(resourcesSrc),
+            '"./renderGallerySection.js"': blobUrl(gallerySrc),
+            '"./editorTabs.js"': blobUrl(tabsSrc),
+            '"./editorStatus.js"': blobUrl(statusSrc),
+            '"./draftRecoveryBanner.js"': blobUrl(recoverySrc)
+            // "./renderReadinessChecklist.js" deliberately left real — the
+            // readiness-gating logic (isReady) is exactly what this test
+            // needs to exercise for real.
+        };
+
+        // Give app.js a ?draft= param to read from this test page's own URL.
+        history.replaceState(null, "", location.pathname + "?draft=draft-1");
+
+        const realSrc = await (await fetch("../js/pages/editor/app.js")).text();
+        let rewritten = realSrc;
+        for (const [from, to] of Object.entries(rewrites)) {
+            rewritten = rewritten.replaceAll(from, `"${to}"`);
+        }
+
+        await import(blobUrl(rewritten));
+
+        function waitFor(predicate, timeoutMs = 2000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                const check = () => {
+                    if (predicate()) return resolve();
+                    if (Date.now() - start > timeoutMs) return reject(new Error("timed out: " + predicate.toString()));
+                    setTimeout(check, 10);
+                };
+                check();
+            });
+        }
+
+        const publishBtn = document.getElementById("editorPublishBtn");
+        const unpublishBtn = document.getElementById("editorUnpublishBtn");
+        const badge = document.getElementById("editorPublishBadge");
+        const liveLink = document.getElementById("editorViewLiveLink");
+
+        // --- Case 1: never published — Publish button, Unpublish hidden -----
+        await waitFor(() => !publishBtn.disabled);
+
+        test("never published: publish button reads \"Publish\"", publishBtn.textContent === "Publish", publishBtn.textContent);
+        test("never published: publish button is enabled once readiness passes", publishBtn.disabled === false);
+        test("never published: unpublish button stays hidden", unpublishBtn.hidden === true);
+
+        // --- Case 2: click Publish (first publish) ---------------------------
+        publishBtn.click();
+        await waitFor(() => calls.some(c => c[0] === "publishDraft"));
+        await waitFor(() => badge.textContent === "Published");
+
+        test("first publish calls publishDraft with the draft id", calls.find(c => c[0] === "publishDraft")?.[1] === "draft-1");
+        test("after first publish: badge reads \"Published\"", badge.textContent === "Published");
+        test("after first publish: unpublish button becomes visible (build is public)", unpublishBtn.hidden === false);
+        test("after first publish: publish button reads \"Update Live Version\"", publishBtn.textContent === "Update Live Version", publishBtn.textContent);
+        test("after first publish: view-live link reads the published (not preview) label", liveLink.textContent === "View live project →", liveLink.textContent);
+
+        // --- Case 3: click Unpublish -----------------------------------------
+        const originalConfirm = window.confirm;
+        window.confirm = () => true;
+
+        calls.length = 0;
+        unpublishBtn.click();
+        await waitFor(() => calls.some(c => c[0] === "setBuildVisibility"));
+        await waitFor(() => badge.textContent === "Unpublished");
+
+        test("unpublish calls setBuildVisibility with the build id and 'private'", JSON.stringify(calls[0]) === JSON.stringify(["setBuildVisibility", "build-1", "private"]), JSON.stringify(calls));
+        test("after unpublish: badge reads \"Unpublished\"", badge.textContent === "Unpublished");
+        test("after unpublish: unpublish button hides itself (nothing public left to take down)", unpublishBtn.hidden === true);
+        test("after unpublish: publish button reads \"Publish Again\", not \"Update Live Version\"", publishBtn.textContent === "Publish Again", publishBtn.textContent);
+        test("after unpublish: view-live link switches to the preview label", liveLink.textContent === "Preview (unpublished) →", liveLink.textContent);
+
+        // --- Case 4: click Publish again — restores public automatically ----
+        calls.length = 0;
+        publishBtn.click();
+        await waitFor(() => calls.some(c => c[0] === "publishDraft"));
+        await waitFor(() => badge.textContent === "Published");
+
+        test("\"Publish Again\" restores the Published badge with a single click (no separate republish-visibility step)", badge.textContent === "Published");
+        test("after publishing again: unpublish button reappears", unpublishBtn.hidden === false);
+        test("after publishing again: publish button reads \"Update Live Version\" again", publishBtn.textContent === "Update Live Version", publishBtn.textContent);
+        test("no setBuildVisibility call was needed to bring it back — publish alone did it", !calls.some(c => c[0] === "setBuildVisibility"), JSON.stringify(calls));
+
+        window.confirm = originalConfirm;
+
+        // --- Case 5: readiness becomes unmet — button must explain why,
+        //     not just sit inertly disabled -----------------------------
+        document.getElementById("fieldTitle").value = ""; // invalidate title
+        globalThis.__mock.triggerMediaChange(1); // forces a readiness recompute
+
+        await waitFor(() => publishBtn.disabled === true);
+
+        const publishHint = document.getElementById("editorPublishHint");
+
+        test("when readiness fails, the publish button becomes disabled", publishBtn.disabled === true);
+        // Not a title/tooltip attribute — disabled buttons generally don't
+        // show those on hover, so the explanation has to be visible text a
+        // sighted user sees without needing devtools.
+        test("when disabled for readiness, a visible hint explains why (not just a title attribute)", publishHint.hidden === false && publishHint.textContent.toLowerCase().includes("readiness"), publishHint.textContent);
+        test("the disabled button is visually distinguishable (reduced opacity)", parseFloat(getComputedStyle(publishBtn).opacity) < 1, getComputedStyle(publishBtn).opacity);
+        test("the disabled button cannot be clicked (pointer-events none)", getComputedStyle(publishBtn).pointerEvents === "none", getComputedStyle(publishBtn).pointerEvents);
+
+        // Restore valid state for cleanliness (not strictly required since
+        // this is the last case, but avoids a misleading final DOM state).
+        document.getElementById("fieldTitle").value = "A Valid Project Title";
+        globalThis.__mock.triggerMediaChange(1);
+        await waitFor(() => publishBtn.disabled === false);
+        test("readiness recovers once the field is valid again, and the hint hides itself", publishHint.hidden === true);
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`editorPublishUnpublish.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

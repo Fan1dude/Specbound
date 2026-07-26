@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>renderBuild.js / renderTimeline.js — image URL resolution</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        h1 { font-size: 1.1rem; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>renderBuild.js / renderTimeline.js — image URL resolution</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <!-- Elements renderBuild.js / renderTimeline.js look up by id. -->
+    <img id="buildImage" hidden>
+    <div id="revisionTimeline"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        // Mocked mediaRepository: only bare storage paths should ever
+        // reach getMediaSignedUrl — a full URL passed through would mean
+        // resolveImageUrl's discriminator regressed. Signing appends a
+        // recognizable suffix so we can confirm resolution actually
+        // happened (not just that the raw value passed through).
+        const signCalls = [];
+        const mediaRepoSrc = `
+            export async function getMediaSignedUrl(path) {
+                globalThis.__signCalls.push(path);
+                return "https://signed.example/" + encodeURIComponent(path) + "?token=mock";
+            }
+
+            const FULL_URL_PATTERN = /^https?:\\/\\//i;
+
+            export async function resolveImageUrl(value) {
+                if (!value) return "";
+                if (FULL_URL_PATTERN.test(value)) return value;
+                return getMediaSignedUrl(value).catch(() => "");
+            }
+        `;
+        globalThis.__signCalls = signCalls;
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        const mediaRepoUrl = blobUrl(mediaRepoSrc);
+
+        async function loadRewritten(path) {
+            const src = await (await fetch(path)).text();
+            const rewritten = src.replace(
+                '"../../repositories/mediaRepository.js"',
+                `"${mediaRepoUrl}"`
+            );
+            return import(blobUrl(rewritten));
+        }
+
+        const { renderBuild } = await loadRewritten("../js/pages/build/renderBuild.js");
+        const { renderTimeline } = await loadRewritten("../js/pages/build/renderTimeline.js");
+
+        // --- Case 1: legacy full URL passes through untouched, no signing call ---
+        await renderBuild({ id: "b1", title: "Legacy Build", slug: "legacy", image_url: "https://old.supabase.co/storage/v1/object/public/project-images/avatars/u1/500.jpg" });
+
+        test(
+            "full URL image_url renders as-is",
+            document.getElementById("buildImage").src.startsWith("https://old.supabase.co/"),
+            document.getElementById("buildImage").src
+        );
+        test("full URL image_url does not trigger a signing call", signCalls.length === 0, `signCalls: ${JSON.stringify(signCalls)}`);
+
+        // --- Case 2: bare storage path gets resolved via getMediaSignedUrl ---
+        signCalls.length = 0;
+        await renderBuild({ id: "b2", title: "New Build", slug: "new-build", image_url: "projects/draft-1/media-1.jpg" });
+
+        test(
+            "bare path image_url resolves to a signed URL",
+            document.getElementById("buildImage").src.startsWith("https://signed.example/"),
+            document.getElementById("buildImage").src
+        );
+        test("bare path image_url triggers exactly one signing call", signCalls.length === 1 && signCalls[0] === "projects/draft-1/media-1.jpg", `signCalls: ${JSON.stringify(signCalls)}`);
+
+        // --- Case 3: no image_url falls back to the placeholder ---
+        await renderBuild({ id: "b3", title: "No Image Build", slug: "no-image", image_url: null });
+
+        test(
+            "missing image_url falls back to the placeholder",
+            document.getElementById("buildImage").src.includes("default-cover.svg"),
+            document.getElementById("buildImage").src
+        );
+
+        // --- Case 4: renderTimeline resolves a mixed set of revision images,
+        //     in the correct order, without cross-wiring between entries. ---
+        signCalls.length = 0;
+
+        const revisions = [
+            { id: "r1", title: "First entry (full URL)", version: "v1.0", created_at: "2026-01-01T00:00:00Z", image_url: "https://old.supabase.co/full-url-1.jpg" },
+            { id: "r2", title: "Second entry (bare path)", version: "v1.1", created_at: "2026-01-02T00:00:00Z", image_url: "projects/draft-2/media-9.jpg" },
+            { id: "r3", title: "Third entry (no image)", version: "v1.2", created_at: "2026-01-03T00:00:00Z", image_url: null }
+        ];
+
+        await renderTimeline(revisions);
+
+        const entries = Array.from(document.querySelectorAll(".journal-entry"));
+        test("renders one journal entry per revision", entries.length === 3, `got ${entries.length}`);
+
+        // newest-first order: r3, r2, r1
+        const titlesInOrder = entries.map(e => e.querySelector("h3")?.textContent);
+        test(
+            "entries are newest-first and correctly paired with their own title",
+            JSON.stringify(titlesInOrder) === JSON.stringify(["Third entry (no image)", "Second entry (bare path)", "First entry (full URL)"]),
+            JSON.stringify(titlesInOrder)
+        );
+
+        const imgSrcsInOrder = entries.map(e => e.querySelector("img")?.getAttribute("src") || null);
+        test(
+            "each entry's image matches its own resolved URL (no cross-wiring), in newest-first order",
+            imgSrcsInOrder[0] === null &&
+                imgSrcsInOrder[1]?.startsWith("https://signed.example/") &&
+                imgSrcsInOrder[1]?.includes(encodeURIComponent("projects/draft-2/media-9.jpg")) &&
+                imgSrcsInOrder[2] === "https://old.supabase.co/full-url-1.jpg",
+            JSON.stringify(imgSrcsInOrder)
+        );
+
+        test("only the one bare-path revision triggered a signing call", signCalls.length === 1 && signCalls[0] === "projects/draft-2/media-9.jpg", `signCalls: ${JSON.stringify(signCalls)}`);
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+
+        console.log(`buildImageResolution.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

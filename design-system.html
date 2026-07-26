@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="assets/brand/logo/favicon.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Blueprint Design System | Specbound</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet"
+    >
+
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+
+<body>
+    <nav class="navbar" id="navbar"></nav>
+
+    <main class="design-system-page" id="main">
+        <header class="design-system-hero">
+            <p class="hero-badge">Internal Reference</p>
+            <h1>Blueprint Design System</h1>
+            <p>
+                The reusable visual language used throughout Specbound.
+                This page is for development and design review.
+            </p>
+        </header>
+
+        <!-- Colors -->
+        <section class="design-section">
+            <div class="design-section-heading">
+                <p class="hero-badge">Foundation</p>
+                <h2>Colors</h2>
+            </div>
+
+            <div class="token-grid">
+                <article class="token-card">
+                    <span
+                        class="color-preview"
+                        style="--preview-color: var(--color-primary)"
+                    ></span>
+                    <strong>Primary</strong>
+                    <code>--color-primary</code>
+                </article>
+
+                <article class="token-card">
+                    <span
+                        class="color-preview"
+                        style="--preview-color: var(--color-surface)"
+                    ></span>
+                    <strong>Surface</strong>
+                    <code>--color-surface</code>
+                </article>
+
+                <article class="token-card">
+                    <span
+                        class="color-preview"
+                        style="--preview-color: var(--color-success)"
+                    ></span>
+                    <strong>Success</strong>
+                    <code>--color-success</code>
+                </article>
+
+                <article class="token-card">
+                    <span
+                        class="color-preview"
+                        style="--preview-color: var(--color-warning)"
+                    ></span>
+                    <strong>Warning</strong>
+                    <code>--color-warning</code>
+                </article>
+
+                <article class="token-card">
+                    <span
+                        class="color-preview"
+                        style="--preview-color: var(--color-danger)"
+                    ></span>
+                    <strong>Danger</strong>
+                    <code>--color-danger</code>
+                </article>
+            </div>
+        </section>
+
+        <!-- Typography -->
+        <section class="design-section">
+            <div class="design-section-heading">
+                <p class="hero-badge">Foundation</p>
+                <h2>Typography</h2>
+            </div>
+
+            <div class="component-preview typography-preview card">
+                <h1>Display Heading</h1>
+                <h2>Section Heading</h2>
+                <h3>Component Heading</h3>
+                <p>
+                    Body text explains ideas clearly while remaining readable
+                    across desktop and mobile layouts.
+                </p>
+                <small>Muted supporting text</small>
+            </div>
+        </section>
+
+        <!-- Buttons -->
+        <section class="design-section">
+            <div class="design-section-heading">
+                <p class="hero-badge">Actions</p>
+                <h2>Buttons</h2>
+            </div>
+
+            <div class="component-preview card">
+                <div class="preview-row">
+                    <button class="btn btn-primary" type="button">
+                        Primary
+                    </button>
+
+                    <button class="btn btn-secondary" type="button">
+                        Secondary
+                    </button>
+
+                    <button class="btn btn-ghost" type="button">
+                        Ghost
+                    </button>
+
+                    <button class="btn btn-danger" type="button">
+                        Danger
+                    </button>
+                </div>
+
+                <div class="preview-row">
+                    <button class="btn btn-primary btn-small" type="button">
+                        Small
+                    </button>
+
+                    <button class="btn btn-primary" type="button">
+                        Default
+                    </button>
+
+                    <button class="btn btn-primary btn-large" type="button">
+                        Large
+                    </button>
+
+                    <button class="btn btn-primary" type="button" disabled>
+                        Disabled
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Badges -->
+        <section class="design-section">
+            <div class="design-section-heading">
+                <p class="hero-badge">Display</p>
+                <h2>Badges</h2>
+            </div>
+
+            <div class="component-preview card">
+                <div class="preview-row">
+                    <span class="badge">Blueprint</span>
+                    <span class="badge badge-planning">Planning</span>
+                    <span class="badge badge-building">In Progress</span>
+                    <span class="badge badge-completed">Completed</span>
+                    <span class="badge badge-paused">Paused</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Forms -->
+        <section class="design-section">
+            <div class="design-section-heading">
+                <p class="hero-badge">Forms</p>
+                <h2>Inputs</h2>
+            </div>
+
+            <div class="component-preview card">
+                <div class="form-preview-grid">
+                    <div>
+                        <label for="designTitle">Title</label>
+                        <input
+                            id="designTitle"
+                            type="text"
+                            placeholder="Project title"
+                        >
+                    </div>
+
+                    <div>
+                        <label for="designCategory">Category</label>
+                        <select id="designCategory">
+                            <option>PC Builds</option>
+                            <option>Arduino</option>
+                            <option>Robotics</option>
+                        </select>
+                    </div>
+
+                    <div class="form-preview-wide">
+                        <label for="designDescription">Description</label>
+                        <textarea
+                            id="designDescription"
+                            rows="5"
+                            placeholder="Describe the project..."
+                        ></textarea>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Progress -->
+        <section class="design-section">
+            <div class="design-section-heading">
+                <p class="hero-badge">Feedback</p>
+                <h2>Progress</h2>
+            </div>
+
+            <div class="component-preview card progress-preview">
+                <div class="progress">
+                    <div class="progress-header">
+                        <span>Planning</span>
+                        <span>20%</span>
+                    </div>
+
+                    <div class="progress-track">
+                        <div
+                            class="progress-fill"
+                            style="--progress: 20%"
+                        ></div>
+                    </div>
+                </div>
+
+                <div class="progress">
+                    <div class="progress-header">
+                        <span>Building</span>
+                        <span>65%</span>
+                    </div>
+
+                    <div class="progress-track">
+                        <div
+                            class="progress-fill"
+                            style="--progress: 65%"
+                        ></div>
+                    </div>
+                </div>
+
+                <div class="progress">
+                    <div class="progress-header">
+                        <span>Completed</span>
+                        <span>100%</span>
+                    </div>
+
+                    <div class="progress-track">
+                        <div
+                            class="progress-fill"
+                            style="--progress: 100%"
+                        ></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tabs -->
+        <section class="design-section">
+            <div class="design-section-heading">
+                <p class="hero-badge">Navigation</p>
+                <h2>Tabs</h2>
+            </div>
+
+            <div class="component-preview card">
+                <div class="tabs" role="tablist">
+                    <button
+                        class="tab is-active"
+                        type="button"
+                        role="tab"
+                        aria-selected="true"
+                    >
+                        Blueprints
+                    </button>
+
+                    <button
+                        class="tab"
+                        type="button"
+                        role="tab"
+                        aria-selected="false"
+                    >
+                        Projects
+                    </button>
+
+                    <button
+                        class="tab"
+                        type="button"
+                        role="tab"
+                        aria-selected="false"
+                    >
+                        Completed Builds
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Upload -->
+        <section class="design-section">
+            <div class="design-section-heading">
+                <p class="hero-badge">Forms</p>
+                <h2>Upload Zone</h2>
+            </div>
+
+            <label class="upload-zone">
+                <input type="file">
+
+                <div>
+                    <div class="upload-zone-icon" aria-hidden="true">
+                        ↑
+                    </div>
+
+                    <h3>Upload a project image</h3>
+
+                    <p>
+                        Drag and drop an image here, or select a file from
+                        your device.
+                    </p>
+                </div>
+            </label>
+        </section>
+
+        <!-- Empty State -->
+        <section class="design-section">
+            <div class="design-section-heading">
+                <p class="hero-badge">Feedback</p>
+                <h2>Empty State</h2>
+            </div>
+
+            <div class="empty-state">
+                <h3>No Blueprints Yet</h3>
+                <p>
+                    Create your first Blueprint to begin documenting an idea.
+                </p>
+
+                <a href="pages/upload.html" class="btn btn-primary">
+                    Create Blueprint
+                </a>
+            </div>
+        </section>
+
+        <!-- Skeletons -->
+        <section class="design-section">
+            <div class="design-section-heading">
+                <p class="hero-badge">Feedback</p>
+                <h2>Skeleton Loading</h2>
+            </div>
+
+            <div class="skeleton-preview-grid">
+                <article class="card skeleton-card">
+                    <div class="skeleton skeleton-image"></div>
+                    <div class="skeleton skeleton-title"></div>
+                    <div class="skeleton skeleton-text"></div>
+                    <div class="skeleton skeleton-text"></div>
+                </article>
+
+                <article class="card skeleton-card">
+                    <div class="skeleton skeleton-image"></div>
+                    <div class="skeleton skeleton-title"></div>
+                    <div class="skeleton skeleton-text"></div>
+                    <div class="skeleton skeleton-text"></div>
+                </article>
+            </div>
+        </section>
+
+        <!-- Category Symbols -->
+        <section class="design-section">
+            <div class="design-section-heading">
+                <p class="hero-badge">Brand</p>
+                <h2>Category Symbols</h2>
+            </div>
+
+            <div id="designTechnologyGrid" class="design-technology-grid"></div>
+        </section>
+    </main>
+
+    <footer class="footer" id="footer"></footer>
+
+    <script
+        type="module"
+        src="js/pages/design-system/app.js"
+    ></script>
+</body>
+</html>

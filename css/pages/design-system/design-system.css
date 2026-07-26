@@ -1,0 +1,120 @@
+.design-system-page {
+    width: min(var(--container-lg), 92%);
+    margin: 0 auto;
+    padding: var(--space-7) 0 var(--space-9);
+}
+
+.design-system-hero {
+    max-width: 820px;
+    margin-bottom: var(--space-8);
+}
+
+.design-system-hero h1 {
+    margin: var(--space-2) 0;
+}
+
+.design-section {
+    margin-bottom: var(--space-8);
+}
+
+.design-section-heading {
+    margin-bottom: var(--space-4);
+}
+
+.design-section-heading h2 {
+    margin-top: var(--space-1);
+}
+
+.component-preview {
+    padding: var(--space-4);
+}
+
+.preview-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+}
+
+.preview-row + .preview-row {
+    margin-top: var(--space-3);
+}
+
+.token-grid {
+    display: grid;
+    grid-template-columns:
+        repeat(auto-fit, minmax(170px, 1fr));
+    gap: var(--space-2);
+}
+
+.token-card {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-2);
+
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+.color-preview {
+    height: 72px;
+    border-radius: var(--radius-sm);
+    background: var(--preview-color);
+    border: 1px solid var(--border);
+}
+
+.token-card code {
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+}
+
+.typography-preview {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.form-preview-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+}
+
+.form-preview-wide {
+    grid-column: 1 / -1;
+}
+
+.progress-preview {
+    display: grid;
+    gap: var(--space-4);
+}
+
+.skeleton-preview-grid {
+    display: grid;
+    grid-template-columns:
+        repeat(auto-fit, minmax(260px, 1fr));
+    gap: var(--space-3);
+}
+
+.skeleton-card {
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-3);
+}
+
+.design-technology-grid {
+    display: grid;
+    grid-template-columns:
+        repeat(auto-fit, minmax(250px, 1fr));
+    gap: var(--space-3);
+}
+
+@media (max-width: 700px) {
+    .form-preview-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .form-preview-wide {
+        grid-column: auto;
+    }
+}

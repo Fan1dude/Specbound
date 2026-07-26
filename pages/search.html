@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../assets/brand/logo/favicon.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta
+        name="description"
+        content="Search projects, builders, and categories on Specbound."
+    >
+
+    <title>Search | Specbound</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet"
+    >
+
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+
+<body>
+
+    <nav class="navbar" id="navbar"></nav>
+
+    <main class="search-page" id="main">
+
+        <header class="search-header">
+            <p class="hero-badge">Search</p>
+
+            <h1 id="searchHeading">Search Specbound.</h1>
+
+            <div class="search-input-wrap">
+                <label class="sr-only" for="searchPageInput">
+                    Search projects, builders, and categories
+                </label>
+
+                <input
+                    id="searchPageInput"
+                    type="search"
+                    placeholder="Search projects, builders, and categories..."
+                    autocomplete="off"
+                >
+            </div>
+        </header>
+
+        <section
+            id="searchResults"
+            class="search-results"
+            aria-live="polite"
+        ></section>
+
+    </main>
+
+    <footer class="footer" id="footer"></footer>
+
+    <script type="module" src="../js/pages/search/app.js"></script>
+
+</body>
+</html>

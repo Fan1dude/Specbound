@@ -1,0 +1,17 @@
+.badge,
+.hero-badge,
+.build-category {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: fit-content;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(79,125,255,.12);
+    color: var(--primary);
+    border: 1px solid rgba(79,125,255,.24);
+    font-size: .78rem;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}

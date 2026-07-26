@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 6C — profile</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 6C — profile</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="profileAvatar">?</div>
+    <h1 id="profileUsername">Loading...</h1>
+    <p id="profileDisplayName" hidden></p>
+    <p id="profileBio">Hardware Creator</p>
+    <div id="profileMeta"></div>
+    <div id="profileLinks"></div>
+    <div id="profileStats"></div>
+    <div id="profileBuilds"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        // --- Mock state -----------------------------------------------------
+        let mockAvatarUrl = "";
+
+        globalThis.__mock = {
+            get mockAvatarUrl() { return mockAvatarUrl; }
+        };
+
+        const mediaRepoSrc = `
+            export async function resolveAvatarUrl(profile) {
+                return globalThis.__mock.mockAvatarUrl;
+            }
+        `;
+
+        // BlueprintCard.js has no imports of its own, so the real file is used
+        // as-is (via an absolute URL) rather than mocked — this is what lets
+        // these tests actually verify the "Unknown Creator" attachment bug is
+        // fixed, instead of just trusting a stub.
+        const blueprintCardUrl = new URL("../js/components/BlueprintCard.js", location.href).href;
+
+        // renderFollow.js (Milestone 7C) is its own dedicated, separately
+        // tested unit (see renderFollow.test.html) — stubbed out here as a
+        // no-op so this file stays focused on what it already covers
+        // (avatar, bio, links, stats, builds, error state).
+        const renderFollowSrc = `export async function renderFollow() {}`;
+
+        const rewrites = {
+            '"../../components/BlueprintCard.js"': blueprintCardUrl,
+            '"../../repositories/mediaRepository.js"': blobUrl(mediaRepoSrc),
+            '"./renderFollow.js"': blobUrl(renderFollowSrc)
+        };
+
+        const realSrc = await (await fetch("../js/pages/profile/renderProfile.js")).text();
+        let rewritten = realSrc;
+        for (const [from, to] of Object.entries(rewrites)) {
+            rewritten = rewritten.replaceAll(from, `"${to}"`);
+        }
+
+        const { renderProfile, renderProfileError } = await import(blobUrl(rewritten));
+
+        function resetDom() {
+            document.getElementById("profileAvatar").innerHTML = "?";
+            document.getElementById("profileUsername").textContent = "Loading...";
+            document.getElementById("profileDisplayName").textContent = "";
+            document.getElementById("profileDisplayName").hidden = true;
+            document.getElementById("profileBio").textContent = "Hardware Creator";
+            document.getElementById("profileMeta").innerHTML = "";
+            document.getElementById("profileLinks").innerHTML = "";
+            document.getElementById("profileStats").innerHTML = "";
+            document.getElementById("profileBuilds").innerHTML = "";
+        }
+
+        // --- Case 1: full profile — every optional field present ------------
+        resetDom();
+        mockAvatarUrl = "https://signed.example/avatars%2Fuser-a%2F500.jpg";
+
+        const fullProfile = {
+            id: "user-a",
+            username: "alice",
+            display_name: "Alice Builder",
+            bio: "I build robots.",
+            location: "Toronto, ON",
+            website: "alice.dev",
+            github: "@alice",
+            youtube: "",
+            avatar_path: "avatars/user-a/500.jpg",
+            avatar_url: null,
+            created_at: "2024-03-15T00:00:00Z"
+        };
+
+        const fullBuilds = [
+            { id: "b1", title: "Robot Arm", slug: "robot-arm", user_id: "user-a", category: "robotics", status: "building", visibility: "public", views: 120, profiles: fullProfile },
+            { id: "b2", title: "Desk Setup", slug: "desk-setup", user_id: "user-a", category: "setup", status: "completed", visibility: "public", views: 33, profiles: fullProfile }
+        ];
+
+        await renderProfile({ profile: fullProfile, builds: fullBuilds, commentCount: 7 });
+
+        test("username is rendered", document.getElementById("profileUsername").textContent === "alice");
+        test("display_name is shown when different from username", document.getElementById("profileDisplayName").hidden === false && document.getElementById("profileDisplayName").textContent === "Alice Builder");
+        test("bio is rendered", document.getElementById("profileBio").textContent === "I build robots.");
+        test("location appears in meta", document.getElementById("profileMeta").textContent.includes("Toronto, ON"));
+        test("join date appears in meta", document.getElementById("profileMeta").textContent.includes("Joined March 2024"));
+        test("website link is rendered with https:// normalization", document.getElementById("profileLinks").innerHTML.includes('href="https://alice.dev"'));
+        test("github link is rendered, stripping a leading @", document.getElementById("profileLinks").innerHTML.includes('href="https://github.com/alice"'));
+        test("empty youtube field produces no youtube link", !document.getElementById("profileLinks").innerHTML.includes("youtube.com"));
+        test("avatar resolves avatar_path to a signed image", document.getElementById("profileAvatar").querySelector("img")?.getAttribute("src") === mockAvatarUrl);
+
+        const statsText = document.getElementById("profileStats").textContent;
+        test("Published Projects stat equals builds.length", statsText.includes("2") && statsText.includes("Published Projects"));
+        test("Comments Received stat equals the commentCount param", statsText.includes("7") && statsText.includes("Comments Received"));
+        test("Total Views stat sums views across the builder's builds (120 + 33 = 153)", statsText.includes("153") && statsText.includes("Total Views"));
+        test("Member Since stat shows the join year", statsText.includes("2024") && statsText.includes("Member Since"));
+        test("stats show exactly four tiles (no Total Likes)", document.querySelectorAll("#profileStats .profile-stat").length === 4);
+        test("Total Likes is never shown", !statsText.includes("Total Likes"));
+
+        const cards = document.querySelectorAll("#profileBuilds .blueprint-card");
+        test("one BlueprintCard rendered per published project", cards.length === 2, `got ${cards.length}`);
+        const buildsTextNormalized = document.getElementById("profileBuilds").textContent.replace(/\s+/g, " ");
+        test("cards attribute the correct builder, not 'Unknown Creator' (the pre-6C bug)", buildsTextNormalized.includes("By alice") && !buildsTextNormalized.includes("Unknown Creator"));
+        test("a card shows its own build's view count (120 views)", buildsTextNormalized.includes("120 views"));
+        test("a card shows its own build's view count (33 views)", buildsTextNormalized.includes("33 views"));
+
+        // --- Case 2: minimal profile — every optional field absent -----------
+        resetDom();
+        mockAvatarUrl = "";
+
+        const minimalProfile = {
+            id: "user-b",
+            username: "bob",
+            display_name: null,
+            bio: null,
+            location: null,
+            website: null,
+            github: null,
+            youtube: null,
+            avatar_path: null,
+            avatar_url: null,
+            created_at: "2025-11-02T00:00:00Z"
+        };
+
+        await renderProfile({ profile: minimalProfile, builds: [], commentCount: 0 });
+
+        test("display_name is hidden when absent", document.getElementById("profileDisplayName").hidden === true);
+        test("bio falls back to the default when absent", document.getElementById("profileBio").textContent === "Hardware Creator");
+        test("meta shows no location text when location is absent", !document.getElementById("profileMeta").textContent.includes("null"));
+        test("meta still shows a join date when location is absent", document.getElementById("profileMeta").textContent.includes("Joined"));
+        test("links container is empty when no links are set", document.getElementById("profileLinks").innerHTML.trim() === "");
+        test("avatar falls back to an initial letter when no avatar is set", document.getElementById("profileAvatar").querySelector("img") === null && document.getElementById("profileAvatar").textContent.trim() === "B");
+        test("Published Projects is 0 for a builder with no published projects", document.getElementById("profileStats").textContent.includes("Published Projects"));
+        test("Total Views is 0 for a builder with no published projects", document.getElementById("profileStats").textContent.includes("Total Views"));
+        test("empty projects grid shows an empty-state message", document.getElementById("profileBuilds").textContent.includes("No published projects yet."));
+
+        // --- Case 2b: a build with no views field at all doesn't break the sum ---
+        resetDom();
+
+        await renderProfile({
+            profile: minimalProfile,
+            builds: [{ id: "b3", title: "No Views Field", slug: "x", user_id: "user-b", category: "setup", status: "planning", visibility: "public", profiles: minimalProfile }],
+            commentCount: 0
+        });
+
+        test("a build missing the views field entirely is treated as 0, not NaN/undefined", !document.getElementById("profileStats").textContent.includes("NaN") && !document.getElementById("profileStats").textContent.includes("undefined"));
+        test("that same build's card shows '0 views', not 'undefined views'", document.getElementById("profileBuilds").textContent.includes("0 views"));
+
+        // --- Case 3: display_name identical to username is treated as unset --
+        resetDom();
+        mockAvatarUrl = "";
+
+        await renderProfile({
+            profile: { ...minimalProfile, display_name: "bob" },
+            builds: [],
+            commentCount: 0
+        });
+
+        test("a display_name equal to the username is not shown as a separate line", document.getElementById("profileDisplayName").hidden === true);
+
+        // --- Case 4: error state -----------------------------------------
+        resetDom();
+        document.getElementById("profileUsername").textContent = "Loading...";
+
+        renderProfileError();
+
+        test("error state replaces the loading username with a visible message", document.getElementById("profileUsername").textContent !== "Loading..." && document.getElementById("profileUsername").textContent.length > 0);
+        test("error state shows a visible explanation, not a blank/stuck page", document.getElementById("profileBuilds").textContent.toLowerCase().includes("could not be loaded"));
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`profile.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

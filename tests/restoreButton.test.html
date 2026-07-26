@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 5C — restore button (confirmation + concurrency)</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 5C — restore button (confirmation + concurrency)</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <button id="restoreRevisionBtn" hidden>Restore This Revision</button>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        // --- Call log + configurable mocks --------------------------------
+        const calls = [];
+        let restoreShouldFail = false;
+        // Matches restore_revision_to_draft()'s exact concurrency-conflict
+        // message (supabase/migrations/0005_revision_history_and_restore.sql)
+        // by default — overridden for the ownership-rejection case below to
+        // match that same function's exact ownership error instead, so the
+        // test proves the client surfaces whatever the server actually says,
+        // not a client-invented string.
+        let restoreErrorMessage = "This draft has changed since you loaded it — refresh and try restoring again.";
+        let existingDraftUpdatedAt = "2026-01-01T00:00:00Z";
+        const toastMessages = [];
+
+        globalThis.__mockState = {
+            calls,
+            get restoreShouldFail() { return restoreShouldFail; },
+            get restoreErrorMessage() { return restoreErrorMessage; },
+            get existingDraftUpdatedAt() { return existingDraftUpdatedAt; },
+            toastMessages
+        };
+
+        const draftRepoSrc = `
+            export async function getDraftByPublishedBuildId(buildId) {
+                globalThis.__mockState.calls.push(["getDraftByPublishedBuildId", buildId]);
+                const updatedAt = globalThis.__mockState.existingDraftUpdatedAt;
+                return updatedAt ? { id: "draft-1", updated_at: updatedAt } : null;
+            }
+        `;
+
+        const publishRepoSrc = `
+            export async function restoreRevisionToDraft(revisionId, expectedUpdatedAt) {
+                globalThis.__mockState.calls.push(["restoreRevisionToDraft", revisionId, expectedUpdatedAt]);
+                if (globalThis.__mockState.restoreShouldFail) {
+                    throw new Error(globalThis.__mockState.restoreErrorMessage);
+                }
+                return { id: "draft-1" };
+            }
+        `;
+
+        const toastSrc = `
+            export function showToast(message, type) {
+                globalThis.__mockState.toastMessages.push({ message, type });
+            }
+        `;
+
+        // Unused by setupRestoreButton directly, but loadBuild.js imports
+        // them at module scope, so they need to resolve to *something*.
+        const noopSrc = `export const noop = true;`;
+        const buildRepoSrc = `export async function getBuildBySlug() { throw new Error("not used"); }`;
+        const revisionRepoSrc = `export async function getBuildRevisions() { throw new Error("not used"); } export async function getRevisionById() { throw new Error("not used"); }`;
+        const profileRepoSrc = `export async function getProfile() { throw new Error("not used"); }`;
+        const mediaRepoSrc = `export async function getRevisionMedia() { throw new Error("not used"); }`;
+        const viewRepoSrc = `export async function recordBuildView() { throw new Error("not used"); }`;
+        const authSrc = `export async function getCurrentUser() { return null; }`;
+
+        const origin = new URL("../js/pages/build/", location.href).href;
+
+        const rewrites = {
+            '"../../repositories/buildRepository.js"': blobUrl(buildRepoSrc),
+            '"../../repositories/revisionRepository.js"': blobUrl(revisionRepoSrc),
+            '"../../repositories/profileRepository.js"': blobUrl(profileRepoSrc),
+            '"../../repositories/mediaRepository.js"': blobUrl(mediaRepoSrc),
+            '"../../repositories/draftRepository.js"': blobUrl(draftRepoSrc),
+            '"../../repositories/publishRepository.js"': blobUrl(publishRepoSrc),
+            // Milestone 8A fix: loadBuild.js has grown these four extra
+            // imports since this test was originally written (comments,
+            // likes, saves, view tracking) — the missing entries left
+            // `await import(blobUrl(rewritten))` throwing an unhandled
+            // module-resolution error on every run, so this file silently
+            // produced zero results while looking like a normal test.
+            '"../../repositories/viewRepository.js"': blobUrl(viewRepoSrc),
+            '"../../core/auth.js"': blobUrl(authSrc),
+            '"../../core/toast.js"': blobUrl(toastSrc),
+            // Real, unmocked sibling modules — harmless pure-DOM render
+            // functions not exercised by this test (it calls
+            // setupRestoreButton directly), but they still need to
+            // resolve to something real: blob: URLs have no meaningful
+            // directory for "./" to resolve against.
+            '"./renderBuild.js"': new URL("renderBuild.js", origin).href,
+            '"./renderSpecifications.js"': new URL("renderSpecifications.js", origin).href,
+            '"./renderResources.js"': new URL("renderResources.js", origin).href,
+            '"./renderTimeline.js"': new URL("renderTimeline.js", origin).href,
+            '"./renderComments.js"': new URL("renderComments.js", origin).href,
+            '"./renderLike.js"': new URL("renderLike.js", origin).href,
+            '"./renderSave.js"': new URL("renderSave.js", origin).href,
+            // Milestone 8B: loadBuild.js gained this import too (shared
+            // loading/empty/error-state render helpers). It has no
+            // imports of its own, so — same reasoning as the render
+            // files above — the real file is used as-is.
+            '"../../utils/listState.js"': new URL("../../utils/listState.js", origin).href
+        };
+
+        const realSrc = await (await fetch("../js/pages/build/loadBuild.js")).text();
+        let rewritten = realSrc;
+        for (const [from, to] of Object.entries(rewrites)) {
+            rewritten = rewritten.replaceAll(from, `"${to}"`);
+        }
+
+        const { setupRestoreButton } = await import(blobUrl(rewritten));
+
+        const build = { id: "build-1", slug: "my-project", user_id: "u1" };
+        // snapshot_title populated: this suite tests the normal restore
+        // flow (confirmation, concurrency, error handling) — the separate
+        // "no snapshot to restore from" guard is covered in
+        // revisionView.test.html instead.
+        const revision = { id: "rev-1", version: "v1.1", snapshot_title: "A Snapshot Title" };
+
+        function click() {
+            document.getElementById("restoreRevisionBtn").click();
+        }
+
+        function waitForCalls(minCount, timeoutMs = 1000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                const check = () => {
+                    if (calls.length >= minCount) return resolve();
+                    if (Date.now() - start > timeoutMs) return reject(new Error("timed out waiting for calls"));
+                    setTimeout(check, 10);
+                };
+                check();
+            });
+        }
+
+        // --- Case 1: user cancels the confirm dialog -----------------------
+        setupRestoreButton(build, revision);
+
+        const originalConfirm = window.confirm;
+        let confirmMessageSeen = "";
+
+        window.confirm = message => {
+            confirmMessageSeen = message;
+            return false;
+        };
+
+        click();
+        await new Promise(r => setTimeout(r, 50));
+
+        test("confirm() is shown with an explanation before restoring", confirmMessageSeen.includes("does NOT change anything published"), confirmMessageSeen);
+        test("cancelling the confirm dialog makes zero repository calls", calls.length === 0, JSON.stringify(calls));
+
+        // --- Case 2: confirmed, but the server rejects (concurrency conflict) ---
+        restoreShouldFail = true;
+        window.confirm = () => true;
+
+        const btn = document.getElementById("restoreRevisionBtn");
+        click();
+
+        await waitForCalls(2); // getDraftByPublishedBuildId + restoreRevisionToDraft
+        await new Promise(r => setTimeout(r, 50));
+
+        test("on rejection, the draft's updated_at is fetched fresh and passed through", calls[0][0] === "getDraftByPublishedBuildId" && calls[1] && calls[1][0] === "restoreRevisionToDraft" && calls[1][2] === "2026-01-01T00:00:00Z", JSON.stringify(calls));
+        test("on rejection, the server's error message reaches the user via toast", toastMessages.some(t => t.message.includes("changed since you loaded it")), JSON.stringify(toastMessages));
+        test("on rejection, the button is re-enabled (not left stuck on 'Restoring...')", btn.disabled === false && btn.textContent === "Restore This Revision", `disabled=${btn.disabled} text=${btn.textContent}`);
+
+        // --- Case 3: confirmed, no draft currently linked (null updated_at) ---
+        // restoreShouldFail stays true here too, deliberately — this test
+        // runs in the same tab as the rest of the suite, and letting a
+        // real success reach setupRestoreButton's window.location.href
+        // assignment would navigate this page away mid-test. The call
+        // arguments (what's asserted here) are captured before that line
+        // regardless of whether the call ultimately succeeds or throws.
+        calls.length = 0;
+        toastMessages.length = 0;
+        existingDraftUpdatedAt = null;
+
+        click();
+        await waitForCalls(2);
+
+        test("when no draft is linked yet, restore is still called with null (no concurrency value to check against)", calls[1][2] === null, JSON.stringify(calls));
+
+        // --- Case 4: confirmed, but the server rejects for ownership -------
+        // Milestone 8A: restore_revision_to_draft() enforces ownership
+        // server-side (v_build.user_id <> auth.uid()) — this test doesn't
+        // re-verify that SQL check itself (confirmed separately as part of
+        // the Milestone 8 database audit), it verifies the CLIENT correctly
+        // surfaces that specific rejection via toast, with the button
+        // re-enabled and no navigation, exactly like the concurrency
+        // rejection in Case 2 — the one ownership-adjacent path this file
+        // didn't previously exercise at all.
+        calls.length = 0;
+        toastMessages.length = 0;
+        existingDraftUpdatedAt = "2026-01-01T00:00:00Z";
+        restoreErrorMessage = "Only the build owner can restore a revision.";
+        window.confirm = () => true;
+
+        click();
+        await waitForCalls(2);
+        await new Promise(r => setTimeout(r, 50));
+
+        test("on an ownership rejection, restoreRevisionToDraft is still called (the client doesn't pre-filter by ownership itself)", calls.some(c => c[0] === "restoreRevisionToDraft"), JSON.stringify(calls));
+        test("on an ownership rejection, the server's exact error message reaches the user via toast", toastMessages.some(t => t.message === "Only the build owner can restore a revision." && t.type === "error"), JSON.stringify(toastMessages));
+        test("on an ownership rejection, the button is re-enabled (not left stuck on 'Restoring...')", btn.disabled === false && btn.textContent === "Restore This Revision", `disabled=${btn.disabled} text=${btn.textContent}`);
+
+        window.confirm = originalConfirm;
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`restoreButton.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

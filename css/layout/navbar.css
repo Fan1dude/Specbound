@@ -1,0 +1,114 @@
+.navbar {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 28px;
+    padding: 18px 5%;
+    background: rgba(9, 11, 17, .78);
+    backdrop-filter: blur(18px);
+    border-bottom: 1px solid var(--border);
+}
+
+.logo {
+    font-size: 1.45rem;
+    font-weight: 900;
+    letter-spacing: -.05em;
+}
+
+.logo a {
+    color: var(--text);
+}
+
+.search-bar {
+    flex: 1;
+    max-width: 520px;
+}
+
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.nav-links > a {
+    color: var(--text-secondary);
+    font-weight: 700;
+}
+
+.nav-links > a:hover {
+    color: var(--text);
+}
+
+.nav-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    color: var(--text);
+}
+
+.nav-toggle:hover {
+    background: var(--surface-2);
+}
+
+@media (max-width: 900px) {
+    .navbar {
+        flex-wrap: wrap;
+    }
+
+    .nav-toggle {
+        display: inline-flex;
+        order: 2;
+    }
+
+    .search-bar {
+        order: 3;
+        max-width: none;
+        width: 100%;
+        flex-basis: 100%;
+    }
+
+    .nav-links {
+        order: 4;
+        flex-basis: 100%;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height var(--duration-normal) var(--ease-standard);
+    }
+
+    .nav-links.show-nav-links {
+        max-height: 400px;
+    }
+
+    .nav-links > a {
+        padding: 12px 4px;
+        border-top: 1px solid var(--border);
+        font-size: .95rem;
+    }
+
+    .builder-menu {
+        width: 100%;
+        padding-top: 4px;
+    }
+
+    .builder-button {
+        width: 100%;
+        min-height: 44px;
+        text-align: left;
+    }
+
+    /* The mobile override for .builder-dropdown itself lives in
+       dropdown.css, not here — dropdown.css is @import-ed after this
+       file, so its own unconditional `position: absolute` rule would
+       silently win the cascade over a same-specificity override placed
+       in this earlier-loaded file. See dropdown.css for the real rule. */
+}

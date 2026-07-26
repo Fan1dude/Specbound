@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 7B — notification bell</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 7B — notification bell</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="bellContainer"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        // --- Mock state -----------------------------------------------------
+        const calls = [];
+        const toastMessages = [];
+        let mockUnreadCount = 0;
+        let mockRecent = [];
+        let markAllShouldFail = false;
+        let markOneShouldFail = false;
+
+        globalThis.__mock = {
+            calls,
+            toastMessages,
+            get mockUnreadCount() { return mockUnreadCount; },
+            get mockRecent() { return mockRecent; },
+            get markAllShouldFail() { return markAllShouldFail; },
+            get markOneShouldFail() { return markOneShouldFail; }
+        };
+
+        const toastSrc = `
+            export function showToast(message, type) {
+                globalThis.__mock.toastMessages.push({ message, type });
+            }
+        `;
+
+        const notificationRepoSrc = `
+            export async function getUnreadNotificationCount() {
+                globalThis.__mock.calls.push(["getUnreadNotificationCount"]);
+                return globalThis.__mock.mockUnreadCount;
+            }
+            export async function getRecentNotifications(limit) {
+                globalThis.__mock.calls.push(["getRecentNotifications", limit]);
+                return globalThis.__mock.mockRecent;
+            }
+            export async function markNotificationRead(id) {
+                globalThis.__mock.calls.push(["markNotificationRead", id]);
+                if (globalThis.__mock.markOneShouldFail) throw new Error("could not mark read");
+            }
+            export async function markAllNotificationsRead() {
+                globalThis.__mock.calls.push(["markAllNotificationsRead"]);
+                if (globalThis.__mock.markAllShouldFail) throw new Error("could not mark all read");
+            }
+            export async function enrichNotifications(notifications) {
+                globalThis.__mock.calls.push(["enrichNotifications", notifications.length]);
+                return notifications;
+            }
+        `;
+
+        // notificationFormat.js has no imports of its own, so the real file
+        // is used as-is, same reasoning as BlueprintCard.js elsewhere.
+        const formatUrl = new URL("../js/utils/notificationFormat.js", location.href).href;
+
+        const rewrites = {
+            '"../repositories/notificationRepository.js"': blobUrl(notificationRepoSrc),
+            '"../utils/notificationFormat.js"': formatUrl,
+            // Milestone 8B: notificationBell.js gained this import (a
+            // missing error toast on Mark all read failure).
+            '"./toast.js"': blobUrl(toastSrc)
+        };
+
+        const realSrc = await (await fetch("../js/core/notificationBell.js")).text();
+        let rewritten = realSrc;
+        for (const [from, to] of Object.entries(rewrites)) {
+            rewritten = rewritten.replaceAll(from, `"${to}"`);
+        }
+
+        const { initNotificationBell } = await import(blobUrl(rewritten));
+
+        function waitFor(predicate, timeoutMs = 2000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                const check = () => {
+                    if (predicate()) return resolve();
+                    if (Date.now() - start > timeoutMs) return reject(new Error("timed out: " + predicate.toString()));
+                    setTimeout(check, 10);
+                };
+                check();
+            });
+        }
+
+        const container = document.getElementById("bellContainer");
+        const user = { id: "user-me" };
+
+        function makeNotification(overrides = {}) {
+            return {
+                id: "n1",
+                recipient_id: "user-me",
+                actor_id: "user-a",
+                type: "comment",
+                build_id: "build-1",
+                comment_id: "c1",
+                read_at: null,
+                created_at: new Date().toISOString(),
+                actor: { id: "user-a", username: "alice" },
+                build: { id: "build-1", slug: "cool-build", title: "Cool Build" },
+                ...overrides
+            };
+        }
+
+        // --- Case 1: no container / no user — does nothing, does not throw ---
+        let noopError = null;
+        try {
+            await initNotificationBell(null, { user });
+            await initNotificationBell(container, { user: null });
+        } catch (error) {
+            noopError = error;
+        }
+        test("missing container or user is a safe no-op", noopError === null, String(noopError));
+
+        // --- Case 2: zero unread — badge stays hidden -------------------------
+        container.innerHTML = "";
+        mockUnreadCount = 0;
+        calls.length = 0;
+
+        await initNotificationBell(container, { user, pathPrefix: "../" });
+
+        const badge = document.getElementById("notificationBadge");
+        test("zero unread: badge is hidden", badge.hidden === true);
+        test("unread count is fetched on init", calls.some(c => c[0] === "getUnreadNotificationCount"));
+        test("the dropdown list is NOT fetched before it's ever opened (lazy load)", !calls.some(c => c[0] === "getRecentNotifications"));
+
+        // --- Case 3: unread count shown, capped display -----------------------
+        container.innerHTML = "";
+        mockUnreadCount = 5;
+        calls.length = 0;
+
+        await initNotificationBell(container, { user, pathPrefix: "../" });
+
+        test("nonzero unread: badge is visible with the count", document.getElementById("notificationBadge").hidden === false && document.getElementById("notificationBadge").textContent === "5");
+
+        container.innerHTML = "";
+        mockUnreadCount = 240;
+        await initNotificationBell(container, { user, pathPrefix: "../" });
+        test("a count over 99 displays as '99+'", document.getElementById("notificationBadge").textContent === "99+");
+
+        // --- Case 4: opening the dropdown lazy-loads the list, once -----------
+        container.innerHTML = "";
+        mockUnreadCount = 1;
+        mockRecent = [makeNotification({ id: "n1", read_at: null }), makeNotification({ id: "n2", read_at: "2026-01-01T00:00:00Z", type: "like", comment_id: null })];
+        calls.length = 0;
+
+        await initNotificationBell(container, { user, pathPrefix: "../" });
+
+        const bellButton = document.getElementById("notificationBellButton");
+        bellButton.click();
+
+        await waitFor(() => calls.some(c => c[0] === "getRecentNotifications"));
+        await waitFor(() => document.querySelectorAll(".notification-item").length === 2);
+
+        test("opening the dropdown fetches and renders recent notifications", document.querySelectorAll(".notification-item").length === 2);
+        test("an unread notification has the is-unread class", document.querySelector('.notification-item[data-id="n1"]').classList.contains("is-unread"));
+        test("a read notification does not have the is-unread class", !document.querySelector('.notification-item[data-id="n2"]').classList.contains("is-unread"));
+        test("the comment notification message reads correctly", document.querySelector('.notification-item[data-id="n1"] .notification-item-text').textContent.includes("alice commented on Cool Build"));
+        test("the comment notification links to the comments section", document.querySelector('.notification-item[data-id="n1"]').getAttribute("href").includes("#commentsList"));
+        test("the like notification does not link to a comments anchor", !document.querySelector('.notification-item[data-id="n2"]').getAttribute("href").includes("#commentsList"));
+
+        calls.length = 0;
+        bellButton.click(); // close
+        bellButton.click(); // reopen
+        await new Promise(r => setTimeout(r, 50));
+
+        test("reopening the dropdown does not re-fetch the list a second time", !calls.some(c => c[0] === "getRecentNotifications"));
+
+        // --- Case 5: clicking an unread item marks it read in the background ---
+        // These items are real <a href> elements (by design — clicking one
+        // should navigate) — a real click would actually navigate this test
+        // page away, so the test intercepts and cancels the default action
+        // while still letting the real click handler (which runs on the
+        // same event) do its work.
+        calls.length = 0;
+        const unreadItem = document.querySelector('.notification-item[data-id="n1"]');
+        unreadItem.addEventListener("click", event => event.preventDefault(), { capture: true });
+        unreadItem.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+
+        await waitFor(() => calls.some(c => c[0] === "markNotificationRead"));
+
+        test("clicking an unread notification calls markNotificationRead with its id", calls.some(c => c[0] === "markNotificationRead" && c[1] === "n1"));
+        test("clicking an unread notification removes the is-unread class immediately", !unreadItem.classList.contains("is-unread"));
+
+        // --- Case 6: Mark all read clears every unread row and refreshes the badge ---
+        container.innerHTML = "";
+        mockUnreadCount = 2;
+        mockRecent = [makeNotification({ id: "n1", read_at: null }), makeNotification({ id: "n2", read_at: null })];
+        calls.length = 0;
+
+        await initNotificationBell(container, { user, pathPrefix: "../" });
+        document.getElementById("notificationBellButton").click();
+        await waitFor(() => document.querySelectorAll(".notification-item").length === 2);
+
+        mockUnreadCount = 0; // what the badge should refresh to after marking all read
+        document.getElementById("notificationMarkAllRead").click();
+
+        await waitFor(() => calls.some(c => c[0] === "markAllNotificationsRead"));
+        await waitFor(() => document.getElementById("notificationBadge").hidden === true);
+
+        test("Mark all read calls markAllNotificationsRead", calls.some(c => c[0] === "markAllNotificationsRead"));
+        test("Mark all read clears is-unread from every visible item", document.querySelectorAll(".notification-item.is-unread").length === 0);
+        test("Mark all read refreshes the badge to hidden", document.getElementById("notificationBadge").hidden === true);
+
+        // --- Case 6b: a failed Mark all read surfaces an error toast (Milestone 8B) ---
+        container.innerHTML = "";
+        mockUnreadCount = 1;
+        mockRecent = [makeNotification({ id: "n1", read_at: null })];
+        calls.length = 0;
+        toastMessages.length = 0;
+        markAllShouldFail = true;
+
+        await initNotificationBell(container, { user, pathPrefix: "../" });
+        document.getElementById("notificationBellButton").click();
+        await waitFor(() => document.querySelectorAll(".notification-item").length === 1);
+
+        const markAllBtn = document.getElementById("notificationMarkAllRead");
+        markAllBtn.click();
+
+        await waitFor(() => toastMessages.length > 0);
+
+        test("a failed Mark all read surfaces an error toast (previously silent)", toastMessages.some(t => t.type === "error" && t.message.includes("could not mark all read")), JSON.stringify(toastMessages));
+        test("a failed Mark all read still re-enables the button", markAllBtn.disabled === false);
+        test("a failed Mark all read does not clear is-unread (nothing succeeded)", document.querySelector(".notification-item").classList.contains("is-unread"));
+
+        markAllShouldFail = false;
+
+        // --- Case 7: empty state -----------------------------------------
+        container.innerHTML = "";
+        mockUnreadCount = 0;
+        mockRecent = [];
+        calls.length = 0;
+
+        await initNotificationBell(container, { user, pathPrefix: "../" });
+        document.getElementById("notificationBellButton").click();
+        await waitFor(() => calls.some(c => c[0] === "getRecentNotifications"));
+        await new Promise(r => setTimeout(r, 20));
+
+        test("zero notifications shows an empty-state message", document.getElementById("notificationDropdownList").textContent.includes("No notifications yet"));
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`notificationBell.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

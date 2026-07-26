@@ -1,0 +1,35 @@
+/* ---------- Global Page Layout ---------- */
+
+.page {
+    width: min(1400px, 92%);
+    margin: 0 auto;
+    padding: 72px 0 120px;
+}
+
+.page-header {
+    margin-bottom: 56px;
+}
+
+.page-header h1 {
+    margin: 12px 0;
+}
+
+.page-header p {
+    max-width: 700px;
+}
+
+.section {
+    margin-top: 72px;
+}
+
+.section-heading {
+    margin-bottom: 32px;
+}
+
+.section-heading h2 {
+    margin-top: 8px;
+}
+
+.section-heading p {
+    max-width: 650px;
+}

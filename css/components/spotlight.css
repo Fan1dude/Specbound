@@ -1,0 +1,156 @@
+.featured {
+    padding: 96px 0;
+}
+
+.featured-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1.2fr .8fr;
+    min-height: 520px;
+    overflow: hidden;
+
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+}
+
+.featured-image {
+    min-height: 520px;
+    background: var(--surface-2);
+}
+
+.featured-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.featured-placeholder {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    color: var(--text-muted);
+}
+
+.featured-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 48px;
+}
+
+.featured-label {
+    width: fit-content;
+    margin-bottom: 18px;
+    padding: 8px 12px;
+    border-radius: 999px;
+
+    color: var(--primary);
+    background: rgba(79, 125, 255, .12);
+    border: 1px solid rgba(79, 125, 255, .22);
+
+    font-size: .78rem;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.featured-info h1 {
+    margin-bottom: 18px;
+    font-size: clamp(2.4rem, 5vw, 4.5rem);
+    line-height: .95;
+}
+
+.featured-info > p {
+    margin-bottom: 10px;
+}
+
+.progress-box {
+    margin: 28px 0;
+}
+
+.progress-box p {
+    margin-bottom: 10px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 10px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--surface-2);
+}
+
+.progress-fill {
+    width: 0%;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--primary);
+}
+
+.version {
+    margin-bottom: 22px;
+}
+
+.slide-arrow {
+    position: absolute;
+    top: 50%;
+    z-index: 5;
+
+    width: 46px;
+    height: 46px;
+    display: grid;
+    place-items: center;
+
+    border-radius: 50%;
+    color: var(--text);
+    background: rgba(9, 11, 17, .72);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+
+    transform: translateY(-50%);
+}
+
+.slide-arrow:hover {
+    background: var(--surface-2);
+    border-color: rgba(79, 125, 255, .45);
+}
+
+.slide-arrow.left {
+    left: 18px;
+}
+
+.slide-arrow.right {
+    right: 18px;
+}
+
+@media (max-width: 900px) {
+    .featured-card {
+        grid-template-columns: 1fr;
+    }
+
+    .featured-image {
+        min-height: 320px;
+    }
+
+    .featured-info {
+        padding: 32px;
+    }
+
+    .slide-arrow {
+        top: 290px;
+    }
+}
+
+.featured-creator {
+    width: fit-content;
+    margin-bottom: 10px;
+    color: var(--primary);
+    font-weight: 700;
+}
+
+.featured-creator:hover {
+    text-decoration: underline;
+}

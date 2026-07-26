@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../assets/brand/logo/favicon.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Project | Specbound</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+
+    <nav class="navbar" id="navbar"></nav>
+
+    <main class="upload-page" id="main">
+        <section class="upload-hero">
+            <p class="hero-badge">Create Project</p>
+            <h1>Start something new</h1>
+            <p>
+                Give it a name and a technology to begin. You'll fill in
+                everything else — specifications, resources, and images — in
+                the project editor, and it stays private until you publish it.
+            </p>
+        </section>
+
+        <section class="upload-shell">
+            <form id="createDraftForm" class="upload-form">
+
+                <div class="form-card">
+                    <p class="hero-badge">Getting Started</p>
+                    <h2>Project Basics</h2>
+
+                    <label for="title">Project Title</label>
+                    <input id="title" type="text" placeholder="Project title" required>
+
+                    <label for="category">Technology</label>
+                    <select id="category" required>
+                        <option value="">Choose Technology</option>
+                        <option value="pc_build">PC Builds</option>
+                        <option value="setup">Desk Setups</option>
+                        <option value="arduino">Arduino</option>
+                        <option value="robotics">Robotics</option>
+                        <option value="3d_printer">3D Printing</option>
+                        <option value="homelab">Home Labs</option>
+                    </select>
+                </div>
+
+                <button class="btn btn-primary btn-large" type="submit" id="createDraftSubmit">
+                    Continue to Editor
+                </button>
+
+            </form>
+        </section>
+    </main>
+
+    <footer class="footer" id="footer"></footer>
+
+    <script type="module" src="../js/pages/upload/app.js"></script>
+</body>
+</html>

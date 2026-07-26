@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>renderGallerySection.js — 20-image render check</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        h1 { font-size: 1.1rem; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 6px; max-width: 900px; }
+        .gallery-item { position: relative; margin: 0; border: 1px solid #333; }
+        .gallery-item img { width: 100%; display: block; }
+        .gallery-item-actions { display: none; }
+    </style>
+</head>
+<body>
+    <h1>renderGallerySection.js — 20-image render check</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <!-- The real render target renderGallerySection.js expects, by id. -->
+    <input id="galleryFileInput" type="file" multiple hidden>
+    <p id="galleryUploadStatus" hidden></p>
+    <div id="galleryGrid" class="gallery-grid"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        const IMAGE_COUNT = 20;
+
+        // 20 mock media rows, matching what mediaRepository.getDraftMedia
+        // would return: sorted by display_order ascending.
+        const mockMedia = Array.from({ length: IMAGE_COUNT }, (_, i) => ({
+            id: `media-${i}`,
+            draft_id: "draft-1",
+            storage_path: `projects/draft-1/media-${i}.jpg`,
+            display_order: i,
+            alt_text: `Image ${i}`
+        }));
+
+        function svgDataUri(index) {
+            const hue = (index * 47) % 360;
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90"><rect width="90" height="90" fill="hsl(${hue},70%,45%)"/><text x="45" y="52" font-size="28" fill="white" text-anchor="middle" font-family="sans-serif">${index}</text></svg>`;
+            return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+        }
+
+        // Mocked mediaRepository: getMediaSignedUrl resolves with random
+        // jitter (0-150ms) and deliberately resolves OUT OF REQUEST ORDER
+        // (odd indices resolve fastest) — this is the case that would
+        // expose an ordering bug if the real code appended results in
+        // resolution order instead of mapping each URL back to its
+        // original index via Promise.all.
+        const mediaRepoSrc = `
+            const paths = ${JSON.stringify(mockMedia.map(m => m.storage_path))};
+            const dataUris = ${JSON.stringify(mockMedia.map((_, i) => svgDataUri(i)))};
+
+            export async function getDraftMedia() {
+                return ${JSON.stringify(mockMedia)};
+            }
+
+            export async function getMediaSignedUrl(path) {
+                const index = paths.indexOf(path);
+                const delay = index % 2 === 0 ? 40 + Math.random() * 110 : 5 + Math.random() * 15;
+                await new Promise(r => setTimeout(r, delay));
+                return dataUris[index];
+            }
+
+            export async function addMedia() { throw new Error("not used in this test"); }
+            export async function deleteMedia() { throw new Error("not used in this test"); }
+        `;
+
+        const draftRepoSrc = `
+            export async function updateDraft() { return {}; }
+        `;
+
+        const imageServiceSrc = `
+            export async function uploadGalleryImage() { throw new Error("not used in this test"); }
+            export async function deleteGalleryImage() { throw new Error("not used in this test"); }
+        `;
+
+        const toastSrc = `
+            export function showToast(message) { console.log("[toast]", message); }
+        `;
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        const mediaRepoUrl = blobUrl(mediaRepoSrc);
+        const draftRepoUrl = blobUrl(draftRepoSrc);
+        const imageServiceUrl = blobUrl(imageServiceSrc);
+        const toastUrl = blobUrl(toastSrc);
+
+        const realSrc = await (await fetch("../js/pages/editor/renderGallerySection.js")).text();
+
+        const rewritten = realSrc
+            .replace('"../../repositories/mediaRepository.js"', `"${mediaRepoUrl}"`)
+            .replace('"../../repositories/draftRepository.js"', `"${draftRepoUrl}"`)
+            .replace('"../../services/imageService.js"', `"${imageServiceUrl}"`)
+            .replace('"../../core/toast.js"', `"${toastUrl}"`);
+
+        const { renderGallerySection } = await import(blobUrl(rewritten));
+
+        const start = performance.now();
+        let mediaChangeCount = null;
+
+        await renderGallerySection({ id: "draft-1", cover_media_id: null }, count => {
+            mediaChangeCount = count;
+        });
+
+        const elapsed = performance.now() - start;
+
+        // --- Assertions ----------------------------------------------------
+        const grid = document.getElementById("galleryGrid");
+        const figures = Array.from(grid.querySelectorAll(".gallery-item"));
+
+        test(`renders exactly ${IMAGE_COUNT} gallery items`, figures.length === IMAGE_COUNT, `got ${figures.length}`);
+
+        test("onMediaChange reported the correct count", mediaChangeCount === IMAGE_COUNT, `got ${mediaChangeCount}`);
+
+        const domOrderIds = figures.map(f => f.dataset.id);
+        const expectedOrderIds = mockMedia.map(m => m.id);
+        test(
+            "DOM order matches display_order, independent of signed-URL resolution order",
+            JSON.stringify(domOrderIds) === JSON.stringify(expectedOrderIds),
+            `expected ${JSON.stringify(expectedOrderIds)}, got ${JSON.stringify(domOrderIds)}`
+        );
+
+        const imgs = figures.map(f => f.querySelector("img"));
+        const allHaveSrc = imgs.every(img => img && img.getAttribute("src")?.startsWith("data:image/svg+xml"));
+        test("every image has a resolved (non-empty) signed-URL src", allHaveSrc);
+
+        const altsInOrder = imgs.map(img => img.getAttribute("alt"));
+        const expectedAlts = mockMedia.map(m => m.alt_text);
+        test(
+            "alt text order matches media order (no cross-wiring between items)",
+            JSON.stringify(altsInOrder) === JSON.stringify(expectedAlts),
+            `expected ${JSON.stringify(expectedAlts)}, got ${JSON.stringify(altsInOrder)}`
+        );
+
+        // The grid is built in one Promise.all + single innerHTML write, not
+        // per-image incremental DOM insertion, so there is nothing to
+        // "flicker" between — hasSingleRenderPass documents that
+        // expectation rather than being a real timing measurement.
+        test(
+            "resolved concurrently, not serially (would take >= 900ms serially at ~45ms avg/request)",
+            elapsed < 900,
+            `took ${elapsed.toFixed(0)}ms`
+        );
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""} — rendered in ${elapsed.toFixed(0)}ms`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results, elapsed };
+
+        console.log(`gallery20.test.html: ${passCount}/${results.length} passed, rendered in ${elapsed.toFixed(0)}ms`);
+    </script>
+</body>
+</html>

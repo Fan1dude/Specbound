@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "specbound-static",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [".claude/nocache_server.py"],
+      "port": 8431
+    }
+  ]
+}

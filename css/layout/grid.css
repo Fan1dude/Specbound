@@ -1,0 +1,54 @@
+/* ---------- Universal Grids ---------- */
+
+.grid {
+    display: grid;
+    gap: 24px;
+}
+
+.grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+}
+
+.grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+}
+
+.grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+}
+
+/* ---------- Auto Grid ---------- */
+
+.grid-auto {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 24px;
+}
+
+/* ---------- Sidebar Layout ---------- */
+
+.sidebar-layout {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 40px;
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+
+    .grid-2,
+    .grid-3,
+    .grid-4,
+    .sidebar-layout {
+
+        grid-template-columns: 1fr;
+
+    }
+
+}
