@@ -88,7 +88,7 @@ Not yet committed to git — awaiting the user's decision on that.
 
 *Git verification, production configuration, robots.txt, sitemap.xml, manifest, caching, error pages.*
 
-**Superseded by the detailed proposal**: [`docs/MILESTONE_9_PHASE_9D_ARCHITECTURE.md`](MILESTONE_9_PHASE_9D_ARCHITECTURE.md) — hosting platform recommendation, deployment pipeline, environment variables, Supabase production config, branch strategy, robots.txt/sitemap.xml/manifest/favicon/metadata plans, caching strategy and headers, error pages, CSP, a full `docs/DEPLOYMENT.md` draft, and a verification plan. The summary below is retained as the original high-level scope; the linked document is what's actually awaiting approval.
+**Complete and verified (2026-07-27).** Full detail, including corrections made during implementation, in [`docs/MILESTONE_9_PHASE_9D_ARCHITECTURE.md`](MILESTONE_9_PHASE_9D_ARCHITECTURE.md)'s Implementation Notes section, [`docs/DEPLOYMENT.md`](DEPLOYMENT.md), and [`docs/OPERATIONS.md`](OPERATIONS.md). Cloudflare Pages approved and configured as the hosting platform; production metadata added to all 25 real pages; robots.txt/sitemap.xml/manifest.webmanifest/favicon assets/generic OG image/404 page all implemented and locally verified; a strict CSP with no `unsafe-inline` shipped and verified against the live app surface with zero violations.
 
 ### Git verification
 

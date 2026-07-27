@@ -1,0 +1,12 @@
+User-agent: *
+Disallow: /pages/settings.html
+Disallow: /pages/dashboard.html
+Disallow: /pages/workshop.html
+Disallow: /pages/notifications.html
+Disallow: /pages/login.html
+Disallow: /pages/signup.html
+Disallow: /pages/build/edit.html
+Disallow: /design-system.html
+Disallow: /tests/
+
+Sitemap: https://specbound.app/sitemap.xml

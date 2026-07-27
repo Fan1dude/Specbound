@@ -3,6 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <link rel="icon" type="image/svg+xml" href="../../assets/brand/logo/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../assets/brand/logo/favicon-32.png">
+    <link rel="apple-touch-icon" href="../../assets/brand/logo/apple-touch-icon.png">
+    <link rel="manifest" href="../../manifest.webmanifest">
+    <meta name="theme-color" content="#4f7dff">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <meta
@@ -11,6 +15,21 @@
     >
 
     <title>Blueprint | Specbound</title>
+
+    <!-- No <link rel="canonical"> or og:url here: this is a dynamic page
+         (?slug=...) with no single canonical identity as a static file.
+         Hardcoding either would be misleading for every individual build.
+         See docs/DEPLOYMENT.md for the accepted limitation this implies
+         for social-preview richness. -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Specbound">
+    <meta property="og:title" content="Blueprint | Specbound">
+    <meta property="og:description" content="View a technology build, its specifications, creator, and build journey on Specbound.">
+    <meta property="og:image" content="https://specbound.app/assets/brand/og/og-image.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Blueprint | Specbound">
+    <meta name="twitter:description" content="View a technology build, its specifications, creator, and build journey on Specbound.">
+    <meta name="twitter:image" content="https://specbound.app/assets/brand/og/og-image.png">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
