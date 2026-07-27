@@ -1,4 +1,5 @@
 .blueprint-card {
+    position: relative;
     display: flex;
     flex-direction: column;
     min-width: 0;
@@ -9,22 +10,56 @@
     border-radius: var(--radius-lg);
 
     transition:
-        transform var(--transition),
-        border-color var(--transition),
-        box-shadow var(--transition);
+        transform var(--duration-fast) var(--ease-standard),
+        border-color var(--duration-fast) var(--ease-standard),
+        box-shadow var(--duration-fast) var(--ease-standard);
 }
 
-.blueprint-card:hover {
-    transform: translateY(-5px);
+/* Corner-bracket detail — a small, hover-revealed technical/drafted
+   accent (see docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md §7),
+   built from 8 background-gradient layers (2 short strokes per corner)
+   on an inset, pointer-events-none pseudo-element. Uses --color-primary
+   (the everyday functional color), not --color-accent — this is a
+   structural detail, not one of the 4 named glow uses in §6, so it must
+   stay out of glow territory. */
+.blueprint-card::before {
+    content: "";
+    position: absolute;
+    inset: var(--space-1);
+    z-index: 1;
+
+    background:
+        linear-gradient(to right, var(--color-primary) 2px, transparent 2px) top left / 12px 2px no-repeat,
+        linear-gradient(to bottom, var(--color-primary) 2px, transparent 2px) top left / 2px 12px no-repeat,
+        linear-gradient(to left, var(--color-primary) 2px, transparent 2px) top right / 12px 2px no-repeat,
+        linear-gradient(to bottom, var(--color-primary) 2px, transparent 2px) top right / 2px 12px no-repeat,
+        linear-gradient(to right, var(--color-primary) 2px, transparent 2px) bottom left / 12px 2px no-repeat,
+        linear-gradient(to top, var(--color-primary) 2px, transparent 2px) bottom left / 2px 12px no-repeat,
+        linear-gradient(to left, var(--color-primary) 2px, transparent 2px) bottom right / 12px 2px no-repeat,
+        linear-gradient(to top, var(--color-primary) 2px, transparent 2px) bottom right / 2px 12px no-repeat;
+
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--duration-normal) var(--ease-precise);
+}
+
+.blueprint-card:hover,
+.blueprint-card:focus-within {
+    transform: translateY(-2px);
     border-color: var(--color-border-strong);
-    box-shadow: var(--shadow-hover);
+    box-shadow: var(--shadow-md);
+}
+
+.blueprint-card:hover::before,
+.blueprint-card:focus-within::before {
+    opacity: 1;
 }
 
 .blueprint-card:focus-within {
     border-color: var(--primary);
     box-shadow:
         0 0 0 3px var(--color-primary-soft),
-        var(--shadow-hover);
+        var(--shadow-md);
 }
 
 .blueprint-card-image {
@@ -59,7 +94,7 @@
     display: inline-flex;
     align-items: center;
 
-    padding: 7px 11px;
+    padding: var(--space-0) var(--space-0-5);
 
     color: white;
     background: rgba(9, 11, 17, 0.76);
@@ -102,10 +137,14 @@
     gap: var(--space-1);
 }
 
+/* Technical/numeric data — see docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md
+   §2. A version number is exactly the kind of value this typeface is
+   reserved for. */
 .blueprint-card-version {
     color: var(--text-muted);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-bold);
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-mono);
+    font-weight: var(--font-weight-medium);
 }
 
 .blueprint-card-body h3 {
@@ -138,7 +177,7 @@
 
 .blueprint-card-specs {
     display: grid;
-    gap: 10px;
+    gap: var(--space-1);
 
     margin-top: var(--space-3);
     padding: var(--space-2);
@@ -195,7 +234,7 @@
     justify-content: space-between;
     gap: var(--space-1);
 
-    margin-bottom: 8px;
+    margin-bottom: var(--space-1);
 
     color: var(--text-secondary);
     font-size: var(--font-size-xs);
@@ -231,18 +270,18 @@
 .blueprint-card-link {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-1);
 
     color: var(--primary);
     font-weight: var(--font-weight-bold);
     white-space: nowrap;
 }
 
-.blueprint-card-link span {
-    transition: transform var(--transition);
+.blueprint-card-link .icon {
+    transition: transform var(--duration-fast) var(--ease-precise);
 }
 
-.blueprint-card-link:hover span {
+.blueprint-card-link:hover .icon {
     transform: translateX(4px);
 }
 

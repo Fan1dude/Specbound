@@ -26,61 +26,35 @@
     overflow: hidden;
 
     transition:
-        transform var(--transition),
-        border-color var(--transition),
-        box-shadow var(--transition);
+        transform var(--duration-fast) var(--ease-standard),
+        border-color var(--duration-fast) var(--ease-standard),
+        box-shadow var(--duration-fast) var(--ease-standard);
 }
 
-.technology-card::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
+/* Milestone 10 note: this card previously had a faint repeating
+   grid-line background (::after, a literal graph-paper pattern) —
+   removed. The blueprint/CAD influence this refresh calls for is
+   structural (see docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md's
+   governing principle), not a literal drafting-paper texture. */
 
-    background-image:
-        linear-gradient(
-            color-mix(
-                in srgb,
-                var(--category-accent) 5%,
-                transparent
-            ) 1px,
-            transparent 1px
-        ),
-        linear-gradient(
-            90deg,
-            color-mix(
-                in srgb,
-                var(--category-accent) 5%,
-                transparent
-            ) 1px,
-            transparent 1px
-        );
-
-    background-size: 26px 26px;
-    mask-image: linear-gradient(
-        to bottom,
-        black,
-        transparent 72%
-    );
-}
-
-.technology-card:hover {
-    transform: translateY(-6px);
+.technology-card:hover,
+.technology-card:focus-within {
+    transform: translateY(-2px);
     border-color:
         color-mix(
             in srgb,
-            var(--category-accent) 65%,
+            var(--category-accent) 55%,
             transparent
         );
-    box-shadow: var(--shadow-hover);
+    box-shadow: var(--shadow-md);
 }
 
 .technology-card-icon {
     position: relative;
     z-index: 1;
 
-    width: 72px;
-    height: 72px;
+    width: 56px;
+    height: 56px;
 
     display: grid;
     place-items: center;
@@ -100,36 +74,16 @@
             transparent
         );
 
-    border-radius: 22px;
-    clip-path: polygon(
-        25% 6%,
-        75% 6%,
-        100% 50%,
-        75% 94%,
-        25% 94%,
-        0 50%
-    );
-
-    transition:
-        transform var(--transition),
-        filter var(--transition);
-}
-
-.technology-card:hover .technology-card-icon {
-    transform: translateY(-2px) rotate(-3deg);
-    filter: drop-shadow(
-        0 0 16px
-        color-mix(
-            in srgb,
-            var(--category-accent) 42%,
-            transparent
-        )
-    );
+    /* Rounded square, not a hexagon clip-path — reuses the Assembly
+       Mark's own shape language (see assets/brand/logo/favicon.svg)
+       instead of a one-off decorative shape, for cross-brand
+       consistency. */
+    border-radius: var(--radius-md);
 }
 
 .technology-card-symbol {
-    width: 38px;
-    height: 38px;
+    width: 30px;
+    height: 30px;
 
     display: block;
     background: currentColor;
@@ -178,11 +132,10 @@
     font-weight: var(--font-weight-bold);
 }
 
-.technology-card-footer span:last-child {
-    transition: transform var(--transition);
+.technology-card-footer .icon {
+    transition: transform var(--duration-fast) var(--ease-precise);
 }
 
-.technology-card:hover
-.technology-card-footer span:last-child {
-    transform: translateX(5px);
+.technology-card:hover .technology-card-footer .icon {
+    transform: translateX(4px);
 }

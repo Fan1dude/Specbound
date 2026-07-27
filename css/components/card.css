@@ -2,7 +2,14 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-md);
+    /* Resting elevation is deliberately subtle (--shadow-xs, not the
+       --shadow-md every card previously carried permanently) — see
+       docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md §7. Individual card
+       types (blueprint-card.css, technology-card.css) define their own
+       :hover bump to --shadow-md, so hover reads as a real elevation
+       change instead of nothing changing because the resting state was
+       already at the "hover" shadow. */
+    box-shadow: var(--shadow-xs);
 }
 
 .card-padding {

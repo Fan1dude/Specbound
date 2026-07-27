@@ -2,12 +2,16 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 12px 18px;
+    gap: var(--space-1);
+    padding: var(--space-0-5) var(--space-2);
     border-radius: var(--radius-sm);
     font-weight: 700;
     cursor: pointer;
-    transition: var(--transition);
+    transition:
+        background var(--duration-fast) var(--ease-standard),
+        border-color var(--duration-fast) var(--ease-standard),
+        transform var(--duration-fast) var(--ease-standard),
+        box-shadow var(--duration-fast) var(--ease-precise);
 }
 
 /* The [hidden] attribute selector has the same specificity as .btn above,
@@ -18,15 +22,24 @@
     display: none;
 }
 
-/* No :disabled styling existed at all before this — a disabled button
-   (e.g. Publish, gated on readiness) looked visually identical to an
-   enabled one, with only the native no-op click behavior distinguishing
-   them. That reads as "the button doesn't work" rather than "the button
-   is correctly refusing input." */
 .btn:disabled {
     opacity: .5;
     cursor: not-allowed;
     pointer-events: none;
+}
+
+/* Focus-visible glow — the highest-value use of the glow system (see
+   docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md §6): frequent and
+   functionally meaningful, unlike a decorative hover glow. Replaces the
+   previous default browser outline, which every .btn variant lacked a
+   deliberate treatment for. */
+.btn:focus-visible {
+    outline: 2px solid transparent;
+    box-shadow: var(--glow-sm);
+}
+
+.btn:active:not(:disabled) {
+    transform: translateY(0);
 }
 
 .btn-primary {
@@ -36,7 +49,7 @@
 
 .btn-primary:hover {
     background: var(--primary-strong-hover);
-    transform: translateY(-2px);
+    transform: translateY(-1px);
 }
 
 .btn-secondary {
@@ -46,8 +59,8 @@
 }
 
 .btn-secondary:hover {
-    border-color: rgba(79,125,255,.4);
-    transform: translateY(-2px);
+    border-color: var(--color-border-strong);
+    transform: translateY(-1px);
 }
 
 .btn-ghost {
@@ -66,16 +79,16 @@
 
 .btn-danger:hover {
     background: var(--danger-strong-hover);
-    transform: translateY(-2px);
+    transform: translateY(-1px);
 }
 
 .btn-small {
-    padding: 9px 13px;
+    padding: var(--space-1) var(--space-0-5);
     font-size: .85rem;
     min-height: 44px;
 }
 
 .btn-large {
-    padding: 16px 24px;
+    padding: var(--space-2) var(--space-3);
     font-size: 1rem;
 }
