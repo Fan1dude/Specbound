@@ -214,7 +214,9 @@ WHERE proname IN (
 );
 ```
 
-Once you share those results, the migration file can transcribe the real, live definition exactly (marked as a baseline/documentation migration, `-- Status: capturing pre-existing database state, not a behavior change`, matching this project's established migration-file header convention), plus its own `_rollback.sql` (which for a pure-capture migration would be a no-op with an explanatory comment, since there's nothing to actually roll back — the trigger already existed before the migration file did). **Not implemented yet** — this is the proposal, awaiting either your go-ahead or the query results, whichever you'd prefer to provide first.
+Once you share those results, the migration file can transcribe the real, live definition exactly (marked as a baseline/documentation migration, `-- Status: capturing pre-existing database state, not a behavior change`, matching this project's established migration-file header convention), plus its own `_rollback.sql` (which for a pure-capture migration would be a no-op with an explanatory comment, since there's nothing to actually roll back — the trigger already existed before the migration file did).
+
+**Decision (2026-07-27): the trigger-based architecture itself is approved as-is, not to be changed.** This migration is a documentation-tracking task only, deliberately **deferred until after Track B / immediately after launch** — not scheduled as part of Track A or Track B, and not blocking either.
 
 `docs/AUTH_ARCHITECTURE.md` has already been updated to reflect all of the above as the current, correct understanding.
 
@@ -258,7 +260,7 @@ Scored against what Track A actually proved. Categories that depend materially o
 - **Zero functional verification failures** — every core flow (auth, upload, publish, revise, comment, follow, notify, settings) was tested live and passed, including full end-to-end round trips, not just spot checks.
 - **Zero accessibility regressions** found in the specifically-at-risk surface (Phase 9C's consolidation).
 - **What's actually missing before "ready for production" is entirely Track B** — a real Cloudflare Pages deployment, DNS, Lighthouse/PageSpeed results, and the auth-redirect email test. None of these are open questions about whether the *code* works; they're steps that simply haven't happened yet because they require your own account/domain action, per `docs/DEPLOYMENT.md`.
-- **One concrete, scoped, small fix is recommended before calling this fully done**: write and apply the proposed baseline migration (`0019_baseline_profile_creation_trigger.sql`) documenting the profile-creation trigger — a one-file, non-behavior-changing migration, blocked only on one more query result from you.
+- **The proposed baseline migration** (`0019_baseline_profile_creation_trigger.sql`, documenting the profile-creation trigger) **is approved in principle but deliberately deferred until after Track B / immediately after launch**, per decision on 2026-07-27 — a documentation-tracking task, not a launch blocker, and not scheduled as part of either track.
 
 This is not "not ready" — nothing broken was found. It is not "ready for production" either — that claim requires Track B evidence this phase was explicitly scoped not to fabricate. **"Ready after minor fixes"** is the accurate label: the minor fix is procedural (run Track B, land the one documentation migration), not remedial.
 
