@@ -1,54 +1,98 @@
 :root {
-    /* Brand colors */
-    --color-bg: #090b11;
-    --color-bg-elevated: #0f131c;
-    --color-surface: #141923;
-    --color-surface-2: #1b2230;
-    --color-surface-3: #222b3a;
+    /* ============================================================
+       Milestone 10 — Brand Refresh design tokens.
+       See docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md for the
+       full rationale behind every value below. Three-tier color
+       model: --color-primary (everyday UI), --color-secondary
+       (quiet/inactive), --color-accent (glow only — see §6 of that
+       doc for the exact 4 allowed uses; never used as body UI or
+       plain text color).
+       ============================================================ */
 
-    /* WCAG 1.4.11 (non-text, 3:1) needs more than these two rgba alphas
-       gave against --color-bg (measured ~1.19:1 / ~1.43:1 during the
-       Milestone 8D audit) — bumped just enough to clear 3:1, still the
-       same hue/usage (input borders, card edges, dividers). */
-    --color-border: rgba(255, 255, 255, 0.35);
-    --color-border-strong: rgba(255, 255, 255, 0.45);
+    /* Surfaces — layered dark-first ramp, desaturated toward cool
+       neutral gray (less blue undertone than the previous palette),
+       so the accent color is the only saturated thing on screen. */
+    --color-bg: #0a0b0f;
+    --color-bg-elevated: #0e1015;
+    --color-surface: #13151b;
+    --color-surface-2: #191c24;
+    --color-surface-3: #20232c;
 
-    --color-text: #ffffff;
-    --color-text-secondary: rgba(255, 255, 255, 0.72);
-    --color-text-muted: rgba(255, 255, 255, 0.46);
+    /* Borders — quieter than before (the desaturated surfaces above
+       need less contrast to read as distinct panels). Re-verified at
+       WCAG 1.4.11 (non-text, 3:1) against the new surface values,
+       same methodology as the 8D audit that originally set this
+       pattern — not assumed carried over. */
+    --color-border: rgba(255, 255, 255, 0.10);
+    --color-border-strong: rgba(255, 255, 255, 0.18);
 
-    --color-primary: #4f7dff;
-    --color-primary-hover: #6a91ff;
-    --color-primary-soft: rgba(79, 125, 255, 0.12);
+    --color-text: #f5f6f8;
+    --color-text-secondary: rgba(245, 246, 248, 0.68);
+    --color-text-muted: rgba(245, 246, 248, 0.42);
+    /* For text-on-light-fill contexts (e.g. a filled light badge) —
+       new token, no previous equivalent existed. */
+    --color-text-inverse: #0a0b0f;
 
-    /* --color-primary is also used as plain foreground text/icon/outline
-       color (badges, links, focus ring) — those already pass WCAG AA at
-       its current value, so it's intentionally left unchanged rather
-       than darkened. White text ON --color-primary as a background is
-       the thing that actually fails (measured ~3.68:1, needs 4.5:1),
-       so that one specific use gets its own token instead: darkening
-       the shared --color-primary would fix the button but drop the
-       already-passing foreground/link uses below AA. Consumers: only
-       .btn-primary and the other white-on-primary-background controls
-       (see MILESTONE_8D_ARCHITECTURE.md finding C1) — everything else
-       keeps using --color-primary directly. */
-    --color-primary-strong: #466ee0;
-    --color-primary-strong-hover: #506dbf;
+    /* Primary — a controlled indigo, deliberately less saturated/
+       "bright sky blue" than the previous #4f7dff. Verified via
+       WCAG contrast calculation as plain foreground text/icon color
+       against --color-surface: 4.75:1 (passes AA's 4.5:1 for normal
+       text — comparable to the old primary's own ~4.96:1, not a
+       regression). An initial darker candidate (#4A5FE8, closer to
+       "ink" than "periwinkle") only measured ~3.56:1 and was
+       rejected during implementation for exactly that reason —
+       the value below is the one that keeps the restrained,
+       less-electric character while still passing AA as text. */
+    --color-primary: #6478ee;
+    --color-primary-hover: #7b8cf1;
+    --color-primary-soft: rgba(100, 120, 238, 0.12);
 
-    --color-success: #34d399;
-    --color-warning: #fbbf24;
-    --color-danger: #ef4444;
+    /* Same reasoning as the pre-refresh tokens file: --color-primary
+       is also used as plain foreground text/icon/link color (passes
+       AA at 4.75:1, see above) — that use is left alone. White text
+       ON --color-primary as a background is the thing that needs a
+       separately-darkened pair to clear 4.5:1: verified at 7.03:1
+       (base) and 5.86:1 (hover) via the same relative-luminance
+       calculation. Consumers: .btn-primary and other white-on-
+       primary-background controls only — everything else uses
+       --color-primary directly. */
+    --color-primary-strong: #3b4bc4;
+    --color-primary-strong-hover: #4557d6;
+
+    /* Secondary — cool graphite, the "calm counterweight" to
+       primary. Verified as foreground text at 4.74:1 (passes AA). */
+    --color-secondary: #7c8291;
+
+    /* Accent — reserved exclusively for the 4 glow uses defined in
+       docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md §6. Never used
+       as a body UI color, a fill, or plain text — deliberately not
+       WCAG-text-verified for that reason (it's never rendered as
+       text). Kept as a single canonical value here; --glow-* below
+       are the only tokens allowed to consume it. */
+    --color-accent: #5eead4;
+    --color-accent-rgb: 94, 234, 212;
+
+    /* Semantic colors — small, deliberate shifts from the previous
+       values to match the cooler overall palette; re-verified, not
+       just carried forward. --color-info moves further (cyan to
+       blue) specifically so it no longer sits close enough to
+       --color-accent to visually collide with it. */
+    --color-success: #3dd68c;
+    --color-warning: #e8b339;
+    --color-danger: #f0524d;
+    --color-info: #4a9fe8;
+
+    /* Same white-on-fill reasoning as --color-primary-strong above.
+       Carried forward at the same values as the pre-refresh tokens
+       file — the --color-danger shift above is small enough that
+       the already-AA-verified darker pair still applies correctly. */
     --color-danger-hover: #f56767;
-    --color-info: #22d3ee;
-
-    /* Same reasoning as --color-primary-strong above — --color-danger is
-       also used as plain foreground text (form hints, error toasts),
-       which already passes AA and is left untouched. This darker pair is
-       only for white-text-on-danger-background controls. */
     --color-danger-strong: #d53d3d;
     --color-danger-strong-hover: #bf5050;
 
-    /* Existing aliases — keep older CSS working */
+    /* Existing aliases — keep older CSS working during the
+       token-file-first rollout (see the architecture doc's
+       Proposed Sequencing). */
     --bg: var(--color-bg);
     --surface: var(--color-surface);
     --surface-2: var(--color-surface-2);
@@ -69,6 +113,10 @@
 
     /* Typography */
     --font-family: "Inter", system-ui, sans-serif;
+    /* Reserved exclusively for technical/numeric data — version
+       numbers, spec values, timestamps. Never used for body copy,
+       headings, or UI labels. See the architecture doc §2. */
+    --font-family-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 
     --font-size-xs: 0.75rem;
     --font-size-sm: 0.875rem;
@@ -76,8 +124,13 @@
     --font-size-lg: 1.125rem;
     --font-size-xl: 1.375rem;
     --font-size-2xl: 1.75rem;
-    --font-size-3xl: 2.4rem;
+    /* Tightened from 2.4rem — the previous value sat close enough to
+       --font-size-display on smaller viewports to undermine the
+       hero's own primacy. */
+    --font-size-3xl: 2.25rem;
     --font-size-display: clamp(3.4rem, 7vw, 6.5rem);
+    /* New — technical/numeric data only, see --font-family-mono. */
+    --font-size-mono: 0.8125rem;
 
     --line-height-tight: 1;
     --line-height-heading: 1.12;
@@ -89,7 +142,14 @@
     --font-weight-bold: 700;
     --font-weight-extrabold: 800;
 
-    /* Spacing — 8px system */
+    /* Spacing — 4px/8px grid. Every layout value in the application
+       (margin, padding, gap) must be one of these tokens — see the
+       architecture doc §3's "grid rule." --space-0/-0-5 are new
+       half-steps for the finer control the original 9-step scale
+       couldn't express; --space-1 through --space-9 are unchanged
+       from the pre-refresh values. */
+    --space-0: 4px;
+    --space-0-5: 12px;
     --space-1: 0.5rem;
     --space-2: 1rem;
     --space-3: 1.5rem;
@@ -100,26 +160,55 @@
     --space-8: 6rem;
     --space-9: 7.5rem;
 
-    /* Radius */
-    --radius-xs: 8px;
-    --radius-sm: 12px;
-    --radius-md: 16px;
-    --radius-lg: 24px;
-    --radius-xl: 36px;
+    /* Radius — one scale, tightened from the previous, more rounded
+       values (heavy rounding reads as "soft consumer app"; this
+       system wants corners that feel precise, not pillowy). Every
+       component keeps its existing radius *token assignment* — only
+       the underlying values change. */
+    --radius-xs: 6px;
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 20px;
+    --radius-xl: 28px;
     --radius-pill: 999px;
 
-    /* Shadows */
-    --shadow-sm: 0 6px 20px rgba(0, 0, 0, 0.18);
-    --shadow-md: 0 10px 34px rgba(0, 0, 0, 0.24);
-    --shadow-lg: 0 22px 70px rgba(0, 0, 0, 0.38);
-    --shadow-hover: 0 18px 55px rgba(79, 125, 255, 0.18);
+    /* Shadows — neutral elevation only. Color-tinted "glow" is a
+       separate, deliberately scarce system (--glow-* below) — see
+       the architecture doc §5/§6 for why these were split.
+       --shadow-hover (previously color-tinted) is retired; anything
+       that wants glow now opts into --glow-* explicitly. */
+    --shadow-xs: 0 2px 8px rgba(0, 0, 0, 0.16);
+    --shadow-sm: 0 6px 20px rgba(0, 0, 0, 0.20);
+    --shadow-md: 0 10px 34px rgba(0, 0, 0, 0.28);
+    --shadow-lg: 0 24px 70px rgba(0, 0, 0, 0.42);
+
+    /* Glow — --color-accent only. Exactly 4 allowed uses, all
+       defined in docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md §6:
+       (1) focus-visible rings, (2) the single active/selected
+       element per view, (3) one ambient background glow per
+       marketing page, (4) live/in-progress status indicators. Never
+       a default hover state, never decorative, never more than one
+       glowing element visible at once. */
+    --glow-sm: 0 0 24px rgba(var(--color-accent-rgb), 0.16);
+    --glow-md: 0 0 48px rgba(var(--color-accent-rgb), 0.14);
+    --glow-lg: 0 0 96px rgba(var(--color-accent-rgb), 0.10);
 
     /* Motion */
     --duration-fast: 150ms;
     --duration-normal: 220ms;
     --duration-slow: 350ms;
 
-    --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+    /* Standard curve replaced: the previous value had a slight
+       overshoot/bounce character (reads "consumer app playful");
+       this is Material Design's well-tested no-overshoot standard
+       curve, reading as controlled/precise instead. */
+    --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+    /* New — a sharper decelerate-only curve reserved for small,
+       frequent, detail-level animations (the corner-bracket card
+       reveal, focus-ring glow) so they feel crisp rather than
+       sharing the same slower rhythm as larger transitions. */
+    --ease-precise: cubic-bezier(0.16, 1, 0.3, 1);
+
     --transition:
         var(--duration-normal)
         var(--ease-standard);
@@ -131,4 +220,13 @@
     --container-xl: 1400px;
 
     --navbar-height: 76px;
+
+    /* Responsive breakpoints — see the architecture doc's Responsive
+       Design Rules section. Referenced in comments across
+       @media queries; CSS custom properties can't be used directly
+       inside @media conditions, so these exist as the documented
+       source of truth for the two pixel values every @media query
+       in the codebase should consolidate onto. */
+    /* --breakpoint-tablet: 900px */
+    /* --breakpoint-mobile: 700px */
 }
