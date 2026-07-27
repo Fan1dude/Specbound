@@ -1,5 +1,6 @@
 import { escapeHtml, escapeAttribute } from "../utils/escapeHtml.js";
 import { formatCategory } from "../utils/formatCategory.js";
+import { icon } from "../utils/icons.js";
 
 export function BlueprintCard(build, pathPrefix = "", options = {}) {
     const { variant = "default" } = options;
@@ -133,7 +134,7 @@ export function BlueprintCard(build, pathPrefix = "", options = {}) {
                     >
                         <div
                             class="progress-fill"
-                            style="--progress: ${progress}%"
+                            data-progress="${progress}"
                         ></div>
                     </div>
                 </div>
@@ -149,13 +150,13 @@ export function BlueprintCard(build, pathPrefix = "", options = {}) {
                             ? `
                                 <a href="${continueUrl}" class="blueprint-card-link">
                                     ${hasLinkedDraft ? "Continue Editing" : "View Blueprint"}
-                                    <span aria-hidden="true">→</span>
+                                    ${icon("arrow-right", 16)}
                                 </a>
                             `
                             : `
                                 <a href="${buildUrl}" class="blueprint-card-link">
                                     View Blueprint
-                                    <span aria-hidden="true">→</span>
+                                    ${icon("arrow-right", 16)}
                                 </a>
                             `
                     }

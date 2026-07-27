@@ -1,6 +1,7 @@
 import { resolveImageUrl } from "../../repositories/mediaRepository.js";
 import { escapeHtml } from "../../utils/escapeHtml.js";
 import { formatDate } from "../../utils/formatDate.js";
+import { icon } from "../../utils/icons.js";
 
 const INITIAL_REVISION_COUNT = 3;
 
@@ -81,7 +82,7 @@ function renderJournalEntry(revision, image, slug) {
                 <div>
                     <a class="journal-version" href="${revisionUrl}">
                         ${escapeHtml(revision.version || "v0.1")}
-                        <span aria-hidden="true">→</span>
+                        ${icon("arrow-right", 16)}
                     </a>
 
                     <span class="journal-type">

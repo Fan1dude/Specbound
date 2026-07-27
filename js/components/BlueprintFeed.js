@@ -1,5 +1,6 @@
 import { BlueprintCard } from "./BlueprintCard.js";
 import { escapeHtml } from "../utils/escapeHtml.js";
+import { hydrateProgressBars } from "../utils/progressBar.js";
 
 export function BlueprintFeed({
     container,
@@ -35,4 +36,6 @@ export function BlueprintFeed({
     target.innerHTML = builds
         .map(build => BlueprintCard(build, pathPrefix))
         .join("");
+
+    hydrateProgressBars(target);
 }

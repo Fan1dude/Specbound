@@ -3,6 +3,7 @@ import { getBuildsByIds } from "../../repositories/buildRepository.js";
 import { attachBuildProfiles } from "../../repositories/profileRepository.js";
 import { resolveBuildImageUrls } from "../../repositories/mediaRepository.js";
 import { BlueprintCard } from "../../components/BlueprintCard.js";
+import { hydrateProgressBars } from "../../utils/progressBar.js";
 import { formatRelativeTime } from "../../utils/notificationFormat.js";
 import { escapeHtml } from "../../utils/escapeHtml.js";
 
@@ -148,6 +149,7 @@ export async function renderActivityFeed(currentUser) {
         }
 
         gridEl.innerHTML = activities.map(renderCard).join("");
+        hydrateProgressBars(gridEl);
 
         if (loadMoreBtn) loadMoreBtn.hidden = !hasMore;
     }

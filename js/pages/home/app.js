@@ -4,7 +4,7 @@ import { renderActivityFeed } from "./renderActivityFeed.js";
 import "../../features/featured.js";
 
 import { CATEGORIES } from "../../config/categories.js";
-import { TechnologyCard } from "../../components/TechnologyCard.js";
+import { TechnologyCard, hydrateTechnologyCards } from "../../components/TechnologyCard.js";
 
 
 
@@ -18,6 +18,8 @@ if (technologyGrid) {
         .filter(category => category.featured)
         .map(category => TechnologyCard(category, ""))
         .join("");
+
+    hydrateTechnologyCards(technologyGrid);
 }
 
 if (document.getElementById("activityFeedGrid")) {

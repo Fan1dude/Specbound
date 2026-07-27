@@ -1,4 +1,5 @@
 import { BlueprintCard } from "../../components/BlueprintCard.js";
+import { hydrateProgressBars } from "../../utils/progressBar.js";
 import { resolveAvatarUrl } from "../../repositories/mediaRepository.js";
 import { renderFollow } from "./renderFollow.js";
 import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
@@ -143,6 +144,8 @@ function renderBuilds(builds) {
         builds.length
             ? builds.map(build => BlueprintCard(build, "../")).join("")
             : `<div class="empty-state"><h3>No published projects yet.</h3></div>`;
+
+    hydrateProgressBars(el);
 }
 
 export function renderProfileError() {

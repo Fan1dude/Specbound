@@ -51,10 +51,7 @@ export function renderSpecificationsSection(draft, autosave) {
 
         container.innerHTML = `
             <div class="technology-form-heading">
-                <p
-                    class="technology-form-accent"
-                    style="--technology-accent:${technology.accent}"
-                >
+                <p class="technology-form-accent">
                     ${escapeHtml(technology.title)}
                 </p>
 
@@ -79,6 +76,13 @@ export function renderSpecificationsSection(draft, autosave) {
                 `).join("")}
             </div>
         `;
+
+        // CSP compatibility: was an inline style="--technology-accent:..."
+        // attribute — a strict style-src with no 'unsafe-inline' silently
+        // blocks that (confirmed live during Milestone 10 implementation).
+        // CSSOM property assignment isn't restricted the same way.
+        container.querySelector(".technology-form-accent")
+            ?.style.setProperty("--technology-accent", technology.accent);
 
         fields.forEach(field => {
             const input = document.getElementById(`spec-${field.key}`);

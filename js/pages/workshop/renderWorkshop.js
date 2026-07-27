@@ -3,6 +3,7 @@ import { DraftCard } from "../../components/DraftCard.js";
 import { setBuildSaved } from "../../repositories/savedRepository.js";
 import { showToast } from "../../core/toast.js";
 import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
+import { hydrateProgressBars } from "../../utils/progressBar.js";
 
 export function renderWorkshop({ user, profile, builds, revisionCount, drafts, latestBuild, latestRevision, savedBuilds }) {
     const username = profile?.username || "Builder";
@@ -89,7 +90,7 @@ function renderContinueSection(latestBuild, latestRevision, draftIdByBuildId) {
                     aria-valuemax="100"
                     aria-valuenow="${progress}"
                 >
-                    <div class="progress-fill" style="--progress: ${progress}%"></div>
+                    <div class="progress-fill" data-progress="${progress}"></div>
                 </div>
             </div>
 
@@ -98,6 +99,8 @@ function renderContinueSection(latestBuild, latestRevision, draftIdByBuildId) {
             </a>
         </div>
     `;
+
+    hydrateProgressBars(container);
 }
 
 function renderDraftsSection(drafts) {
@@ -139,6 +142,8 @@ function renderProjectsSection(builds, draftIdByBuildId) {
             { variant: "workspace" }
         ))
         .join("");
+
+    hydrateProgressBars(container);
 }
 
 // A thin wrapper around the unmodified BlueprintCard, per the approved
@@ -192,6 +197,8 @@ function renderSavedSection(savedBuilds) {
                 </div>
             `)
             .join("");
+
+        hydrateProgressBars(container);
 
         container.querySelectorAll(".saved-remove-btn").forEach(button => {
             button.addEventListener("click", async () => {

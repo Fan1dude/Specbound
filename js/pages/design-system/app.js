@@ -1,6 +1,6 @@
 import { loadNavbar, loadFooter } from "../../core/layout.js";
 import { CATEGORIES } from "../../config/categories.js";
-import { TechnologyCard } from "../../components/TechnologyCard.js";
+import { TechnologyCard, hydrateTechnologyCards } from "../../components/TechnologyCard.js";
 
 loadNavbar("");
 loadFooter("");
@@ -13,4 +13,6 @@ if (technologyGrid) {
         .filter(category => category.featured)
         .map(category => TechnologyCard(category, ""))
         .join("");
+
+    hydrateTechnologyCards(technologyGrid);
 }

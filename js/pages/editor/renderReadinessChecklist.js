@@ -1,8 +1,6 @@
 import { getReadinessChecks, isDraftReady } from "../../services/draftValidation.js";
 import { escapeHtml } from "../../utils/escapeHtml.js";
-
-const CHECK_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 9 17 20 6"/></svg>`;
-const CIRCLE_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg>`;
+import { icon } from "../../utils/icons.js";
 
 // Previews what publish_draft() will actually require server-side (see
 // supabase/migrations/0002_publish_draft_and_visibility.sql) — this is a UX
@@ -35,7 +33,7 @@ export function renderReadinessChecklist(getMediaCount, onReadyChange = () => {}
         container.innerHTML = checks
             .map(check => `
                 <span class="readiness-check${check.passed ? " is-complete" : ""}">
-                    <span aria-hidden="true">${check.passed ? CHECK_ICON : CIRCLE_ICON}</span>
+                    <span aria-hidden="true">${icon(check.passed ? "check" : "circle", 16)}</span>
                     ${escapeHtml(check.label)}
                 </span>
             `)
