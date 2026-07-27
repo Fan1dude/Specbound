@@ -2,6 +2,7 @@ import { getDraftMedia, addMedia, deleteMedia, getMediaSignedUrl } from "../../r
 import { updateDraft } from "../../repositories/draftRepository.js";
 import { uploadGalleryImage, deleteGalleryImage } from "../../services/imageService.js";
 import { showToast } from "../../core/toast.js";
+import { escapeAttribute } from "../../utils/escapeHtml.js";
 
 // Gallery is intentionally not part of the shared text-field autosave
 // pipeline. Uploads, deletes, and cover selection are discrete, atomic
@@ -190,11 +191,4 @@ export async function renderGallerySection(draft, onMediaChange = () => {}) {
             });
         });
     }
-}
-
-function escapeAttribute(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("<", "&lt;");
 }

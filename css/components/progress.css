@@ -33,10 +33,3 @@
     transition: width var(--duration-slow) var(--ease-standard);
 }
 
-.progress-small .progress-track {
-    height: 6px;
-}
-
-.progress-large .progress-track {
-    height: 14px;
-}

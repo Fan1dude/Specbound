@@ -2,6 +2,7 @@ import { BlueprintCard } from "../../components/BlueprintCard.js";
 import { DraftCard } from "../../components/DraftCard.js";
 import { setBuildSaved } from "../../repositories/savedRepository.js";
 import { showToast } from "../../core/toast.js";
+import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
 
 export function renderWorkshop({ user, profile, builds, revisionCount, drafts, latestBuild, latestRevision, savedBuilds }) {
     const username = profile?.username || "Builder";
@@ -244,15 +245,3 @@ function formatUpdatedDate(value) {
     })}`;
 }
 
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}
-
-function escapeAttribute(value) {
-    return escapeHtml(value);
-}

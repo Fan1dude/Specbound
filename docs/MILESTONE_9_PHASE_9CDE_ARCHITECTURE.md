@@ -1,6 +1,23 @@
 # Milestone 9 — Phases 9C/9D/9E: Architecture Proposal
 
-**Status: Architecture only. No implementation. Awaiting approval.**
+**Status: Phase 9C is complete and verified live (2026-07-26). Phases 9D/9E remain architecture only, awaiting their own approval to begin.**
+
+## Phase 9C — completion note
+
+Implemented as scoped above, with a few corrections discovered during implementation (all applied, all noted here rather than silently absorbed):
+
+- **Git was initialized first** (user-approved deviation from the original sequencing recommendation), with a baseline commit before any 9C file changes, so every change below is tracked and revertible. A repo-local git identity was set (not global) since none existed.
+- **D3** (blueprint-feed unused layout variants) was deleted without a separate question — same low-risk "confirmed dead in HTML/JS, git-recoverable" reasoning as D1/D2/D5, not worth a 5th product-decision question.
+- **D6 turned out to be based on a stale premise.** The original finding pointed at `js/pages/upload/app.js`, but that file has no upload-zone UI at all — `pages/upload.html` (the page it renders) contains no file input or drag-drop zone anywhere. Investigation found the entire `.upload-zone`/`.upload-form`/`.has-file` rule family in `css/pages/upload/upload.css` was **orphaned dead CSS**, superseded by a separate, already-correct `css/components/uploadzone.css` that styles the *actual* reachable upload zone (the editor's gallery section, `pages/build/edit.html`) — which already has full upload feedback via its own `.is-dragging` state, status text, and immediate thumbnail rendering. There was no real "no confirmation" gap to wire up. Deleted the dead CSS instead (same treatment as D2/D5), consistent with the user's "wire it up" intent (closing the UX gap) since the gap didn't exist in reachable code.
+- **D11** was worse than the original estimate: 20 files had local `escapeHtml`/`escapeAttribute` copies (not ~18), including `settings/app.js` despite that file being directly touched during the storage remediation. All 20 migrated to import the shared `js/utils/escapeHtml.js`.
+- **Q4**: only `formatCategory.js` and `formatDate.js` were recreated as real files (holding D12/D13's consolidated logic), plus a new `avatarInitial.js` for D14. `formatStatus.js` and `slugify.js` were deliberately **not** recreated — investigation found `formatStatus` has two same-named but behaviorally different functions (`renderBuild.js`'s is a display-label formatter, `renderDashboard.js`'s is an internal status passthrough/default) that are not real duplication and would be a functional bug to merge, and `slugify` no longer exists anywhere in the codebase. Creating empty stub files for either would have repeated the exact anti-pattern Q4 itself criticized.
+- All other items (D1, D2, D4, D5, D7, D8, D9 [no action, per approval], D10 [no action], D12, D13, D14, S4, S5, S6, B2, B4, P1–P4) implemented exactly as scoped.
+- Verified live via the browser preview across home, explore, upload, a build page, a public profile page, followers, and search — no new console errors, all touched features (category badges, dates, avatar initials, comments, follow lists, gallery upload, Featured Spotlight via the pinned Supabase CDN version) render correctly.
+- Net diff: 57 files changed, 78 insertions, 920 deletions (mostly dead CSS/JS removal).
+
+Not yet committed to git — awaiting the user's decision on that.
+
+---
 
 **Scope:** the remaining Milestone 9 production work, now that the storage subsystem (originally findings S1/S3/S6 in `docs/MILESTONE_9_ARCHITECTURE.md`) is complete and verified — see `docs/STORAGE_ARCHITECTURE.md`. This document reorganizes the original audit's still-open findings into three phases, after re-verifying every one of them fresh against the current codebase (2026-07-26, post-storage-remediation) to confirm none drifted while that work was in progress. All 27 re-checked items came back unchanged except D11 (escaping duplication — now confirmed 20 files, not the original document's approximate ~18-20 estimate).
 

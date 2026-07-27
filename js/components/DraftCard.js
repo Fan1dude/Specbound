@@ -1,3 +1,5 @@
+import { escapeHtml } from "../utils/escapeHtml.js";
+
 const CATEGORY_LABELS = {
     pc_build: "PC Build",
     setup: "Desk Setup",
@@ -47,11 +49,3 @@ function formatUpdatedDate(value) {
     })}`;
 }
 
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}

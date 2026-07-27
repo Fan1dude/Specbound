@@ -1,3 +1,5 @@
+import { escapeHtml } from "./escapeHtml.js";
+
 // Shared markup for the three states almost every list/section in this app
 // renders at some point — deliberately just render helpers, not a fetch or
 // state-management abstraction. Each caller keeps its own try/catch and
@@ -85,11 +87,3 @@ function findFirstFocusable(root) {
     );
 }
 
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}

@@ -1,3 +1,5 @@
+import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
+
 // resources === null means "not recorded for this revision" (a revision
 // published before Milestone 5C captured per-revision snapshots) —
 // distinct from [] / undefined, which means "recorded, and there just
@@ -28,15 +30,3 @@ export function renderResources(resources) {
         .join("");
 }
 
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}
-
-function escapeAttribute(value) {
-    return escapeHtml(value);
-}

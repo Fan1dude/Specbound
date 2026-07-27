@@ -1,5 +1,6 @@
 import { getTechnology, getTechnologySpecifications } from "../../config/technologies/index.js";
 import { setupComponentAutocomplete } from "../../components/ComponentAutocomplete.js";
+import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
 
 export function renderSpecificationsSection(draft, autosave) {
     const container = document.getElementById("specificationsFields");
@@ -126,15 +127,3 @@ export function renderSpecificationsSection(draft, autosave) {
     return { applyFields };
 }
 
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}
-
-function escapeAttribute(value) {
-    return escapeHtml(value);
-}

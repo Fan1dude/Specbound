@@ -108,10 +108,10 @@ async function buildAvatarVariants(file) {
 // Gallery pipeline: validate, constrain to a max dimension while preserving
 // the original aspect ratio (unlike avatars, gallery images are not
 // cropped to square — lightboxes need the real proportions), and upload to
-// Storage at a path keyed by draft id and a caller-supplied media id.
-// Returns the public URL; does not touch the database — callers persist
-// the resulting URL via mediaRepository separately, since a media record
-// needs its id decided before the upload path can be built.
+// Storage at a path keyed by draft id and a caller-supplied media id. Does
+// not touch the database — callers persist the storage path via
+// mediaRepository separately, since a media record needs its id decided
+// before the upload path can be built.
 export async function uploadGalleryImage(draftId, mediaId, file) {
     const blob = await buildGalleryImage(file);
     const path = galleryStoragePath(draftId, mediaId);
@@ -125,13 +125,6 @@ export async function uploadGalleryImage(draftId, mediaId, file) {
         });
 
     if (uploadError) throw uploadError;
-
-    const { data } = supabase
-        .storage
-        .from(PROJECT_IMAGES_BUCKET)
-        .getPublicUrl(path);
-
-    return data.publicUrl;
 }
 
 export function galleryStoragePath(draftId, mediaId) {

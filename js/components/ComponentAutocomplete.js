@@ -1,4 +1,5 @@
 import { searchComponents } from "../repositories/componentRepository.js";
+import { escapeHtml } from "../utils/escapeHtml.js";
 
 // Returns { destroy() } — callers that re-render (e.g. switching technology
 // in the project editor, which recreates these fields) must call destroy()
@@ -239,11 +240,3 @@ export function setupComponentAutocomplete({
     return { destroy };
 }
 
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}

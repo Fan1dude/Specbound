@@ -1,3 +1,5 @@
+import { escapeAttribute } from "../../utils/escapeHtml.js";
+
 export function renderResourcesSection(draft, autosave) {
     const container = document.getElementById("resourcesList");
     const addButton = document.getElementById("addResourceBtn");
@@ -101,9 +103,3 @@ export function renderResourcesSection(draft, autosave) {
     return { applyFields };
 }
 
-function escapeAttribute(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("<", "&lt;");
-}

@@ -2,6 +2,7 @@ import { getNewestBuilds } from "../repositories/buildRepository.js";
 import { getProfilesByIds } from "../repositories/profileRepository.js";
 import { resolveBuildImageUrls } from "../repositories/mediaRepository.js";
 import { escapeAttribute } from "../utils/escapeHtml.js";
+import { formatCategory } from "../utils/formatCategory.js";
 
 let featuredBuilds = [];
 // Every builder name this carousel will ever need is already known once
@@ -74,16 +75,6 @@ function previousBuild() {
 function startCarousel() {
     if (slideInterval) clearInterval(slideInterval);
     slideInterval = setInterval(nextBuild, 6000);
-}
-
-function formatCategory(category) {
-    switch (category) {
-        case "pc_build": return "PC Build";
-        case "setup": return "Setup";
-        case "arduino": return "Arduino";
-        case "3d_printer": return "3D Printing";
-        default: return category || "Build";
-    }
 }
 
 const left = document.getElementById("prevFeatured");

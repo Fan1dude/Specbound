@@ -190,12 +190,9 @@ async function initEditor(id) {
             // reaching this with isReady false means either state managed
             // to desync from the DOM, or this fired some other way — either
             // way, say so instead of returning silently.
-            console.warn("Publish blocked: readiness checklist not complete.", { draftId: draft.id, publishedBuildId: draft.published_build_id, visibility });
             showToast("Complete the readiness checklist before publishing.", "warning");
             return;
         }
-
-        console.log("Publishing draft:", { draftId: draft.id, publishedBuildId: draft.published_build_id, visibilityBeforePublish: visibility });
 
         isPublishing = true;
         updatePublishBtn();
@@ -208,8 +205,6 @@ async function initEditor(id) {
             await autosave.flushNow();
 
             const build = await publishDraft(draft.id);
-
-            console.log("Publish succeeded:", { buildId: build?.id, visibilityAfterPublish: build?.visibility });
 
             showPublished(build);
             showToast("Project published.", "success");

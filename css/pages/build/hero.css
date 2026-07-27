@@ -51,12 +51,6 @@
     margin-bottom: 22px;
 }
 
-.build-meta {
-    display: flex;
-    gap: 14px;
-    flex-wrap: wrap;
-}
-
 .badge {
     padding: 10px 16px;
     border-radius: 999px;
@@ -65,13 +59,6 @@
     border: 1px solid rgba(79,125,255,.28);
     font-weight: 800;
     font-size: .85rem;
-}
-
-.build-mission {
-    max-width: 780px;
-    font-size: 1.3rem;
-    line-height: 1.85;
-    color: var(--text-secondary);
 }
 
 @media (max-width: 900px) {

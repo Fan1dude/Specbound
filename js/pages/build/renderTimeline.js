@@ -1,4 +1,6 @@
 import { resolveImageUrl } from "../../repositories/mediaRepository.js";
+import { escapeHtml } from "../../utils/escapeHtml.js";
+import { formatDate } from "../../utils/formatDate.js";
 
 const INITIAL_REVISION_COUNT = 3;
 
@@ -204,21 +206,4 @@ function formatUpdateType(type) {
     }
 }
 
-function formatDate(value) {
-    if (!value) return "Recently";
 
-    return new Date(value).toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "long",
-        day: "numeric"
-    });
-}
-
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}

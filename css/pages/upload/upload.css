@@ -63,8 +63,7 @@
     gap: var(--space-3);
 }
 
-.dynamic-field label,
-.spec-importer label {
+.dynamic-field label {
     display: block;
     margin-bottom: var(--space-1);
 
@@ -95,19 +94,6 @@
     text-transform: uppercase;
 }
 
-.spec-importer {
-    margin-bottom: var(--space-4);
-    padding: var(--space-3);
-
-    background: var(--color-bg-elevated);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-}
-
-.spec-importer textarea {
-    margin-bottom: var(--space-2);
-}
-
 .compact-empty-state {
     min-height: 160px;
 }
@@ -116,12 +102,6 @@
     .dynamic-field-grid {
         grid-template-columns: 1fr;
     }
-}
-
-.form-card-description {
-    max-width: 680px;
-    margin: -12px 0 var(--space-4);
-    color: var(--text-secondary);
 }
 
 .progress-input {
@@ -151,89 +131,3 @@
     text-align: right;
 }
 
-.form-card .upload-zone {
-    margin-top: var(--space-4);
-}
-
-.upload-zone.has-file {
-    border-color: var(--success);
-    background: color-mix(
-        in srgb,
-        var(--success) 8%,
-        transparent
-    );
-}
-
-.upload-zone.has-file .upload-zone-icon {
-    color: var(--success);
-    background: color-mix(
-        in srgb,
-        var(--success) 12%,
-        transparent
-    );
-}
-
-.upload-form .upload-zone {
-    position: relative;
-    min-height: 220px;
-
-    display: grid;
-    place-items: center;
-
-    margin-top: var(--space-4);
-    padding: var(--space-4);
-
-    text-align: center;
-
-    background: var(--color-bg-elevated);
-    border: 1px dashed var(--color-border-strong);
-    border-radius: var(--radius-lg);
-
-    cursor: pointer;
-
-    transition:
-        background var(--transition),
-        border-color var(--transition);
-}
-
-.upload-form .upload-zone:hover {
-    background: var(--color-primary-soft);
-    border-color: var(--primary);
-}
-
-.upload-form .upload-zone input[type="file"] {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: 0;
-    padding: 0;
-
-    overflow: hidden;
-    opacity: 0;
-    pointer-events: none;
-}
-
-.upload-form .upload-zone-icon {
-    width: 54px;
-    height: 54px;
-
-    display: grid;
-    place-items: center;
-
-    margin: 0 auto var(--space-2);
-
-    color: var(--primary);
-    background: var(--color-primary-soft);
-    border-radius: var(--radius-md);
-
-    font-size: 1.4rem;
-    font-weight: 800;
-}
-
-.upload-form .upload-zone h3 {
-    margin-bottom: var(--space-1);
-}
-
-.upload-form .upload-zone p {
-    color: var(--text-secondary);
-}

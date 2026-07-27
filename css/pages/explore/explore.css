@@ -205,23 +205,6 @@
     border-radius: var(--radius-sm);
 }
 
-.check-option {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-
-    margin: 12px 0;
-
-    color: var(--text-secondary);
-    cursor: pointer;
-}
-
-.check-option input {
-    width: 18px;
-    height: 18px;
-    accent-color: var(--primary);
-}
-
 /* Catalog */
 
 .catalog {

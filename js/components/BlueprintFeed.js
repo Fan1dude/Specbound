@@ -1,4 +1,5 @@
 import { BlueprintCard } from "./BlueprintCard.js";
+import { escapeHtml } from "../utils/escapeHtml.js";
 
 export function BlueprintFeed({
     container,
@@ -34,13 +35,4 @@ export function BlueprintFeed({
     target.innerHTML = builds
         .map(build => BlueprintCard(build, pathPrefix))
         .join("");
-}
-
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
 }

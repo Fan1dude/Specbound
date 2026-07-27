@@ -4,6 +4,7 @@ import { attachBuildProfiles } from "../../repositories/profileRepository.js";
 import { resolveBuildImageUrls } from "../../repositories/mediaRepository.js";
 import { BlueprintCard } from "../../components/BlueprintCard.js";
 import { formatRelativeTime } from "../../utils/notificationFormat.js";
+import { escapeHtml } from "../../utils/escapeHtml.js";
 
 const PAGE_SIZE = 20;
 
@@ -174,11 +175,3 @@ export async function renderActivityFeed(currentUser) {
     }
 }
 
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}

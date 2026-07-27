@@ -2,6 +2,9 @@ import { getBuildComments, createComment, deleteComment } from "../../repositori
 import { getProfilesByIds } from "../../repositories/profileRepository.js";
 import { resolveAvatarUrls } from "../../repositories/mediaRepository.js";
 import { showToast } from "../../core/toast.js";
+import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
+import { formatDate } from "../../utils/formatDate.js";
+import { avatarInitial } from "../../utils/avatarInitial.js";
 
 const PAGE_SIZE = 50;
 
@@ -255,8 +258,8 @@ export async function renderComments(build, currentUser) {
             <article class="comment-item" data-id="${escapeAttribute(comment.id)}">
                 <div class="comment-avatar">
                     ${avatarUrl
-                        ? `<img src="${escapeAttribute(avatarUrl)}" alt="${escapeAttribute(username)}">`
-                        : escapeHtml(username.charAt(0).toUpperCase())
+                        ? `<img src="${escapeAttribute(avatarUrl)}" alt="${escapeAttribute(username)}" loading="lazy">`
+                        : escapeHtml(avatarInitial(username))
                     }
                 </div>
 
@@ -293,25 +296,4 @@ export async function renderComments(build, currentUser) {
     }
 }
 
-function formatDate(value) {
-    if (!value) return "Recently";
 
-    return new Date(value).toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric"
-    });
-}
-
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}
-
-function escapeAttribute(value) {
-    return escapeHtml(value);
-}

@@ -1,6 +1,8 @@
 import { BlueprintCard } from "../../components/BlueprintCard.js";
 import { resolveAvatarUrl } from "../../repositories/mediaRepository.js";
 import { renderFollow } from "./renderFollow.js";
+import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
+import { avatarInitial } from "../../utils/avatarInitial.js";
 
 const LINK_FIELDS = [
     { key: "website", label: "Website", format: value => normalizeUrl(value) },
@@ -94,7 +96,7 @@ async function renderAvatar(profile, username) {
     if (avatarUrl) {
         avatarEl.innerHTML = `<img src="${escapeAttribute(avatarUrl)}" alt="${escapeAttribute(username)}'s avatar">`;
     } else {
-        avatarEl.textContent = username.charAt(0).toUpperCase();
+        avatarEl.textContent = avatarInitial(username);
     }
 }
 
@@ -189,15 +191,3 @@ function normalizeUrl(value) {
     return /^https?:\/\//i.test(value) ? value : `https://${value}`;
 }
 
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}
-
-function escapeAttribute(value) {
-    return escapeHtml(value);
-}

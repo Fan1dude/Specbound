@@ -8,6 +8,7 @@ import {
 
 import { formatNotificationText, getNotificationUrl, formatRelativeTime } from "../utils/notificationFormat.js";
 import { showToast } from "./toast.js";
+import { escapeHtml, escapeAttribute } from "../utils/escapeHtml.js";
 
 // Called once from loadNavbar() when a user is signed in. Renders the
 // bell button + badge + dropdown into the given container and wires up
@@ -175,15 +176,3 @@ export async function initNotificationBell(container, { user, pathPrefix = "" })
     }
 }
 
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}
-
-function escapeAttribute(value) {
-    return escapeHtml(value);
-}

@@ -1,6 +1,6 @@
 import { getBuildBySlug } from "../../repositories/buildRepository.js";
 import { getBuildRevisions, getRevisionById } from "../../repositories/revisionRepository.js";
-import { getProfile } from "../../repositories/profileRepository.js";
+import { getPublicProfile } from "../../repositories/profileRepository.js";
 import { getRevisionMedia } from "../../repositories/mediaRepository.js";
 import { getDraftByPublishedBuildId } from "../../repositories/draftRepository.js";
 import { restoreRevisionToDraft } from "../../repositories/publishRepository.js";
@@ -46,7 +46,7 @@ export async function loadBuild() {
 
     try {
         if (build.user_id) {
-            profile = await getProfile(build.user_id);
+            profile = await getPublicProfile(build.user_id);
         }
     } catch (error) {
         console.error("Creator profile load error:", error);

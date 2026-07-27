@@ -6,6 +6,8 @@ import { updateAvatarPath } from "../../repositories/profileRepository.js";
 import { resolveAvatarUrl } from "../../repositories/mediaRepository.js";
 import { uploadAvatar } from "../../services/imageService.js";
 import { renderErrorState } from "../../utils/listState.js";
+import { escapeAttribute } from "../../utils/escapeHtml.js";
+import { avatarInitial } from "../../utils/avatarInitial.js";
 
 loadNavbar("../");
 loadFooter("../");
@@ -144,11 +146,5 @@ async function renderAvatarPreview(container, profile) {
         return;
     }
 
-    container.textContent = (profile?.username || "?").charAt(0).toUpperCase();
-}
-
-function escapeAttribute(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll('"', "&quot;");
+    container.textContent = avatarInitial(profile?.username);
 }

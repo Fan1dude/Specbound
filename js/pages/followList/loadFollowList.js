@@ -1,4 +1,4 @@
-import { getProfile } from "../../repositories/profileRepository.js";
+import { getPublicProfile } from "../../repositories/profileRepository.js";
 import { getCurrentUser } from "../../core/auth.js";
 import { renderFollowList } from "./renderFollowList.js";
 
@@ -26,7 +26,7 @@ export async function loadFollowList(type) {
     let profile = null;
 
     try {
-        profile = await getProfile(userId);
+        profile = await getPublicProfile(userId);
     } catch (error) {
         console.error("Profile load error:", error);
     }

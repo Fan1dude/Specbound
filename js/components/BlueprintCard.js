@@ -1,3 +1,6 @@
+import { escapeHtml, escapeAttribute } from "../utils/escapeHtml.js";
+import { formatCategory } from "../utils/formatCategory.js";
+
 export function BlueprintCard(build, pathPrefix = "", options = {}) {
     const { variant = "default" } = options;
     const specs = build.specifications || {};
@@ -240,18 +243,6 @@ function getStage(status) {
     }
 }
 
-function formatCategory(category) {
-    const categories = {
-        pc_build: "PC Build",
-        setup: "Desk Setup",
-        arduino: "Arduino",
-        robotics: "Robotics",
-        "3d_printer": "3D Printing",
-        homelab: "Home Lab"
-    };
-
-    return categories[category] || "Technology";
-}
 
 function normalizeVersion(version) {
     if (!version) return "v1.0";
@@ -294,15 +285,3 @@ function formatUpdatedDate(value) {
     })}`;
 }
 
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}
-
-function escapeAttribute(value) {
-    return escapeHtml(value);
-}

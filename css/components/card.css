@@ -8,9 +8,3 @@
 .card-padding {
     padding: 28px;
 }
-
-.card-hover:hover {
-    transform: translateY(-3px);
-    border-color: rgba(79,125,255,.4);
-    box-shadow: var(--shadow-hover);
-}

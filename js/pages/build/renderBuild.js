@@ -1,4 +1,6 @@
 import { resolveImageUrl } from "../../repositories/mediaRepository.js";
+import { formatCategory } from "../../utils/formatCategory.js";
+import { avatarInitial } from "../../utils/avatarInitial.js";
 
 export async function renderBuild(build, latestRevision = null, { editDraftId = null } = {}) {
     const username =
@@ -224,7 +226,7 @@ function renderCreator(build, username) {
 
     if (creatorAvatar) {
         creatorAvatar.textContent =
-            username.charAt(0).toUpperCase();
+            avatarInitial(username);
     }
 }
 
@@ -362,30 +364,6 @@ function normalizeVersion(version) {
         : `v${value}`;
 }
 
-function formatCategory(category) {
-    switch (category) {
-        case "pc_build":
-            return "PC Build";
-
-        case "setup":
-            return "Desk Setup";
-
-        case "arduino":
-            return "Arduino";
-
-        case "robotics":
-            return "Robotics";
-
-        case "3d_printer":
-            return "3D Printing";
-
-        case "homelab":
-            return "Home Lab";
-
-        default:
-            return "Blueprint";
-    }
-}
 
 function formatStatus(status) {
     switch (status) {

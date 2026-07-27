@@ -2,6 +2,8 @@ import { getFollowersPage, getFollowingPage, getFollowedIds, setFollow } from ".
 import { getProfilesByIds } from "../../repositories/profileRepository.js";
 import { resolveAvatarUrls } from "../../repositories/mediaRepository.js";
 import { showToast } from "../../core/toast.js";
+import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
+import { avatarInitial } from "../../utils/avatarInitial.js";
 
 const PAGE_SIZE = 20;
 
@@ -186,8 +188,8 @@ export async function renderFollowList(type, profileUserId, currentUser) {
                 <a href="profile.html?user=${encodeURIComponent(row.id)}" class="follow-row-profile">
                     <span class="follow-row-avatar">
                         ${row.avatarUrl
-                            ? `<img src="${escapeAttribute(row.avatarUrl)}" alt="${escapeAttribute(row.username)}">`
-                            : escapeHtml(row.username.charAt(0).toUpperCase())
+                            ? `<img src="${escapeAttribute(row.avatarUrl)}" alt="${escapeAttribute(row.username)}" loading="lazy">`
+                            : escapeHtml(avatarInitial(row.username))
                         }
                     </span>
 
@@ -216,15 +218,3 @@ export async function renderFollowList(type, profileUserId, currentUser) {
     }
 }
 
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}
-
-function escapeAttribute(value) {
-    return escapeHtml(value);
-}

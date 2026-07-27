@@ -1,4 +1,5 @@
 import { getReadinessChecks, isDraftReady } from "../../services/draftValidation.js";
+import { escapeHtml } from "../../utils/escapeHtml.js";
 
 const CHECK_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 9 17 20 6"/></svg>`;
 const CIRCLE_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg>`;
@@ -48,9 +49,3 @@ export function renderReadinessChecklist(getMediaCount, onReadyChange = () => {}
     return { update };
 }
 
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;");
-}

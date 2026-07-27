@@ -1,6 +1,5 @@
 .badge,
-.hero-badge,
-.build-category {
+.hero-badge {
     display: inline-flex;
     align-items: center;
     gap: 6px;

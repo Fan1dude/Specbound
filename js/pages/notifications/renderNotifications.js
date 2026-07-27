@@ -7,6 +7,7 @@ import {
 
 import { formatNotificationText, getNotificationUrl, formatRelativeTime } from "../../utils/notificationFormat.js";
 import { showToast } from "../../core/toast.js";
+import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
 
 const PAGE_SIZE = 20;
 
@@ -167,15 +168,3 @@ export async function renderNotifications() {
     }
 }
 
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}
-
-function escapeAttribute(value) {
-    return escapeHtml(value);
-}
