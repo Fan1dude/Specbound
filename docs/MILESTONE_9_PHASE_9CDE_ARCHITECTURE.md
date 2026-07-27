@@ -88,6 +88,8 @@ Not yet committed to git — awaiting the user's decision on that.
 
 *Git verification, production configuration, robots.txt, sitemap.xml, manifest, caching, error pages.*
 
+**Superseded by the detailed proposal**: [`docs/MILESTONE_9_PHASE_9D_ARCHITECTURE.md`](MILESTONE_9_PHASE_9D_ARCHITECTURE.md) — hosting platform recommendation, deployment pipeline, environment variables, Supabase production config, branch strategy, robots.txt/sitemap.xml/manifest/favicon/metadata plans, caching strategy and headers, error pages, CSP, a full `docs/DEPLOYMENT.md` draft, and a verification plan. The summary below is retained as the original high-level scope; the linked document is what's actually awaiting approval.
+
 ### Git verification
 
 | # | Item | Current state | Proposed fix |
