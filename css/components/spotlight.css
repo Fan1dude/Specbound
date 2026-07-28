@@ -17,7 +17,7 @@
 
     background: radial-gradient(
         circle at 20% 80%,
-        rgba(94, 234, 212, 0.06),
+        rgba(201, 166, 232, 0.06),
         transparent 60%
     );
 }
@@ -69,8 +69,8 @@
     border-radius: 999px;
 
     color: var(--primary);
-    background: rgba(79, 125, 255, .12);
-    border: 1px solid rgba(79, 125, 255, .22);
+    background: rgba(165, 107, 199, .12);
+    border: 1px solid rgba(165, 107, 199, .22);
 
     font-size: .78rem;
     font-weight: 800;
@@ -136,7 +136,7 @@
 
 .slide-arrow:hover {
     background: var(--surface-2);
-    border-color: rgba(79, 125, 255, .45);
+    border-color: rgba(165, 107, 199, .45);
 }
 
 .slide-arrow.left {

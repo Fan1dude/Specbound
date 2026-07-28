@@ -25,7 +25,7 @@
 
     background: radial-gradient(
         circle at 75% 30%,
-        rgba(94, 234, 212, 0.06),
+        rgba(201, 166, 232, 0.06),
         transparent 60%
     );
 }
@@ -94,8 +94,8 @@
     width: 360px;
     height: 360px;
     border-radius: 36px;
-    border: 1px solid rgba(100, 120, 238, .25);
-    background: rgba(100, 120, 238, .06);
+    border: 1px solid rgba(165, 107, 199, .25);
+    background: rgba(165, 107, 199, .06);
     box-shadow: var(--shadow-md);
     position: relative;
 }

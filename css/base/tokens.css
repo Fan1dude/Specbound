@@ -33,44 +33,60 @@
        new token, no previous equivalent existed. */
     --color-text-inverse: #0a0b0f;
 
-    /* Primary — a controlled indigo, deliberately less saturated/
-       "bright sky blue" than the previous #4f7dff. Verified via
-       WCAG contrast calculation as plain foreground text/icon color
-       against --color-surface: 4.75:1 (passes AA's 4.5:1 for normal
-       text — comparable to the old primary's own ~4.96:1, not a
-       regression). An initial darker candidate (#4A5FE8, closer to
-       "ink" than "periwinkle") only measured ~3.56:1 and was
-       rejected during implementation for exactly that reason —
-       the value below is the one that keeps the restrained,
-       less-electric character while still passing AA as text. */
-    --color-primary: #6478ee;
-    --color-primary-hover: #7b8cf1;
-    --color-primary-soft: rgba(100, 120, 238, 0.12);
+    /* Primary — Deep Plum, replacing the controlled-indigo/blue-first
+       palette above with the "Deep Plum + Lavender Mist" identity
+       (post-M10 refinement pass — see the commit message for context;
+       the indigo above was itself already a deliberate move away from
+       the pre-refresh #4f7dff, this is a further hue correction, not a
+       reversion). Verified via WCAG contrast calculation as plain
+       foreground text/icon color against --color-surface: 4.80:1
+       (passes AA's 4.5:1 for normal text). Same tension as the
+       original primary's own history: a truly dark/"ink" plum reads
+       as more premium but can't clear 4.5:1 as text against this dark
+       a surface, so this is the lightest value that still reads as
+       unmistakably plum rather than orchid/lilac. */
+    --color-primary: #a56bc7;
+    /* Hover states use Lavender Mist directly (the palette's second
+       named color, shared with --color-accent below) rather than a
+       subtle same-hue lightening — a deliberate two-color identity,
+       not a single hue with shade variations. Verified at 8.78:1 as
+       foreground text against --color-surface (comfortably passes,
+       and hover states benefit from the extra visibility). */
+    --color-primary-hover: #c9a6e8;
+    --color-primary-soft: rgba(165, 107, 199, 0.12);
 
-    /* Same reasoning as the pre-refresh tokens file: --color-primary
-       is also used as plain foreground text/icon/link color (passes
-       AA at 4.75:1, see above) — that use is left alone. White text
-       ON --color-primary as a background is the thing that needs a
-       separately-darkened pair to clear 4.5:1: verified at 7.03:1
-       (base) and 5.86:1 (hover) via the same relative-luminance
-       calculation. Consumers: .btn-primary and other white-on-
-       primary-background controls only — everything else uses
-       --color-primary directly. */
-    --color-primary-strong: #3b4bc4;
-    --color-primary-strong-hover: #4557d6;
+    /* Same reasoning as before: --color-primary is also used as plain
+       foreground text/icon/link color (passes AA at 4.80:1, see
+       above) — that use is left alone. White text ON --color-primary
+       as a background is the thing that needs a separately-darkened
+       pair to clear 4.5:1: verified at 6.70:1 (base) and 5.10:1
+       (hover) via the same relative-luminance calculation. Consumers:
+       .btn-primary and other white-on-primary-background controls
+       only — everything else uses --color-primary directly. */
+    --color-primary-strong: #7c3fa8;
+    --color-primary-strong-hover: #8f52be;
 
-    /* Secondary — cool graphite, the "calm counterweight" to
-       primary. Verified as foreground text at 4.74:1 (passes AA). */
+    /* Secondary — cool graphite, the "calm counterweight" to primary.
+       Deliberately left out of the plum/lavender identity — its role
+       is to be the neutral, quiet color, not a third brand hue.
+       Verified as foreground text at 4.74:1 (passes AA), unchanged by
+       this pass. */
     --color-secondary: #7c8291;
 
-    /* Accent — reserved exclusively for the 4 glow uses defined in
+    /* Accent — Lavender Mist, the same value as --color-primary-hover
+       above (one named color, reused for hover states, accents, and
+       ambient glow — not three separate lavenders). Reserved
+       exclusively for the 4 glow uses defined in
        docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md §6. Never used
-       as a body UI color, a fill, or plain text — deliberately not
-       WCAG-text-verified for that reason (it's never rendered as
-       text). Kept as a single canonical value here; --glow-* below
-       are the only tokens allowed to consume it. */
-    --color-accent: #5eead4;
-    --color-accent-rgb: 94, 234, 212;
+       as a body UI color, a fill, or plain text in that glow role —
+       deliberately not re-verified for that reason (it's never
+       rendered as text there); its --color-primary-hover use above is
+       the one place this exact value is read as text, and that's
+       already verified at 8.78:1. Kept as a single canonical value
+       here; --glow-* below are the only tokens allowed to consume it
+       for glow. */
+    --color-accent: #c9a6e8;
+    --color-accent-rgb: 201, 166, 232;
 
     /* Semantic colors — small, deliberate shifts from the previous
        values to match the cooler overall palette; re-verified, not
