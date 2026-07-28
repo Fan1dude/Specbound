@@ -15,3 +15,14 @@
     margin: 0 auto 28px;
     color: var(--text-secondary);
 }
+
+.empty-state-icon {
+    display: flex;
+    justify-content: center;
+    margin-bottom: var(--space-2);
+    color: var(--text-muted);
+}
+
+.compact-empty-state .empty-state-icon {
+    margin-bottom: var(--space-1);
+}

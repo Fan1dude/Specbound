@@ -135,7 +135,7 @@ export async function initNotificationBell(container, { user, pathPrefix = "" })
             const notifications = await enrichNotifications(await getRecentNotifications(8));
 
             if (!notifications.length) {
-                listEl.innerHTML = `<p class="text-secondary notification-dropdown-message">No notifications yet.</p>`;
+                listEl.innerHTML = `<p class="text-secondary notification-dropdown-message">You're all caught up.</p>`;
                 return;
             }
 

@@ -1,4 +1,5 @@
 import { escapeAttribute } from "../../utils/escapeHtml.js";
+import { icon } from "../../utils/icons.js";
 
 export function renderResourcesSection(draft, autosave) {
     const container = document.getElementById("resourcesList");
@@ -20,6 +21,7 @@ export function renderResourcesSection(draft, autosave) {
         if (!currentResources.length) {
             container.innerHTML = `
                 <div class="empty-state compact-empty-state">
+                    <div class="empty-state-icon">${icon("document", 32)}</div>
                     <h3>No resources yet.</h3>
                     <p>Add links to datasheets, references, or anything else worth pointing to.</p>
                 </div>

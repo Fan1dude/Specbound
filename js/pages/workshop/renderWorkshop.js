@@ -4,6 +4,7 @@ import { setBuildSaved } from "../../repositories/savedRepository.js";
 import { showToast } from "../../core/toast.js";
 import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
 import { hydrateProgressBars } from "../../utils/progressBar.js";
+import { icon } from "../../utils/icons.js";
 
 export function renderWorkshop({ user, profile, builds, revisionCount, drafts, latestBuild, latestRevision, savedBuilds }) {
     const username = profile?.username || "Builder";
@@ -42,6 +43,7 @@ function renderContinueSection(latestBuild, latestRevision, draftIdByBuildId) {
     if (!latestBuild) {
         container.innerHTML = `
             <div class="empty-state">
+                <div class="empty-state-icon">${icon("document", 32)}</div>
                 <h3>Start your first project</h3>
                 <p>
                     Document what you're building from day one — specifications,
@@ -127,8 +129,9 @@ function renderProjectsSection(builds, draftIdByBuildId) {
     if (!builds.length) {
         container.innerHTML = `
             <div class="empty-state">
-                <h3>No projects yet.</h3>
-                <p>Create your first project to start documenting your build.</p>
+                <div class="empty-state-icon">${icon("document", 32)}</div>
+                <h3>Your workshop is empty</h3>
+                <p>Start documenting your first build.</p>
                 <a class="btn btn-primary" href="upload.html">Create Project</a>
             </div>
         `;
@@ -174,6 +177,7 @@ function renderSavedSection(savedBuilds) {
         if (!saved.length) {
             container.innerHTML = `
                 <div class="empty-state">
+                    <div class="empty-state-icon">${icon("document", 32)}</div>
                     <h3>You haven't saved any projects yet.</h3>
                     <p>Save a project from its page to revisit it here later.</p>
                     <a class="btn btn-primary" href="explore.html">Explore Projects</a>

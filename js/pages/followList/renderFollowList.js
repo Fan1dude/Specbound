@@ -4,6 +4,7 @@ import { resolveAvatarUrls } from "../../repositories/mediaRepository.js";
 import { showToast } from "../../core/toast.js";
 import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
 import { avatarInitial } from "../../utils/avatarInitial.js";
+import { icon } from "../../utils/icons.js";
 
 const PAGE_SIZE = 20;
 
@@ -108,11 +109,18 @@ export async function renderFollowList(type, profileUserId, currentUser) {
 
     function renderList() {
         if (!rows.length) {
-            const emptyText = type === "followers"
-                ? "No followers yet."
-                : "Not following anyone yet.";
+            const emptyTitle = type === "followers" ? "No followers yet" : "Not following anyone yet";
+            const emptyDescription = type === "followers"
+                ? "Publish a build to start building an audience."
+                : "Follow some builders to see their latest projects here.";
 
-            listEl.innerHTML = `<div class="empty-state"><h3>${emptyText}</h3></div>`;
+            listEl.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">${icon("users", 32)}</div>
+                    <h3>${emptyTitle}</h3>
+                    <p>${emptyDescription}</p>
+                </div>
+            `;
 
             if (loadMoreBtn) loadMoreBtn.hidden = true;
             return;

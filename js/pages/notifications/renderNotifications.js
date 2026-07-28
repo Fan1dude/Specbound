@@ -8,6 +8,7 @@ import {
 import { formatNotificationText, getNotificationUrl, formatRelativeTime } from "../../utils/notificationFormat.js";
 import { showToast } from "../../core/toast.js";
 import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
+import { icon } from "../../utils/icons.js";
 
 const PAGE_SIZE = 20;
 
@@ -100,8 +101,9 @@ export async function renderNotifications() {
         if (!notifications.length) {
             listEl.innerHTML = `
                 <div class="empty-state">
-                    <h3>No notifications yet.</h3>
-                    <p>You'll see comments, likes, and saves on your projects here.</p>
+                    <div class="empty-state-icon">${icon("bell", 32)}</div>
+                    <h3>You're all caught up</h3>
+                    <p>New activity on your builds will show up here.</p>
                 </div>
             `;
 

@@ -7,6 +7,7 @@ import { hydrateProgressBars } from "../../utils/progressBar.js";
 import { cardGridSkeleton } from "../../utils/skeletons.js";
 import { formatRelativeTime } from "../../utils/notificationFormat.js";
 import { escapeHtml } from "../../utils/escapeHtml.js";
+import { icon } from "../../utils/icons.js";
 
 const PAGE_SIZE = 20;
 
@@ -136,6 +137,7 @@ export async function renderActivityFeed(currentUser) {
             gridEl.innerHTML = scope === "following"
                 ? `
                     <div class="empty-state">
+                        <div class="empty-state-icon">${icon("users", 32)}</div>
                         <h3>Your Following feed is empty.</h3>
                         <p>Follow some builders to see their latest projects and updates here.</p>
                         <a class="btn btn-primary" href="pages/explore.html">Explore Projects</a>
@@ -143,6 +145,7 @@ export async function renderActivityFeed(currentUser) {
                 `
                 : `
                     <div class="empty-state">
+                        <div class="empty-state-icon">${icon("document", 32)}</div>
                         <h3>No activity yet.</h3>
                         <p>Published projects and updates will show up here.</p>
                     </div>

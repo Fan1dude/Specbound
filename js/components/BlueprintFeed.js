@@ -1,6 +1,7 @@
 import { BlueprintCard } from "./BlueprintCard.js";
 import { escapeHtml } from "../utils/escapeHtml.js";
 import { hydrateProgressBars } from "../utils/progressBar.js";
+import { icon } from "../utils/icons.js";
 
 export function BlueprintFeed({
     container,
@@ -8,7 +9,8 @@ export function BlueprintFeed({
     pathPrefix = "",
     layout = "grid",
     emptyTitle = "No Blueprints Found",
-    emptyDescription = "There are no Blueprints to display yet."
+    emptyDescription = "There are no Blueprints to display yet.",
+    emptyIcon = "document"
 }) {
     const target =
         typeof container === "string"
@@ -26,6 +28,7 @@ export function BlueprintFeed({
     if (!Array.isArray(builds) || builds.length === 0) {
         target.innerHTML = `
             <div class="empty-state blueprint-feed-empty">
+                <div class="empty-state-icon">${icon(emptyIcon, 32)}</div>
                 <h3>${escapeHtml(emptyTitle)}</h3>
                 <p>${escapeHtml(emptyDescription)}</p>
             </div>

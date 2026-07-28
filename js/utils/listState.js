@@ -1,4 +1,5 @@
 import { escapeHtml } from "./escapeHtml.js";
+import { icon } from "./icons.js";
 
 // Shared markup for the three states almost every list/section in this app
 // renders at some point — deliberately just render helpers, not a fetch or
@@ -22,13 +23,19 @@ export function renderLoadingState(container, message = "Loading...", skeleton =
     container.innerHTML = skeleton || `<p class="text-secondary list-state-message">${escapeHtml(message)}</p>`;
 }
 
-export function renderEmptyState(container, { title, description = "", actionHtml = "" } = {}) {
+// `icon`, if provided, is a name from js/utils/icons.js rendered at the
+// 32px empty-state size (Iconography Standards' fourth and last defined
+// size) above the title — see docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md's
+// Empty States section for the one-icon-per-context language this replaces
+// plain text-only empty states with.
+export function renderEmptyState(container, { title, description = "", actionHtml = "", icon: iconName = "" } = {}) {
     if (!container) return;
 
     container.setAttribute("role", "status");
     container.setAttribute("aria-live", "polite");
     container.innerHTML = `
         <div class="empty-state">
+            ${iconName ? `<div class="empty-state-icon">${icon(iconName, 32)}</div>` : ""}
             <h3>${escapeHtml(title)}</h3>
             ${description ? `<p>${escapeHtml(description)}</p>` : ""}
             ${actionHtml}
@@ -55,6 +62,7 @@ export function renderErrorState(container, { message = "Could not load this. Tr
     container.setAttribute("aria-live", "polite");
     container.innerHTML = `
         <div class="empty-state list-state-error">
+            <div class="empty-state-icon">${icon("warning", 32)}</div>
             <h3 tabindex="-1">${escapeHtml(message)}</h3>
             ${onRetry ? `<button type="button" class="btn btn-secondary list-state-retry">Try Again</button>` : ""}
         </div>

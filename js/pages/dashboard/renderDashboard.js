@@ -1,4 +1,5 @@
 import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
+import { icon } from "../../utils/icons.js";
 
 export function renderDashboard({ profile, builds, revisionCount }) {
     document.getElementById("dashboardGreeting").textContent =
@@ -35,6 +36,7 @@ function renderBuilds(builds) {
     if (!builds.length) {
         container.innerHTML = `
             <div class="empty-state">
+                <div class="empty-state-icon">${icon("document", 32)}</div>
                 <h3>No builds yet.</h3>
                 <p>Create your first build and start documenting your journey.</p>
                 <a class="btn btn-primary" href="../pages/upload.html">Create Build</a>

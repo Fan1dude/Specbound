@@ -1,6 +1,7 @@
 import { getTechnology, getTechnologySpecifications } from "../../config/technologies/index.js";
 import { setupComponentAutocomplete } from "../../components/ComponentAutocomplete.js";
 import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
+import { icon } from "../../utils/icons.js";
 
 export function renderSpecificationsSection(draft, autosave) {
     const container = document.getElementById("specificationsFields");
@@ -42,6 +43,7 @@ export function renderSpecificationsSection(draft, autosave) {
         if (!technology || !fields.length) {
             container.innerHTML = `
                 <div class="empty-state compact-empty-state">
+                    <div class="empty-state-icon">${icon("document", 32)}</div>
                     <h3>No specification fields for this technology yet.</h3>
                     <p>Choose a technology in Overview to see its fields here.</p>
                 </div>

@@ -56,7 +56,8 @@ async function initExplore() {
             layout: "grid",
             emptyTitle: "Unable to Load Blueprints",
             emptyDescription:
-                "Something went wrong while loading the discovery feed."
+                "Something went wrong while loading the discovery feed.",
+            emptyIcon: "warning"
         });
 
         resultCount.textContent = "Unable to load results";
@@ -202,9 +203,10 @@ function render() {
         builds,
         pathPrefix: "../",
         layout: "grid",
-        emptyTitle: "No Blueprints Found",
+        emptyTitle: "Nothing matches yet",
         emptyDescription:
-            "Try changing or clearing some of your filters."
+            "Try changing or clearing some of your filters.",
+        emptyIcon: "search"
     });
 }
 

@@ -1,9 +1,13 @@
 import { loadNavbar, loadFooter } from "../../core/layout.js";
 import { CATEGORIES } from "../../config/categories.js";
 import { TechnologyCard, hydrateTechnologyCards } from "../../components/TechnologyCard.js";
+import { icon } from "../../utils/icons.js";
 
 loadNavbar("");
 loadFooter("");
+
+document.querySelector(".empty-state")
+    ?.insertAdjacentHTML("afterbegin", `<div class="empty-state-icon">${icon("document", 32)}</div>`);
 
 const technologyGrid =
     document.getElementById("designTechnologyGrid");

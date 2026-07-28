@@ -81,7 +81,7 @@ async function runQuery(rawValue, { updateUrl }) {
         if (requestId !== latestRequestId) return;
 
         console.error("Search error:", error);
-        showState("Search Unavailable", "Something went wrong while searching. Try again.");
+        showState("Search Unavailable", "Something went wrong while searching. Try again.", "warning");
         return;
     }
 
@@ -93,7 +93,7 @@ async function runQuery(rawValue, { updateUrl }) {
         if (requestId !== latestRequestId) return;
 
         console.error("Search result loading error:", error);
-        showState("Search Unavailable", "Something went wrong while searching. Try again.");
+        showState("Search Unavailable", "Something went wrong while searching. Try again.", "warning");
         return;
     }
 
@@ -104,8 +104,9 @@ async function runQuery(rawValue, { updateUrl }) {
         builds: results,
         pathPrefix: "../",
         layout: "grid",
-        emptyTitle: "No Projects Found",
-        emptyDescription: `No projects matched "${trimmed}".`
+        emptyTitle: "Nothing matches yet",
+        emptyDescription: `Nothing matched "${trimmed}" — try a different term or browse by category.`,
+        emptyIcon: "search"
     });
 }
 
@@ -127,16 +128,17 @@ async function attachCreators(builds) {
 }
 
 function showPrompt() {
-    showState("Search Specbound.", "Type something to search projects, builders, or categories.");
+    showState("Search Specbound.", "Type something to search projects, builders, or categories.", "search");
 }
 
-function showState(title, description) {
+function showState(title, description, icon = "search") {
     BlueprintFeed({
         container: "#searchResults",
         builds: [],
         pathPrefix: "../",
         layout: "grid",
         emptyTitle: title,
-        emptyDescription: description
+        emptyDescription: description,
+        emptyIcon: icon
     });
 }

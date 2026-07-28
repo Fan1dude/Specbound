@@ -7,6 +7,7 @@ import { formatDate } from "../../utils/formatDate.js";
 import { avatarInitial } from "../../utils/avatarInitial.js";
 import { confirmDialog } from "../../utils/modal.js";
 import { commentsSkeleton } from "../../utils/skeletons.js";
+import { icon } from "../../utils/icons.js";
 
 const PAGE_SIZE = 50;
 
@@ -190,7 +191,12 @@ export async function renderComments(build, currentUser) {
 
     async function renderList() {
         if (!comments.length) {
-            listEl.innerHTML = `<p class="text-secondary">No comments yet. Be the first to share your thoughts.</p>`;
+            listEl.innerHTML = `
+                <div class="empty-state compact-empty-state">
+                    <div class="empty-state-icon">${icon("document", 32)}</div>
+                    <h3>Be the first to weigh in on this build.</h3>
+                </div>
+            `;
             if (loadMoreBtn) loadMoreBtn.hidden = true;
             return;
         }

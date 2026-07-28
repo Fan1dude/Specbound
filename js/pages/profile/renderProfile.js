@@ -4,6 +4,7 @@ import { resolveAvatarUrl } from "../../repositories/mediaRepository.js";
 import { renderFollow } from "./renderFollow.js";
 import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
 import { avatarInitial } from "../../utils/avatarInitial.js";
+import { icon } from "../../utils/icons.js";
 
 const LINK_FIELDS = [
     { key: "website", label: "Website", format: value => normalizeUrl(value) },
@@ -143,7 +144,13 @@ function renderBuilds(builds) {
     el.innerHTML =
         builds.length
             ? builds.map(build => BlueprintCard(build, "../")).join("")
-            : `<div class="empty-state"><h3>No published projects yet.</h3></div>`;
+            : `
+                <div class="empty-state">
+                    <div class="empty-state-icon">${icon("document", 32)}</div>
+                    <h3>Nothing published yet</h3>
+                    <p>Every great build starts with a first draft.</p>
+                </div>
+            `;
 
     hydrateProgressBars(el);
 }
@@ -172,7 +179,12 @@ export function renderProfileError() {
     const builds = document.getElementById("profileBuilds");
 
     if (builds) {
-        builds.innerHTML = `<div class="empty-state"><h3>This profile could not be loaded.</h3></div>`;
+        builds.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">${icon("warning", 32)}</div>
+                <h3>This profile could not be loaded.</h3>
+            </div>
+        `;
     }
 }
 

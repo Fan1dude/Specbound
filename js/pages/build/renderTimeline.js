@@ -13,6 +13,7 @@ export async function renderTimeline(revisions, slug) {
     if (!revisions?.length) {
         container.innerHTML = `
             <div class="empty-state">
+                <div class="empty-state-icon">${icon("document", 32)}</div>
                 <h3>Start Your Project Log</h3>
                 <p>Document the first step of this project to begin recording its progress.</p>
             </div>
