@@ -3,6 +3,7 @@ import { updateDraft } from "../../repositories/draftRepository.js";
 import { uploadGalleryImage, deleteGalleryImage } from "../../services/imageService.js";
 import { showToast } from "../../core/toast.js";
 import { escapeAttribute } from "../../utils/escapeHtml.js";
+import { confirmDialog } from "../../utils/modal.js";
 
 // Gallery is intentionally not part of the shared text-field autosave
 // pipeline. Uploads, deletes, and cover selection are discrete, atomic
@@ -171,7 +172,14 @@ export async function renderGallerySection(draft, onMediaChange = () => {}) {
             });
 
             item.querySelector(".gallery-delete-btn").addEventListener("click", async () => {
-                if (!confirm("Delete this image?")) return;
+                const confirmed = await confirmDialog({
+                    title: "Delete this image?",
+                    body: "This can't be undone.",
+                    confirmLabel: "Delete",
+                    danger: true
+                });
+
+                if (!confirmed) return;
 
                 try {
                     await deleteMedia(media);

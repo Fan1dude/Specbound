@@ -1,0 +1,63 @@
+/* New component — no dialog/modal existed in the codebase before Milestone
+   10 (confirmed via a repo-wide search during the architecture phase; the
+   app previously relied on the browser's native confirm() for every
+   destructive/consequential action). See
+   docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md §7. Built on the native
+   <dialog> element for free accessible focus-trapping and Esc handling —
+   js/utils/modal.js drives the open/close mechanics. */
+.modal {
+    padding: 0;
+    max-width: min(420px, 90vw);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    color: var(--color-text);
+
+    opacity: 0;
+    transform: scale(0.96);
+    transition:
+        opacity var(--duration-normal) var(--ease-precise),
+        transform var(--duration-normal) var(--ease-precise),
+        overlay var(--duration-normal) var(--ease-precise) allow-discrete,
+        display var(--duration-normal) allow-discrete;
+}
+
+.modal.is-open {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.modal::backdrop {
+    background: rgba(10, 11, 15, 0.72);
+    opacity: 0;
+    transition: opacity var(--duration-normal) var(--ease-precise);
+}
+
+.modal.is-open::backdrop {
+    opacity: 1;
+}
+
+.modal-body {
+    padding: var(--space-3);
+}
+
+.modal-title {
+    margin-bottom: var(--space-1);
+    font-size: var(--font-size-xl);
+    line-height: var(--line-height-heading);
+}
+
+.modal-message {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-body);
+    white-space: pre-line;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-1);
+    margin-top: var(--space-3);
+}

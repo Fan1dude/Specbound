@@ -7,6 +7,7 @@ import { restoreRevisionToDraft } from "../../repositories/publishRepository.js"
 import { getCurrentUser } from "../../core/auth.js";
 import { showToast } from "../../core/toast.js";
 import { renderErrorState, renderLoadingState } from "../../utils/listState.js";
+import { confirmDialog } from "../../utils/modal.js";
 
 import { renderBuild, renderRevisionView } from "./renderBuild.js";
 import { renderSpecifications } from "./renderSpecifications.js";
@@ -258,12 +259,14 @@ export function setupRestoreButton(build, revision) {
             return;
         }
 
-        const confirmed = confirm(
-            `Restore ${revision.version || "this revision"} into your editable draft?\n\n` +
-            "This replaces your current draft's title, description, category, specifications, resources, and gallery with this revision's content. " +
-            "It does NOT change anything published — this revision and every other live revision stay exactly as they are. " +
-            "You'll review the restored draft and publish it yourself when you're ready."
-        );
+        const confirmed = await confirmDialog({
+            title: `Restore ${revision.version || "this revision"} into your editable draft?`,
+            body:
+                "This replaces your current draft's title, description, category, specifications, resources, and gallery with this revision's content. " +
+                "It does NOT change anything published — this revision and every other live revision stay exactly as they are. " +
+                "You'll review the restored draft and publish it yourself when you're ready.",
+            confirmLabel: "Restore"
+        });
 
         if (!confirmed) return;
 

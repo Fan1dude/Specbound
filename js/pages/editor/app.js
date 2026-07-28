@@ -13,6 +13,7 @@ import { renderReadinessChecklist } from "./renderReadinessChecklist.js";
 import { setupEditorTabs } from "./editorTabs.js";
 import { setEditorStatus } from "./editorStatus.js";
 import { maybeShowRecoveryBanner } from "./draftRecoveryBanner.js";
+import { confirmDialog } from "../../utils/modal.js";
 
 loadNavbar("../../");
 loadFooter("../../");
@@ -225,11 +226,14 @@ async function initEditor(id) {
     unpublishBtn?.addEventListener("click", async () => {
         if (isUnpublishing || !draft.published_build_id) return;
 
-        const confirmed = confirm(
-            "Unpublish this project?\n\n" +
-            "It will no longer appear on Home, Explore, or your public profile, and direct links will stop working for other people. " +
-            "Nothing is deleted — your drafts, gallery, and full version history stay exactly as they are, and you can publish again anytime."
-        );
+        const confirmed = await confirmDialog({
+            title: "Unpublish this project?",
+            body:
+                "It will no longer appear on Home, Explore, or your public profile, and direct links will stop working for other people. " +
+                "Nothing is deleted — your drafts, gallery, and full version history stay exactly as they are, and you can publish again anytime.",
+            confirmLabel: "Unpublish",
+            danger: true
+        });
 
         if (!confirmed) return;
 

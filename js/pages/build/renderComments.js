@@ -5,6 +5,7 @@ import { showToast } from "../../core/toast.js";
 import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
 import { formatDate } from "../../utils/formatDate.js";
 import { avatarInitial } from "../../utils/avatarInitial.js";
+import { confirmDialog } from "../../utils/modal.js";
 
 const PAGE_SIZE = 50;
 
@@ -226,7 +227,14 @@ export async function renderComments(build, currentUser) {
     function bindDeleteButtons(buttons) {
         buttons.forEach(button => {
             button.addEventListener("click", async () => {
-                if (!confirm("Delete this comment?")) return;
+                const confirmed = await confirmDialog({
+                    title: "Delete this comment?",
+                    body: "This can't be undone.",
+                    confirmLabel: "Delete",
+                    danger: true
+                });
+
+                if (!confirmed) return;
 
                 const commentId = button.dataset.id;
 
