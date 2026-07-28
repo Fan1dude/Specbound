@@ -88,7 +88,13 @@
     box-shadow: var(--glow-sm);
 }
 
-@media (max-width: 900px) {
+/* Milestone 10: this used to collapse at 900px, taking the Tablet tier
+   down with it — the Responsive Design Rules section
+   (docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md) confirmed the nav
+   already fits comfortably at Tablet widths, so Tablet now renders
+   identically to Desktop and only Mobile (700px and below) collapses to
+   the hamburger pattern below. */
+@media (max-width: 700px) {
     .navbar {
         flex-wrap: wrap;
     }

@@ -179,7 +179,10 @@
     background: var(--surface-3);
 }
 
-@media (max-width: 900px) {
+/* Breakpoint kept in lockstep with navbar.css's own collapse point
+   (700px as of Milestone 10) — this dropdown lives inside the same
+   collapsible .nav-links container. */
+@media (max-width: 700px) {
     .notification-dropdown {
         position: static;
         width: 100%;

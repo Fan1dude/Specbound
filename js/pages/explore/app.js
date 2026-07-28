@@ -11,7 +11,8 @@ import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
 
 import {
     fuzzyMatches,
-    findClosestSuggestions
+    findClosestSuggestions,
+    getRelevanceScore
 } from "../../utils/fuzzySearch.js";
 
 loadNavbar("../");

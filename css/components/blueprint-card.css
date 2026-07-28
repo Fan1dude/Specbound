@@ -285,7 +285,7 @@
     transform: translateX(4px);
 }
 
-@media (max-width: 500px) {
+@media (max-width: 700px) {
     .blueprint-card-footer {
         align-items: flex-start;
         flex-direction: column;

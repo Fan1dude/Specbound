@@ -21,3 +21,36 @@
 .section-heading p {
     max-width: 650px;
 }
+
+/* Layout-level spacing (page margins, section gaps) steps down by one
+   token tier at Tablet and two at Mobile — component-internal spacing
+   (button/card padding, form gaps) is deliberately untouched here, it
+   stays constant at every width (docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md's
+   Responsive Design Rules). */
+@media (max-width: 900px) {
+    .page {
+        padding: var(--space-6) 0 var(--space-8);
+    }
+
+    .section {
+        margin-top: var(--space-6);
+    }
+
+    .section-heading {
+        margin-bottom: var(--space-3);
+    }
+}
+
+@media (max-width: 700px) {
+    .page {
+        padding: var(--space-5) 0 var(--space-7);
+    }
+
+    .section {
+        margin-top: var(--space-5);
+    }
+
+    .section-heading {
+        margin-bottom: var(--space-2);
+    }
+}

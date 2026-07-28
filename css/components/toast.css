@@ -7,6 +7,18 @@
     gap: var(--space-0-5);
 }
 
+/* Mobile: full-width instead of corner-anchored — a corner-anchored
+   toast is hard to tap-dismiss accurately on a small screen
+   (docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md's Responsive Design
+   Rules). Grid's default item-stretch already fills the now-full-width
+   container, so no change to .toast itself is needed. */
+@media (max-width: 700px) {
+    .toast-container {
+        left: var(--space-3);
+        right: var(--space-3);
+    }
+}
+
 .toast {
     display: flex;
     align-items: flex-start;
