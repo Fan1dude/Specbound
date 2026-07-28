@@ -1,22 +1,39 @@
 .toast-container {
     position: fixed;
-    right: 24px;
-    bottom: 24px;
+    right: var(--space-3);
+    bottom: var(--space-3);
     z-index: 9999;
     display: grid;
-    gap: 12px;
+    gap: var(--space-0-5);
 }
 
 .toast {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
-    background: var(--surface);
+    gap: var(--space-0-5);
+    background: var(--surface-2);
     border: 1px solid var(--border);
     border-left: 3px solid var(--text-muted);
     border-radius: var(--radius-md);
-    padding: 14px 16px;
-    box-shadow: var(--shadow-lg);
+    padding: var(--space-0-5) var(--space-2);
+    box-shadow: var(--shadow-md);
+
+    /* Enter/exit per the microinteractions standard
+       (docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md): js/core/toast.js
+       already toggled a .show class with the right timing (added next
+       frame, removed 300ms before DOM removal) - the CSS driving it was
+       simply never written, so toasts previously just appeared/
+       disappeared instantly. No JS change needed. */
+    opacity: 0;
+    transform: translateY(8px);
+    transition:
+        opacity var(--duration-fast) var(--ease-precise),
+        transform var(--duration-normal) var(--ease-precise);
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 .toast-icon {
