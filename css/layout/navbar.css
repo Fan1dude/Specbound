@@ -6,9 +6,11 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 28px;
-    padding: 18px 5%;
-    background: rgba(9, 11, 17, .78);
+    gap: var(--space-3);
+    padding: var(--space-2) 5%;
+    /* Frosted-glass treatment (already existed pre-refresh, kept — just
+       repointed from a hardcoded rgba to the new --color-bg value). */
+    background: rgba(10, 11, 15, .78);
     backdrop-filter: blur(18px);
     border-bottom: 1px solid var(--border);
 }
@@ -31,16 +33,38 @@
 .nav-links {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: var(--space-2);
 }
 
 .nav-links > a {
+    position: relative;
     color: var(--text-secondary);
     font-weight: 700;
+
+    transition: color var(--duration-fast) var(--ease-standard);
 }
 
 .nav-links > a:hover {
     color: var(--text);
+}
+
+/* No active-link indication existed before this — every nav link looked
+   identical regardless of which page you were on. Set via
+   aria-current="page" in js/core/layout.js (compares the current
+   pathname against each link's href once, on load). No glow — this is
+   frequent, low-stakes UI, not one of the 4 named glow uses. */
+.nav-links > a[aria-current="page"] {
+    color: var(--color-primary);
+}
+
+.nav-links > a[aria-current="page"]::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -6px;
+    height: 1px;
+    background: var(--color-primary);
 }
 
 .nav-toggle {
@@ -51,10 +75,17 @@
     height: 44px;
     border-radius: var(--radius-sm);
     color: var(--text);
+
+    transition: background var(--duration-fast) var(--ease-standard);
 }
 
 .nav-toggle:hover {
     background: var(--surface-2);
+}
+
+.nav-toggle:focus-visible {
+    outline: none;
+    box-shadow: var(--glow-sm);
 }
 
 @media (max-width: 900px) {
@@ -79,7 +110,7 @@
         flex-basis: 100%;
         flex-direction: column;
         align-items: stretch;
-        gap: 4px;
+        gap: var(--space-0);
         max-height: 0;
         overflow: hidden;
         transition: max-height var(--duration-normal) var(--ease-standard);
@@ -90,14 +121,22 @@
     }
 
     .nav-links > a {
-        padding: 12px 4px;
+        padding: var(--space-0-5) var(--space-0);
         border-top: 1px solid var(--border);
         font-size: .95rem;
     }
 
+    /* The active-link underline (::after, positioned via bottom: -6px)
+       doesn't make sense once links stack vertically with their own
+       border-top divider — suppressed here rather than left to render
+       somewhere visually meaningless. */
+    .nav-links > a[aria-current="page"]::after {
+        display: none;
+    }
+
     .builder-menu {
         width: 100%;
-        padding-top: 4px;
+        padding-top: var(--space-0);
     }
 
     .builder-button {

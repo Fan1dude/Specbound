@@ -3,8 +3,17 @@
 }
 
 .builder-button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-0);
+    border-radius: var(--radius-sm);
     color: var(--text);
     font-weight: 700;
+}
+
+.builder-button:focus-visible {
+    outline: none;
+    box-shadow: var(--glow-sm);
 }
 
 .builder-dropdown {

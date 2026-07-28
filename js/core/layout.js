@@ -1,6 +1,8 @@
 import { supabase } from "./supabase.js";
 import { getCurrentUser, clearCurrentUserCache } from "./auth.js";
 import { initNotificationBell } from "./notificationBell.js";
+import { escapeHtml } from "../utils/escapeHtml.js";
+import { icon } from "../utils/icons.js";
 
 export async function loadNavbar(pathPrefix = "") {
     ensureToastContainer();
@@ -25,7 +27,7 @@ export async function loadNavbar(pathPrefix = "") {
         authLinks = `
             <div class="builder-menu">
                 <button class="builder-button" id="builderMenuButton">
-                    ${username} ▾
+                    ${escapeHtml(username)} ${icon("chevron-down", 16)}
                 </button>
 
                 <div class="builder-dropdown" id="builderDropdown">
@@ -80,6 +82,17 @@ export async function loadNavbar(pathPrefix = "") {
             ${authLinks}
         </div>
     `;
+
+    // Marks whichever top-level nav link matches the current page with
+    // aria-current="page" — no prior mechanism existed for this at all.
+    // Comparing pathnames (not full hrefs) so query strings on the current
+    // URL (e.g. explore.html?category=pc_build) don't prevent a match.
+    const currentPath = window.location.pathname.split("/").pop();
+
+    navbar.querySelectorAll(".nav-links > a[href]").forEach(link => {
+        const linkPath = new URL(link.href, window.location.origin).pathname.split("/").pop();
+        if (linkPath === currentPath) link.setAttribute("aria-current", "page");
+    });
 
     if (user) {
         const bellContainer = document.getElementById("notificationBellContainer");
