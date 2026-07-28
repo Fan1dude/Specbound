@@ -12,36 +12,58 @@
     right: 0;
     top: 140%;
     min-width: 210px;
-    background: var(--surface);
+    background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    padding: 10px;
+    padding: var(--space-1);
     box-shadow: var(--shadow-lg);
-    display: none;
     z-index: 999;
+
+    /* Milestone 10: was a plain display:none/block instant toggle — now
+       an opacity + translateY reveal per the microinteractions standard
+       (docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md, Microinteractions
+       section). visibility (not display) drives whether it's interactive/
+       in the accessibility tree, with a transition-delay so it disappears
+       immediately on close but still fades in on open — same
+       show-dropdown class toggle as before, no JS change needed. */
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px);
+    transition:
+        opacity var(--duration-fast) var(--ease-precise),
+        transform var(--duration-fast) var(--ease-precise),
+        visibility 0s linear var(--duration-fast);
 }
 
 .builder-dropdown.show-dropdown {
-    display: block;
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    transition:
+        opacity var(--duration-fast) var(--ease-precise),
+        transform var(--duration-fast) var(--ease-precise),
+        visibility 0s linear 0s;
 }
 
 .builder-dropdown a {
     display: block;
-    padding: 12px;
+    padding: var(--space-0-5);
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
     font-weight: 600;
+
+    transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
 }
 
 .builder-dropdown a:hover {
-    background: var(--surface-2);
+    background: var(--surface-3);
     color: var(--text);
 }
 
 .builder-dropdown hr {
     border: none;
     border-top: 1px solid var(--border);
-    margin: 8px 0;
+    margin: var(--space-1) 0;
 }
 
 /* Placed in this file (not navbar.css) deliberately — dropdown.css is
@@ -54,7 +76,8 @@
     .builder-dropdown {
         position: static;
         width: 100%;
-        margin-top: 4px;
+        margin-top: var(--space-0);
         box-shadow: none;
+        transform: none;
     }
 }

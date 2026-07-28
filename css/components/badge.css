@@ -1,16 +1,30 @@
+/* Two variants only, per docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md
+   §7: filled (the default — calm, informational, no accent) and outline
+   (for the rare case something needs more emphasis). Neither uses
+   --color-accent — badges are informational, not a highlight moment, so
+   they stay out of glow territory entirely. This changes the previous
+   default (a hardcoded primary-blue tint, rgba(79,125,255,.12)/.24)) to
+   the calmer filled treatment across every category/status pill in the
+   app — a deliberate, approved part of moving away from color-by-default
+   toward color reserved for when it means something. */
 .badge,
 .hero-badge {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-0);
     width: fit-content;
-    padding: 8px 12px;
-    border-radius: 999px;
-    background: rgba(79,125,255,.12);
-    color: var(--primary);
-    border: 1px solid rgba(79,125,255,.24);
-    font-size: .78rem;
+    padding: var(--space-1) var(--space-0-5);
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-2);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border);
+    font-size: var(--font-size-xs);
     font-weight: 800;
     letter-spacing: .06em;
     text-transform: uppercase;
+}
+
+.badge-outline {
+    background: transparent;
+    border-color: var(--color-border-strong);
 }

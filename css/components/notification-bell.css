@@ -11,11 +11,18 @@
     height: 44px;
     color: var(--text-secondary);
     border-radius: var(--radius-sm);
+
+    transition: color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard);
 }
 
 .notification-bell-button:hover {
     color: var(--text);
     background: var(--surface-2);
+}
+
+.notification-bell-button:focus-visible {
+    outline: none;
+    box-shadow: var(--glow-sm);
 }
 
 .notification-badge {
@@ -24,10 +31,10 @@
     right: 2px;
     min-width: 16px;
     height: 16px;
-    padding: 0 4px;
+    padding: 0 var(--space-0);
     display: grid;
     place-items: center;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     background: var(--danger-strong);
     color: #fff;
     font-size: .65rem;
@@ -45,17 +52,32 @@
     top: 140%;
     width: 340px;
     max-width: 90vw;
-    background: var(--surface);
+    background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-lg);
-    display: none;
     z-index: 999;
     overflow: hidden;
+
+    /* Same animated-reveal treatment as .builder-dropdown — see
+       dropdown.css for the full explanation. */
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px);
+    transition:
+        opacity var(--duration-fast) var(--ease-precise),
+        transform var(--duration-fast) var(--ease-precise),
+        visibility 0s linear var(--duration-fast);
 }
 
 .notification-dropdown.show-dropdown {
-    display: block;
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    transition:
+        opacity var(--duration-fast) var(--ease-precise),
+        transform var(--duration-fast) var(--ease-precise),
+        visibility 0s linear 0s;
 }
 
 .notification-dropdown-header {
@@ -63,7 +85,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-2);
-    padding: 12px 14px;
+    padding: var(--space-0-5);
     border-bottom: 1px solid var(--border);
 }
 
@@ -93,17 +115,19 @@
 }
 
 .notification-dropdown-message {
-    padding: 20px 14px;
+    padding: var(--space-3) var(--space-0-5);
     text-align: center;
 }
 
 .notification-item {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 12px 14px;
+    gap: var(--space-0);
+    padding: var(--space-0-5);
     border-bottom: 1px solid var(--border);
     color: var(--text-secondary);
+
+    transition: background var(--duration-fast) var(--ease-standard);
 }
 
 .notification-item:last-child {
@@ -111,7 +135,7 @@
 }
 
 .notification-item:hover {
-    background: var(--surface-2);
+    background: var(--surface-3);
 }
 
 .notification-item.is-unread {
@@ -132,27 +156,31 @@
 .notification-item-time {
     color: var(--text-muted);
     font-size: var(--font-size-xs);
+    font-family: var(--font-family-mono);
 }
 
 .notification-dropdown-viewall {
     display: block;
-    padding: 12px 14px;
+    padding: var(--space-0-5);
     text-align: center;
     color: var(--primary);
     font-weight: 700;
     font-size: var(--font-size-sm);
     border-top: 1px solid var(--border);
+
+    transition: background var(--duration-fast) var(--ease-standard);
 }
 
 .notification-dropdown-viewall:hover {
-    background: var(--surface-2);
+    background: var(--surface-3);
 }
 
 @media (max-width: 900px) {
     .notification-dropdown {
         position: static;
         width: 100%;
-        margin-top: 4px;
+        margin-top: var(--space-0);
         box-shadow: none;
+        transform: none;
     }
 }
