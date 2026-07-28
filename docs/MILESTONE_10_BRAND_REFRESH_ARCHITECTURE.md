@@ -1,6 +1,20 @@
 # Milestone 10 — Brand Refresh: Design System Architecture Proposal
 
-**Status: Approved, with 7 additions incorporated below (Design Goals, an expanded Spacing System, Iconography Standards, Skeleton Loading, Empty States, Microinteractions, Responsive Design Rules). Architecture only — no implementation yet, per your instruction to review the completed document once more before implementation begins.**
+**Status: Implemented — all 10 steps of the proposed sequencing complete.** Approved with 7 additions incorporated below (Design Goals, an expanded Spacing System, Iconography Standards, Skeleton Loading, Empty States, Microinteractions, Responsive Design Rules).
+
+**Implementation record** (checkpoint-committed, one commit per step):
+1. Token file (`css/base/tokens.css`) — colors/radius/shadow/glow/motion/spacing, WCAG-verified
+2. Iconography system (`js/utils/icons.js`) — plus a critical runtime CSP bug found and fixed along the way (inline `style="--x"` attributes silently blocked under this app's `style-src`, fixed via `data-*` + `.style.setProperty()`)
+3. Component CSS (buttons, cards, inputs, badges, dropdowns, nav, progress, toasts)
+4. Modal component (`js/utils/modal.js`, `css/components/modal.css`) — replaces native `confirm()`
+5. Skeleton loading (`js/utils/skeletons.js`) — assembled compositions per content type
+6. Empty states — icon + copy pass across every `.empty-state` usage
+7. Responsive design rules — breakpoint consolidation (900px/700px), component-level mobile adaptations; also fixed an unrelated pre-existing bug found live (`getRelevanceScore` missing an import in `explore/app.js`)
+8. Background system — the one ambient glow, on exactly the two named marketing surfaces; also removed a pre-existing graph-paper-texture violation on the homepage hero mockup
+9. Brand assets — Assembly Mark redrawn (geometrically constructed, two tangent arcs), OG image regenerated; also repointed 26 pages' stale `theme-color` meta tags and the web manifest to the current palette
+10. Visual regression pass — home/explore/a build page/the editor/settings-login/signup, all clean at desktop/tablet/mobile widths, no errors introduced
+
+Every step was verified live in-browser before its commit (this environment can't take real screenshots, so verification used computed-style inspection, the accessibility tree, and console/network checks in its place). Two genuine pre-existing bugs, unrelated to this milestone, were found and fixed along the way rather than worked around.
 
 **Scope confirmed with you first**: "Assembly Mark" refers to the current rounded-square "S" badge (`assets/brand/logo/favicon.svg`, created in Phase 9C) — this proposal keeps that geometric-badge *approach* and refines its execution, rather than replacing the concept.
 
