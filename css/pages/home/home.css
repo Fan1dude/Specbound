@@ -11,7 +11,29 @@
     overflow: hidden;
 }
 
+/* The one ambient background glow this page is allowed
+   (docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md §9) — large, soft,
+   low-opacity, positioned off-center, fixed behind content. Not a
+   repeated UI pattern; the only other surface with this treatment is
+   the Featured Spotlight backdrop (home.css's .featured rule). */
+.landing-hero::before {
+    content: "";
+    position: absolute;
+    inset: -10%;
+    z-index: 0;
+    pointer-events: none;
+
+    background: radial-gradient(
+        circle at 75% 30%,
+        rgba(94, 234, 212, 0.06),
+        transparent 60%
+    );
+}
+
 .landing-hero .container {
+    position: relative;
+    z-index: 1;
+
     display: grid;
     grid-template-columns: 1.1fr .9fr;
     gap: 64px;
@@ -60,25 +82,28 @@
     }
 }
 
+/* Milestone 10: previously had a repeating grid-line background (a
+   literal graph-paper texture) plus 4 stacked box-shadow glows — both
+   direct violations of the approved architecture (governing principle:
+   no graph-paper backgrounds anywhere; glow confined to 4 named uses,
+   never more than one glowing element per page — and this page gets
+   its one ambient glow from .landing-hero::before below, not from this
+   decorative mockup). Replaced with a flat, brand-tinted card and solid
+   content bars — same layout, no texture, no glow. */
 .hero-visual .blueprint-card {
     width: 360px;
     height: 360px;
     border-radius: 36px;
-    border: 1px solid rgba(79,125,255,.25);
-    background:
-        linear-gradient(rgba(79,125,255,.08) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(79,125,255,.08) 1px, transparent 1px),
-        rgba(79,125,255,.06);
-    background-size: 28px 28px;
-    box-shadow: 0 0 80px rgba(79,125,255,.18);
+    border: 1px solid rgba(100, 120, 238, .25);
+    background: rgba(100, 120, 238, .06);
+    box-shadow: var(--shadow-md);
     position: relative;
 }
 
 .hero-visual .blueprint-card span {
     position: absolute;
-    background: var(--primary);
+    background: var(--color-primary);
     border-radius: 18px;
-    box-shadow: 0 0 40px rgba(79,125,255,.55);
 }
 
 .hero-visual .blueprint-card span:nth-child(1) {
