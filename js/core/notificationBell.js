@@ -9,6 +9,7 @@ import {
 import { formatNotificationText, getNotificationUrl, formatRelativeTime } from "../utils/notificationFormat.js";
 import { showToast } from "./toast.js";
 import { escapeHtml, escapeAttribute } from "../utils/escapeHtml.js";
+import { listSkeleton } from "../utils/skeletons.js";
 
 // Called once from loadNavbar() when a user is signed in. Renders the
 // bell button + badge + dropdown into the given container and wires up
@@ -46,8 +47,8 @@ export async function initNotificationBell(container, { user, pathPrefix = "" })
                     </button>
                 </div>
 
-                <div id="notificationDropdownList" class="notification-dropdown-list" role="status" aria-live="polite">
-                    <p class="text-secondary notification-dropdown-message">Loading...</p>
+                <div id="notificationDropdownList" class="notification-dropdown-list" role="status" aria-live="polite" aria-label="Loading notifications">
+                    ${listSkeleton(3)}
                 </div>
 
                 <a href="${pathPrefix}pages/notifications.html" class="notification-dropdown-viewall">

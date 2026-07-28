@@ -42,6 +42,17 @@
     width: 48px;
     height: 48px;
     border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.skeleton-avatar-lg {
+    width: 96px;
+    height: 96px;
+}
+
+.skeleton-avatar-sm {
+    width: 32px;
+    height: 32px;
 }
 
 @keyframes skeleton-shimmer {
@@ -54,4 +65,91 @@
     .skeleton::after {
         animation: none;
     }
+}
+
+/* Assembled compositions — see js/utils/skeletons.js. Width variation
+   between repeated lines uses :nth-child/:last-child, not inline
+   style="width:...", so the composition functions never need to embed a
+   per-instance HTML style attribute (which this app's CSP silently
+   blocks — see js/utils/progressBar.js for where that was first found). */
+
+.skeleton-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-3);
+}
+
+.skeleton-card-body .skeleton-title {
+    margin-bottom: var(--space-1);
+}
+
+.skeleton-card-body .skeleton-text:last-child {
+    width: 70%;
+}
+
+.skeleton-profile {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4) 0;
+}
+
+.skeleton-profile-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.skeleton-title-name {
+    width: 220px;
+}
+
+.skeleton-profile-body > .skeleton-text {
+    width: 60%;
+}
+
+.skeleton-profile-stats {
+    display: flex;
+    gap: var(--space-3);
+    margin-top: var(--space-1);
+}
+
+.skeleton-profile-stats .skeleton-text {
+    width: 80px;
+}
+
+.skeleton-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-1);
+    padding: var(--space-0-5) 0;
+}
+
+.skeleton-row-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-0);
+}
+
+.skeleton-row-body > .skeleton-text {
+    width: 55%;
+}
+
+.skeleton-row-body-comment .skeleton-text:first-child {
+    width: 40%;
+}
+
+.skeleton-row-body-comment .skeleton-text:last-child {
+    width: 85%;
+}
+
+/* Matches .gallery-item img's real 4/3 ratio (css/pages/build/gallery.css)
+   so the editor's gallery grid doesn't jump in height once real images
+   replace the skeleton tiles. */
+.skeleton-gallery-tile {
+    aspect-ratio: 4 / 3;
+    border-radius: var(--radius-md);
 }

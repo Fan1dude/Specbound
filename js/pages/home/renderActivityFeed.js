@@ -4,6 +4,7 @@ import { attachBuildProfiles } from "../../repositories/profileRepository.js";
 import { resolveBuildImageUrls } from "../../repositories/mediaRepository.js";
 import { BlueprintCard } from "../../components/BlueprintCard.js";
 import { hydrateProgressBars } from "../../utils/progressBar.js";
+import { cardGridSkeleton } from "../../utils/skeletons.js";
 import { formatRelativeTime } from "../../utils/notificationFormat.js";
 import { escapeHtml } from "../../utils/escapeHtml.js";
 
@@ -55,7 +56,10 @@ export async function renderActivityFeed(currentUser) {
     }
 
     async function loadFirstPage() {
-        gridEl.innerHTML = `<p class="text-secondary">Loading activity...</p>`;
+        gridEl.setAttribute("role", "status");
+        gridEl.setAttribute("aria-live", "polite");
+        gridEl.setAttribute("aria-label", "Loading activity");
+        gridEl.innerHTML = cardGridSkeleton();
         if (loadMoreBtn) loadMoreBtn.hidden = true;
 
         try {

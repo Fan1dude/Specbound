@@ -6,6 +6,7 @@ import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
 import { formatDate } from "../../utils/formatDate.js";
 import { avatarInitial } from "../../utils/avatarInitial.js";
 import { confirmDialog } from "../../utils/modal.js";
+import { commentsSkeleton } from "../../utils/skeletons.js";
 
 const PAGE_SIZE = 50;
 
@@ -26,7 +27,10 @@ export async function renderComments(build, currentUser) {
 
     renderCompose();
 
-    listEl.innerHTML = `<p class="text-secondary">Loading comments...</p>`;
+    listEl.setAttribute("role", "status");
+    listEl.setAttribute("aria-live", "polite");
+    listEl.setAttribute("aria-label", "Loading comments");
+    listEl.innerHTML = commentsSkeleton();
     if (loadMoreBtn) loadMoreBtn.hidden = true;
 
     try {

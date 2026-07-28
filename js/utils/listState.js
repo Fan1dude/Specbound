@@ -5,12 +5,21 @@ import { escapeHtml } from "./escapeHtml.js";
 // state-management abstraction. Each caller keeps its own try/catch and
 // decides what (if anything) a retry should re-run; this module only knows
 // how to draw the result.
-export function renderLoadingState(container, message = "Loading...") {
+// `skeleton`, if provided (one of the composed HTML strings from
+// js/utils/skeletons.js), replaces the plain "Loading..." text with an
+// assembled skeleton matching the real content's shape — see
+// docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md's Skeleton Loading
+// section. `message` is still used as the accessible label either way
+// (screen readers get an announcement regardless of which visual is
+// shown), defaulting to the original plain-text behavior when no
+// skeleton is passed.
+export function renderLoadingState(container, message = "Loading...", skeleton = null) {
     if (!container) return;
 
     container.setAttribute("role", "status");
     container.setAttribute("aria-live", "polite");
-    container.innerHTML = `<p class="text-secondary list-state-message">${escapeHtml(message)}</p>`;
+    container.setAttribute("aria-label", message);
+    container.innerHTML = skeleton || `<p class="text-secondary list-state-message">${escapeHtml(message)}</p>`;
 }
 
 export function renderEmptyState(container, { title, description = "", actionHtml = "" } = {}) {

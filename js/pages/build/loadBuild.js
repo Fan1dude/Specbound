@@ -8,6 +8,7 @@ import { getCurrentUser } from "../../core/auth.js";
 import { showToast } from "../../core/toast.js";
 import { renderErrorState, renderLoadingState } from "../../utils/listState.js";
 import { confirmDialog } from "../../utils/modal.js";
+import { listSkeleton } from "../../utils/skeletons.js";
 
 import { renderBuild, renderRevisionView } from "./renderBuild.js";
 import { renderSpecifications } from "./renderSpecifications.js";
@@ -190,7 +191,7 @@ export async function loadBuild() {
 async function retryTimeline(build) {
     const container = document.getElementById("revisionTimeline");
 
-    renderLoadingState(container, "Loading revision history...");
+    renderLoadingState(container, "Loading revision history...", listSkeleton(3));
 
     try {
         const revisions = await getBuildRevisions(build.id);

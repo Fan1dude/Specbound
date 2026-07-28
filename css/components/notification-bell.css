@@ -114,6 +114,10 @@
     overflow-y: auto;
 }
 
+.notification-dropdown-list .skeleton-row {
+    padding: var(--space-0-5);
+}
+
 .notification-dropdown-message {
     padding: var(--space-3) var(--space-0-5);
     text-align: center;

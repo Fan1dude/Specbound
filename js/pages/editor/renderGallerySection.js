@@ -4,6 +4,7 @@ import { uploadGalleryImage, deleteGalleryImage } from "../../services/imageServ
 import { showToast } from "../../core/toast.js";
 import { escapeAttribute } from "../../utils/escapeHtml.js";
 import { confirmDialog } from "../../utils/modal.js";
+import { imageGridSkeleton } from "../../utils/skeletons.js";
 
 // Gallery is intentionally not part of the shared text-field autosave
 // pipeline. Uploads, deletes, and cover selection are discrete, atomic
@@ -20,7 +21,10 @@ export async function renderGallerySection(draft, onMediaChange = () => {}) {
     let coverMediaId = draft.cover_media_id || null;
     let loadFailed = false;
 
-    grid.innerHTML = `<p class="text-secondary">Loading gallery...</p>`;
+    grid.setAttribute("role", "status");
+    grid.setAttribute("aria-live", "polite");
+    grid.setAttribute("aria-label", "Loading gallery");
+    grid.innerHTML = imageGridSkeleton();
 
     try {
         mediaItems = await getDraftMedia(draft.id);
