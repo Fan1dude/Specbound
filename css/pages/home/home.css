@@ -3,37 +3,44 @@
     margin: 0 auto;
 }
 
+/* Post-M10 refinement: full-page ambient lighting for the homepage
+   specifically (per review feedback — the per-section glow below used
+   to give one isolated "spotlight" in the hero and another, separate
+   one in Featured, with nothing tying them together; everything below
+   that felt flat). One fixed backdrop behind every section instead,
+   so scrolling through Hero -> Featured -> Explore -> Activity reads
+   as one continuous lit environment, not three disconnected surfaces
+   on a flat black canvas. Placed as the first element in <body>
+   (index.html) with a negative z-index so it paints below all in-flow
+   page content automatically, no z-index management needed on any
+   section — see the CSS stacking-order note in the commit message if
+   this ever needs touching again.
+
+   Three large, soft, very-low-opacity radial washes in both palette
+   colors (Deep Plum + Lavender Mist), each with a huge soft-edged
+   falloff — restrained the way Linear/Framer/Apple use ambient
+   lighting: you should feel the page is "lit," not consciously notice
+   a background effect. No hard edges, no repeating pattern, nothing
+   sharp enough to compete with content. */
+.home-ambient {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+
+    background:
+        radial-gradient(ellipse 1000px 700px at 18% -8%, rgba(165, 107, 199, 0.12), transparent 62%),
+        radial-gradient(ellipse 820px 820px at 104% 22%, rgba(201, 166, 232, 0.08), transparent 60%),
+        radial-gradient(ellipse 900px 700px at 12% 96%, rgba(165, 107, 199, 0.06), transparent 65%);
+}
+
 .landing-hero {
     min-height: 78vh;
     display: flex;
     align-items: center;
-    position: relative;
-    overflow: hidden;
-}
-
-/* The one ambient background glow this page is allowed
-   (docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md §9) — large, soft,
-   low-opacity, positioned off-center, fixed behind content. Not a
-   repeated UI pattern; the only other surface with this treatment is
-   the Featured Spotlight backdrop (home.css's .featured rule). */
-.landing-hero::before {
-    content: "";
-    position: absolute;
-    inset: -10%;
-    z-index: 0;
-    pointer-events: none;
-
-    background: radial-gradient(
-        circle at 75% 30%,
-        rgba(201, 166, 232, 0.06),
-        transparent 60%
-    );
 }
 
 .landing-hero .container {
-    position: relative;
-    z-index: 1;
-
     display: grid;
     grid-template-columns: 1.1fr .9fr;
     gap: 64px;

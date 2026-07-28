@@ -46,6 +46,11 @@
 
 <body>
 
+    <!-- Ambient lighting — one continuous backdrop behind every section
+         on this page, not a per-section device. See css/pages/home/home.css's
+         .home-ambient rule. -->
+    <div class="home-ambient" aria-hidden="true"></div>
+
     <!-- Navbar -->
     <nav
         class="navbar"
@@ -57,9 +62,6 @@
 
         <!-- Hero -->
         <section class="landing-hero">
-
-            <div class="hero-bg-grid" aria-hidden="true"></div>
-            <div class="hero-bg-glow" aria-hidden="true"></div>
 
             <div class="container">
 
