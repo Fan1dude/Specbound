@@ -1,4 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-    <rect width="32" height="32" rx="7" fill="#a56bc7"/>
-    <path d="M16 5 A5.5 5.5 0 0 1 21.5 10.5 A5.5 5.5 0 0 1 16 16 A5.5 5.5 0 0 0 10.5 21.5 A5.5 5.5 0 0 0 16 27" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Specbound symbol">
+    <defs>
+        <mask id="specbound-mask">
+            <rect width="128" height="128" fill="black"/>
+            <path d="M64 8
+C69 8 73 10 77 12
+L112 33
+C117 36 120 41 120 47
+L120 81
+C120 87 117 92 112 95
+L77 116
+C73 119 69 120 64 120
+C59 120 55 119 51 116
+L16 95
+C11 92 8 87 8 81
+L8 47
+C8 41 11 36 16 33
+L51 12
+C55 10 59 8 64 8 Z" fill="white"/>
+            <!-- Negative-space S -->
+            <path d="M91 39 C82 27 49 27 39 42 C31 54 40 63 58 67 L72 70 C87 73 97 81 89 95 C79 110 46 108 36 94"
+                fill="none" stroke="black" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- Wide modular tile gaps -->
+            <path d="M19 34 L47 51 M78 13 L77 35 M112 48 L88 62 M108 94 L80 78 M50 115 L51 92 M10 79 L36 64"
+                fill="none" stroke="black" stroke-width="6.5" stroke-linecap="round"/>
+        </mask>
+    </defs>
+
+    <rect width="128" height="128" fill="#B79AE6" mask="url(#specbound-mask)"/>
 </svg>

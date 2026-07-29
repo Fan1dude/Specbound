@@ -22,7 +22,7 @@
 
 .notification-bell-button:focus-visible {
     outline: none;
-    box-shadow: var(--glow-sm);
+    box-shadow: var(--focus-ring);
 }
 
 .notification-badge {
@@ -36,7 +36,7 @@
     place-items: center;
     border-radius: var(--radius-pill);
     background: var(--danger-strong);
-    color: #fff;
+    color: var(--color-text-inverse);
     font-size: .65rem;
     font-weight: 800;
     line-height: 1;

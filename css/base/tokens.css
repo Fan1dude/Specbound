@@ -1,114 +1,122 @@
 :root {
     /* ============================================================
-       Milestone 10 — Brand Refresh design tokens.
-       See docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md for the
-       full rationale behind every value below. Three-tier color
-       model: --color-primary (everyday UI), --color-secondary
-       (quiet/inactive), --color-accent (glow only — see §6 of that
-       doc for the exact 4 allowed uses; never used as body UI or
-       plain text color).
+       Milestone 14 — Brand Implementation.
+       See docs/BRAND.md for the approved brand direction and
+       docs/milestones/ (once filed) for this milestone's full
+       verification writeup. Rolls out the warm-graphite + lavender
+       identity approved 2026-07-28, replacing Milestone 10's Deep
+       Plum / near-black system below.
+
+       IMPORTANT — every value below was reverified against WCAG 2.1
+       AA using the same relative-luminance methodology this project
+       has used for every prior palette (see the M14 implementation
+       report for the full contrast table). BRAND.md's literal hex
+       values, applied as given, FAIL AA in numerous places: Surface
+       Elevated is too light for any text tier to read on it, Primary
+       Lavender fails as text/link color everywhere, white text fails
+       on every fill, and Border fails the 3:1 non-text minimum. Every
+       adjustment below preserves the given color's hue and role
+       (fills stay exactly as specified) while correcting lightness
+       only where contrast required it — the same "verify, don't
+       assume" approach BRAND.md's own text calls for.
        ============================================================ */
 
-    /* Surfaces — layered dark-first ramp, desaturated toward cool
-       neutral gray (less blue undertone than the previous palette),
-       so the accent color is the only saturated thing on screen. */
-    --color-bg: #0a0b0f;
-    --color-bg-elevated: #0e1015;
-    --color-surface: #13151b;
-    --color-surface-2: #191c24;
-    --color-surface-3: #20232c;
+    /* Surfaces — kept close together on purpose. A wide ascending
+       ramp (as BRAND.md's literal Background -> Surface Elevated
+       spread implies) cannot support a legible 3-tier text hierarchy
+       at this background's luminance — the math doesn't allow it, not
+       a stylistic choice (see the implementation report). Panels read
+       as distinct primarily via border + shadow now, not a large
+       background-color jump — consistent with BRAND.md's own "quiet
+       elevation, restrained shadows" language. --color-surface-3 has
+       no distinct brand-given value, so it aliases --color-surface-2.
+       Background itself is exactly BRAND.md's given value, unchanged. */
+    --color-bg: #4F4C55;
+    --color-bg-elevated: #54515A;
+    --color-surface: #57545D;
+    --color-surface-2: #5A5760;
+    --color-surface-3: #5A5760;
 
-    /* Borders — quieter than before (the desaturated surfaces above
-       need less contrast to read as distinct panels). Re-verified at
-       WCAG 1.4.11 (non-text, 3:1) against the new surface values,
-       same methodology as the 8D audit that originally set this
-       pattern — not assumed carried over. */
-    --color-border: rgba(255, 255, 255, 0.10);
-    --color-border-strong: rgba(255, 255, 255, 0.18);
+    /* Border — lightened from BRAND.md's given #8A8491. That value
+       only clears WCAG 1.4.11's 3:1 non-text minimum against
+       Background itself (2.32:1) and fails against every surface tier
+       above it. Verified at 3.61-3.04:1 across all four surface tiers
+       below. --color-border-strong is a second, more visible step for
+       hover/emphasis use, same relationship as before. */
+    --color-border: #ADA8B2;
+    --color-border-strong: #BCB7C1;
 
-    --color-text: #f5f6f8;
-    --color-text-secondary: rgba(245, 246, 248, 0.68);
-    --color-text-muted: rgba(245, 246, 248, 0.42);
-    /* For text-on-light-fill contexts (e.g. a filled light badge) —
-       new token, no previous equivalent existed. */
-    --color-text-inverse: #0a0b0f;
+    /* Text Primary/Secondary are BRAND.md's given values, essentially
+       unchanged (Secondary nudged 3 units lighter so it clears Surface
+       Elevated too, was already close). Text Muted is meaningfully
+       lightened from the given #B9B2C1 (which only measured 4.08:1
+       even against Background, the darkest tier) — verified at
+       4.60-5.46:1 across all four surface tiers. Text Inverse is new:
+       dark ink for text sitting on a light fill (buttons, badges) —
+       BRAND.md doesn't specify one, needed because white text fails
+       badly on every light fill this palette has (see --color-primary-
+       strong below). */
+    --color-text: #F7F5FA;
+    --color-text-secondary: #DBD6E1;
+    --color-text-muted: #D4CEDA;
+    --color-text-inverse: #17151C;
 
-    /* Primary — Deep Plum, replacing the controlled-indigo/blue-first
-       palette above with the "Deep Plum + Lavender Mist" identity
-       (post-M10 refinement pass — see the commit message for context;
-       the indigo above was itself already a deliberate move away from
-       the pre-refresh #4f7dff, this is a further hue correction, not a
-       reversion). Verified via WCAG contrast calculation as plain
-       foreground text/icon color against --color-surface: 4.80:1
-       (passes AA's 4.5:1 for normal text). Same tension as the
-       original primary's own history: a truly dark/"ink" plum reads
-       as more premium but can't clear 4.5:1 as text against this dark
-       a surface, so this is the lightest value that still reads as
-       unmistakably plum rather than orchid/lilac. */
-    --color-primary: #a56bc7;
-    /* Hover states use Lavender Mist directly (the palette's second
-       named color, shared with --color-accent below) rather than a
-       subtle same-hue lightening — a deliberate two-color identity,
-       not a single hue with shade variations. Verified at 8.78:1 as
-       foreground text against --color-surface (comfortably passes,
-       and hover states benefit from the extra visibility). */
-    --color-primary-hover: #c9a6e8;
-    --color-primary-soft: rgba(165, 107, 199, 0.12);
+    /* Primary — split the same way --color-primary/--color-primary-
+       strong already were pre-M14, just for a different reason this
+       time. BRAND.md's "Primary Lavender" (#B79AE6) is a light,
+       high-luminance color: it works beautifully as a FILL (dark ink
+       text on it verified at 7.56:1) but fails badly as text/link/icon
+       color itself (3.51:1 against Background, nowhere close to 4.5).
+       So: --color-primary is a lightened derivative reserved for text/
+       link/icon/border use (verified 4.66-5.48:1 across every surface
+       tier); --color-primary-strong is BRAND.md's given Primary
+       Lavender value, unchanged, for fills only (.btn-primary and
+       similar — these must pair with --color-text-inverse, not white).
+       --color-primary-pressed is new, for an explicit pressed/active
+       fill state (BRAND.md names this state; the pre-M14 palette
+       didn't need a third fill step). --color-primary-soft keeps using
+       the true brand Primary Lavender RGB at low opacity — a
+       decorative tint wash, not text, so contrast doesn't apply. */
+    --color-primary: #DBC9F5;
+    --color-primary-hover: #E4D5F8;
+    --color-primary-soft: rgba(183, 154, 230, 0.12);
+    --color-primary-strong: #B79AE6;
+    --color-primary-strong-hover: #C4AAEC;
+    --color-primary-pressed: #A987DA;
 
-    /* Same reasoning as before: --color-primary is also used as plain
-       foreground text/icon/link color (passes AA at 4.80:1, see
-       above) — that use is left alone. White text ON --color-primary
-       as a background is the thing that needs a separately-darkened
-       pair to clear 4.5:1: verified at 6.70:1 (base) and 5.10:1
-       (hover) via the same relative-luminance calculation. Consumers:
-       .btn-primary and other white-on-primary-background controls
-       only — everything else uses --color-primary directly. */
-    --color-primary-strong: #7c3fa8;
-    --color-primary-strong-hover: #8f52be;
+    /* Secondary — no consumers anywhere in the app today (verified via
+       repo-wide grep); kept defined for API stability, aliased to
+       Text Secondary's neutral tone rather than invented from nothing. */
+    --color-secondary: #DBD6E1;
 
-    /* Secondary — cool graphite, the "calm counterweight" to primary.
-       Deliberately left out of the plum/lavender identity — its role
-       is to be the neutral, quiet color, not a third brand hue.
-       Verified as foreground text at 4.74:1 (passes AA), unchanged by
-       this pass. */
-    --color-secondary: #7c8291;
+    /* Accent / glow retired under this brand. BRAND.md explicitly
+       prohibits glow, gradients, and neon effects — "no ambient glow
+       effects... no neon or oversaturated purple." Every former
+       --glow-* consumer (all five were focus-visible rings) now uses
+       --focus-ring below: a solid, zero-blur ring, not a soft glow.
+       The hom087epage's fixed ambient-gradient background system is
+       removed in this milestone's CSS pass, not just left unreferenced
+       here. */
+    --focus-ring: 0 0 0 3px var(--color-primary-strong);
 
-    /* Accent — Lavender Mist, the same value as --color-primary-hover
-       above (one named color, reused for hover states, accents, and
-       ambient glow — not three separate lavenders). Reserved
-       exclusively for the 4 glow uses defined in
-       docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md §6. Never used
-       as a body UI color, a fill, or plain text in that glow role —
-       deliberately not re-verified for that reason (it's never
-       rendered as text there); its --color-primary-hover use above is
-       the one place this exact value is read as text, and that's
-       already verified at 8.78:1. Kept as a single canonical value
-       here; --glow-* below are the only tokens allowed to consume it
-       for glow. */
-    --color-accent: #c9a6e8;
-    --color-accent-rgb: 201, 166, 232;
+    /* Semantic colors — same strong/non-strong fill-vs-text split as
+       Primary, for the same reason: BRAND.md's given values
+       (Success/Warning/Danger) work well as fills with dark ink text,
+       but need lightening to pass 4.5:1 as small text across every
+       surface tier. Info has no BRAND.md-given value at all (not
+       specified) — derived as a soft slate-blue consistent with the
+       graphite/lavender family, verified the same way. */
+    --color-success: #C0D9C4;
+    --color-success-strong: #A8C7AE;
+    --color-warning: #E5CDA3;
+    --color-warning-strong: #D8B77A;
+    --color-danger: #EEC9C9;
+    --color-danger-hover: #F2D6D6;
+    --color-danger-strong: #D98E8E;
+    --color-danger-strong-hover: #E2A6A6;
+    --color-info: #BDD1E7;
 
-    /* Semantic colors — small, deliberate shifts from the previous
-       values to match the cooler overall palette; re-verified, not
-       just carried forward. --color-info moves further (cyan to
-       blue) specifically so it no longer sits close enough to
-       --color-accent to visually collide with it. */
-    --color-success: #3dd68c;
-    --color-warning: #e8b339;
-    --color-danger: #f0524d;
-    --color-info: #4a9fe8;
-
-    /* Same white-on-fill reasoning as --color-primary-strong above.
-       Carried forward at the same values as the pre-refresh tokens
-       file — the --color-danger shift above is small enough that
-       the already-AA-verified darker pair still applies correctly. */
-    --color-danger-hover: #f56767;
-    --color-danger-strong: #d53d3d;
-    --color-danger-strong-hover: #bf5050;
-
-    /* Existing aliases — keep older CSS working during the
-       token-file-first rollout (see the architecture doc's
-       Proposed Sequencing). */
+    /* Existing aliases — keep older CSS working. */
     --bg: var(--color-bg);
     --surface: var(--color-surface);
     --surface-2: var(--color-surface-2);
@@ -127,11 +135,16 @@
     --danger-strong: var(--color-danger-strong);
     --danger-strong-hover: var(--color-danger-strong-hover);
 
-    /* Typography */
+    /* Typography — family unchanged (Inter). Sizes below now match
+       docs/BRAND.md's scale exactly for every named style except
+       Display: seven of the eight sizes already matched what this
+       token file had (Caption/Small/Body/Body-large/H3/H2/H1 all
+       lined up with --font-size-xs through -3xl already). Only
+       Display changes materially — BRAND.md specifies a fixed 48px,
+       far more restrained than the pre-M14 hero's clamp up to 104px;
+       kept as a small clamp anchored at that same 48px ceiling purely
+       for graceful mobile scaling, never exceeding the brand's value. */
     --font-family: "Inter", system-ui, sans-serif;
-    /* Reserved exclusively for technical/numeric data — version
-       numbers, spec values, timestamps. Never used for body copy,
-       headings, or UI labels. See the architecture doc §2. */
     --font-family-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 
     --font-size-xs: 0.75rem;
@@ -140,12 +153,9 @@
     --font-size-lg: 1.125rem;
     --font-size-xl: 1.375rem;
     --font-size-2xl: 1.75rem;
-    /* Tightened from 2.4rem — the previous value sat close enough to
-       --font-size-display on smaller viewports to undermine the
-       hero's own primacy. */
     --font-size-3xl: 2.25rem;
-    --font-size-display: clamp(3.4rem, 7vw, 6.5rem);
-    /* New — technical/numeric data only, see --font-family-mono. */
+    /* BRAND.md Display: 48/56, weight 700 — was clamp(3.4rem, 7vw, 6.5rem). */
+    --font-size-display: clamp(2.5rem, 6vw, 3rem);
     --font-size-mono: 0.8125rem;
 
     --line-height-tight: 1;
@@ -158,12 +168,10 @@
     --font-weight-bold: 700;
     --font-weight-extrabold: 800;
 
-    /* Spacing — 4px/8px grid. Every layout value in the application
-       (margin, padding, gap) must be one of these tokens — see the
-       architecture doc §3's "grid rule." --space-0/-0-5 are new
-       half-steps for the finer control the original 9-step scale
-       couldn't express; --space-1 through --space-9 are unchanged
-       from the pre-refresh values. */
+    /* Spacing — unchanged. Already an 8px grid with a 4px half-step
+       for finer control (BRAND.md's "8px spacing grid" requirement is
+       already satisfied; --space-0 at 4px is a documented half-step,
+       not a deviation from it). */
     --space-0: 4px;
     --space-0-5: 12px;
     --space-1: 0.5rem;
@@ -176,60 +184,45 @@
     --space-8: 6rem;
     --space-9: 7.5rem;
 
-    /* Radius — one scale, tightened from the previous, more rounded
-       values (heavy rounding reads as "soft consumer app"; this
-       system wants corners that feel precise, not pillowy). Every
-       component keeps its existing radius *token assignment* — only
-       the underlying values change. */
-    --radius-xs: 6px;
-    --radius-sm: 10px;
+    /* Radius — remapped to BRAND.md's three named values: buttons/
+       inputs 12px, cards 16px, dialogs 20px. Every component keeps its
+       existing token *assignment* (button.css already referenced
+       --radius-sm, card.css already referenced --radius-lg) except
+       modal.css, which is repointed from --radius-lg (now 16px, cards'
+       value) to --radius-xl (now 20px, dialogs' value, previously an
+       unused 28px with zero other consumers — confirmed via grep, safe
+       to repurpose). */
+    --radius-xs: 8px;
+    --radius-sm: 12px;
     --radius-md: 14px;
-    --radius-lg: 20px;
-    --radius-xl: 28px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
     --radius-pill: 999px;
 
-    /* Shadows — neutral elevation only. Color-tinted "glow" is a
-       separate, deliberately scarce system (--glow-* below) — see
-       the architecture doc §5/§6 for why these were split.
-       --shadow-hover (previously color-tinted) is retired; anything
-       that wants glow now opts into --glow-* explicitly. */
-    --shadow-xs: 0 2px 8px rgba(0, 0, 0, 0.16);
-    --shadow-sm: 0 6px 20px rgba(0, 0, 0, 0.20);
-    --shadow-md: 0 10px 34px rgba(0, 0, 0, 0.28);
-    --shadow-lg: 0 24px 70px rgba(0, 0, 0, 0.42);
+    /* Shadows — same neutral-black structure as before, opacity raised
+       slightly across the board. A shadow tuned for a near-black
+       #0a0b0f canvas reads far too faint on this palette's lighter
+       #4F4C55 canvas — verified visually, not just carried forward. */
+    --shadow-xs: 0 2px 8px rgba(0, 0, 0, 0.22);
+    --shadow-sm: 0 6px 20px rgba(0, 0, 0, 0.26);
+    --shadow-md: 0 10px 34px rgba(0, 0, 0, 0.34);
+    --shadow-lg: 0 24px 70px rgba(0, 0, 0, 0.48);
 
-    /* Glow — --color-accent only. Exactly 4 allowed uses, all
-       defined in docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md §6:
-       (1) focus-visible rings, (2) the single active/selected
-       element per view, (3) one ambient background glow per
-       marketing page, (4) live/in-progress status indicators. Never
-       a default hover state, never decorative, never more than one
-       glowing element visible at once. */
-    --glow-sm: 0 0 24px rgba(var(--color-accent-rgb), 0.16);
-    --glow-md: 0 0 48px rgba(var(--color-accent-rgb), 0.14);
-    --glow-lg: 0 0 96px rgba(var(--color-accent-rgb), 0.10);
-
-    /* Motion */
+    /* Motion — durations unchanged (BRAND.md's "150-200ms ease-out"
+       is compatible with the existing fast/normal pair; slow is used
+       for larger transitions BRAND.md doesn't speak to directly). */
     --duration-fast: 150ms;
     --duration-normal: 220ms;
     --duration-slow: 350ms;
 
-    /* Standard curve replaced: the previous value had a slight
-       overshoot/bounce character (reads "consumer app playful");
-       this is Material Design's well-tested no-overshoot standard
-       curve, reading as controlled/precise instead. */
     --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
-    /* New — a sharper decelerate-only curve reserved for small,
-       frequent, detail-level animations (the corner-bracket card
-       reveal, focus-ring glow) so they feel crisp rather than
-       sharing the same slower rhythm as larger transitions. */
     --ease-precise: cubic-bezier(0.16, 1, 0.3, 1);
 
     --transition:
         var(--duration-normal)
         var(--ease-standard);
 
-    /* Layout */
+    /* Layout — unchanged, not a brand concern. */
     --container-sm: 760px;
     --container-md: 1040px;
     --container-lg: 1240px;
@@ -237,12 +230,6 @@
 
     --navbar-height: 76px;
 
-    /* Responsive breakpoints — see the architecture doc's Responsive
-       Design Rules section. Referenced in comments across
-       @media queries; CSS custom properties can't be used directly
-       inside @media conditions, so these exist as the documented
-       source of truth for the two pixel values every @media query
-       in the codebase should consolidate onto. */
     /* --breakpoint-tablet: 900px */
     /* --breakpoint-mobile: 700px */
 }

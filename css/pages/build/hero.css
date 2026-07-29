@@ -54,9 +54,9 @@
 .badge {
     padding: 10px 16px;
     border-radius: 999px;
-    background: rgba(165, 107, 199,.14);
+    background: rgba(183, 154, 230,.14);
     color: var(--primary);
-    border: 1px solid rgba(165, 107, 199,.28);
+    border: 1px solid rgba(183, 154, 230,.28);
     font-weight: 800;
     font-size: .85rem;
 }
@@ -183,8 +183,8 @@
 }
 
 .save-btn.is-saved {
-    background: rgba(165, 107, 199, .18);
-    border-color: rgba(165, 107, 199, .5);
+    background: rgba(183, 154, 230, .18);
+    border-color: rgba(183, 154, 230, .5);
     color: var(--primary);
 }
 

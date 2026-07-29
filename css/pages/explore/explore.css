@@ -81,7 +81,7 @@
 .lifecycle-filter.active {
     color: var(--primary);
     background: var(--color-primary-soft);
-    border-color: rgba(165, 107, 199, .42);
+    border-color: rgba(183, 154, 230, .42);
 }
 
 /* Layout */
@@ -190,7 +190,7 @@
 .filter-pill.active {
     color: var(--primary);
     background: var(--color-primary-soft);
-    border-color: rgba(165, 107, 199, .45);
+    border-color: rgba(183, 154, 230, .45);
 }
 
 .filter-section input[type="text"],

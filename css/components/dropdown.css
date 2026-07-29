@@ -13,7 +13,7 @@
 
 .builder-button:focus-visible {
     outline: none;
-    box-shadow: var(--glow-sm);
+    box-shadow: var(--focus-ring);
 }
 
 .builder-dropdown {

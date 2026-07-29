@@ -28,14 +28,13 @@
     pointer-events: none;
 }
 
-/* Focus-visible glow — the highest-value use of the glow system (see
-   docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md §6): frequent and
-   functionally meaningful, unlike a decorative hover glow. Replaces the
-   previous default browser outline, which every .btn variant lacked a
-   deliberate treatment for. */
+/* Focus-visible ring — solid, zero-blur (docs/BRAND.md explicitly
+   prohibits glow/gradient/neon effects, so this is a crisp ring, not a
+   soft glow). Replaces the previous default browser outline, which
+   every .btn variant lacked a deliberate treatment for. */
 .btn:focus-visible {
     outline: 2px solid transparent;
-    box-shadow: var(--glow-sm);
+    box-shadow: var(--focus-ring);
 }
 
 .btn:active:not(:disabled) {
@@ -44,7 +43,7 @@
 
 .btn-primary {
     background: var(--primary-strong);
-    color: white;
+    color: var(--color-text-inverse);
 }
 
 .btn-primary:hover {
@@ -74,7 +73,7 @@
 
 .btn-danger {
     background: var(--danger-strong);
-    color: white;
+    color: var(--color-text-inverse);
 }
 
 .btn-danger:hover {

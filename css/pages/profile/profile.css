@@ -15,8 +15,8 @@
     width: 110px;
     height: 110px;
     border-radius: 30px;
-    background: rgba(165, 107, 199,.14);
-    border: 1px solid rgba(165, 107, 199,.25);
+    background: rgba(183, 154, 230,.14);
+    border: 1px solid rgba(183, 154, 230,.25);
     color: var(--primary);
     display: grid;
     place-items: center;
@@ -127,7 +127,7 @@
     background: var(--primary-strong);
     border: 1px solid var(--primary-strong);
     border-radius: var(--radius-md);
-    color: #fff;
+    color: var(--color-text-inverse);
     font-weight: 700;
     cursor: pointer;
 }

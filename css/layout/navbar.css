@@ -85,7 +85,7 @@
 
 .nav-toggle:focus-visible {
     outline: none;
-    box-shadow: var(--glow-sm);
+    box-shadow: var(--focus-ring);
 }
 
 /* Milestone 10: this used to collapse at 900px, taking the Tablet tier

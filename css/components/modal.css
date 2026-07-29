@@ -10,7 +10,9 @@
     max-width: min(420px, 90vw);
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
+    /* Dialogs get their own radius per docs/BRAND.md (20px, distinct
+       from cards' 16px) — --radius-xl, previously unused. */
+    border-radius: var(--radius-xl);
     box-shadow: var(--shadow-lg);
     color: var(--color-text);
 

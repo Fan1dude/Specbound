@@ -3,8 +3,8 @@
 .creator-avatar {
     display: grid;
     place-items: center;
-    background: rgba(165, 107, 199,.14);
-    border: 1px solid rgba(165, 107, 199,.25);
+    background: rgba(183, 154, 230,.14);
+    border: 1px solid rgba(183, 154, 230,.25);
     color: var(--primary);
     font-weight: 900;
     overflow: hidden;

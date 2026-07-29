@@ -2,7 +2,7 @@
 
 Status: Authoritative. Approved 2026-07-28. Supersedes `archive/design-system-v1.md`, `archive/design-v2.md`, and `archive/brand-pre-refresh.md`.
 
-**Implementation status: this document describes the target brand. It is not yet implemented.** The live app currently ships a different palette (Deep Plum / Lavender Mist on near-black — see `css/base/tokens.css`) and a different logo mark. Rolling this document out to the actual product is Milestone 14. Nothing described below is true of the running app yet.
+**Implementation status: shipped (Milestone 14, 2026-07-29).** `css/base/tokens.css` and the logo assets under `assets/brand/` now implement this brand. The Color System table below shows the values as actually shipped, not the package's original proposal — see that section for why several were adjusted and the full verification methodology.
 
 ---
 
@@ -44,28 +44,37 @@ This replaces the rounded-square badge / two-arc-S mark shipped in Milestone 10 
 
 # Color System
 
-| Token | Hex | Use |
-|---|---:|---|
-| Background | `#4F4C55` | Main app canvas |
-| Background Alt | `#5B5861` | Secondary regions |
-| Surface | `#696570` | Cards and panels |
-| Surface Elevated | `#77727F` | Menus and dialogs |
-| Border | `#8A8491` | Dividers and field outlines |
-| Primary Lavender | `#B79AE6` | Main actions and active states |
-| Primary Hover | `#C4AAEC` | Hover and selected emphasis |
-| Primary Pressed | `#A987DA` | Pressed controls |
-| Text Primary | `#F7F5FA` | Main text |
-| Text Secondary | `#D8D3DE` | Supporting text |
-| Text Muted | `#B9B2C1` | Metadata |
-| Success | `#A8C7AE` | Confirmed success |
-| Warning | `#D8B77A` | Caution |
-| Danger | `#D98E8E` | Destructive or failed states |
+As shipped (`css/base/tokens.css`), WCAG AA-verified. Every fill/badge color below is the package's original proposal, unchanged — these work as given because dark ink text sits on them, not white. Every surface and text color needed adjustment; see the notes column for why. Full contrast table in the Milestone 14 implementation report (2026-07-29).
+
+| Token | Hex | Use | Note |
+|---|---:|---|---|
+| Background | `#4F4C55` | Main app canvas | Unchanged from the original proposal |
+| Background Alt | `#54515A` | Secondary regions | Compressed from the proposed `#5B5861` |
+| Surface | `#57545D` | Cards and panels | Compressed from the proposed `#696570` |
+| Surface Elevated | `#5A5760` | Menus and dialogs | Compressed from the proposed `#77727F` — that value mathematically cannot support legible text at any tier (even the brightest text color only reaches 4.31:1 against it) |
+| Border | `#ADA8B2` | Dividers, field outlines | Lightened from the proposed `#8A8491`, which only cleared WCAG's 3:1 non-text minimum against Background itself, failing against every surface above it |
+| Border Strong | `#BCB7C1` | Hover/emphasis borders | New — a second, more visible step |
+| Primary (text/links/icons) | `#DBC9F5` | Links, icons, active nav text | New — the proposed Primary Lavender fails badly as text (3.51:1 against Background); this is a lightened derivative reserved for text/link/icon use |
+| Primary Fill | `#B79AE6` | Primary buttons, active-state fills | The original proposed "Primary Lavender," unchanged — pairs with dark ink text (`--color-text-inverse`), never white |
+| Primary Fill Hover | `#C4AAEC` | Fill hover | Unchanged from the original proposal |
+| Primary Pressed | `#A987DA` | Pressed fill state | Unchanged from the original proposal |
+| Text Primary | `#F7F5FA` | Main text | Unchanged from the original proposal |
+| Text Secondary | `#DBD6E1` | Supporting text | Nudged 3 units lighter than proposed so it clears Surface Elevated too |
+| Text Muted | `#D4CEDA` | Metadata | Meaningfully lightened from the proposed `#B9B2C1`, which only measured 4.08:1 even against Background, the darkest tier |
+| Text Inverse | `#17151C` | Text on light fills (buttons, badges) | New — not specified in the original package; white text fails on every light fill this palette has |
+| Success (text) | `#C0D9C4` | Status text | Lightened from the fill value for small-text use |
+| Success Fill | `#A8C7AE` | Fills, large badges | Unchanged from the original proposal |
+| Warning (text) | `#E5CDA3` | Status text | Lightened from the fill value |
+| Warning Fill | `#D8B77A` | Fills, large badges | Unchanged from the original proposal |
+| Danger (text) | `#EEC9C9` | Status text | Lightened from the fill value |
+| Danger Fill | `#D98E8E` | Fills, large badges | Unchanged from the original proposal |
+| Info | `#BDD1E7` | Informational status | New — not specified in the original package |
 
 **Purple is an accent, not wallpaper.** Use it for primary buttons, active navigation, focus rings, links, and meaningful progress. Most of the interface stays graphite, gray, and soft white so builder work remains the visual focus.
 
-**Explicitly prohibited:** gradients, glows, neon styling, gaming aesthetics, or highly saturated Discord-like purple. This is a firmer constraint than the source brand package stated, and it governs: no ambient glow effects (the homepage's current fixed-gradient lighting system from the Milestone 10 refinement pass does not carry forward under this brand), no neon or oversaturated purple, no glassmorphism.
+**Explicitly prohibited, and removed during implementation:** gradients, glows, neon styling, gaming aesthetics, or highly saturated Discord-like purple. Every former focus-ring glow now uses a solid, zero-blur ring instead (`--focus-ring`); the homepage's fixed ambient-gradient background (from the Milestone 10 refinement pass) was removed entirely, not just left unreferenced.
 
-WCAG AA contrast must be reverified for this palette before Milestone 14 ships it — do not assume "calmer" implies compliant. See the implementation report (2026-07-28) for the verification methodology already established in this project (relative-luminance calculation, not just visual judgment).
+**A structural finding, not a style choice:** the surface ramp above is far more compressed than the original package proposed. The math doesn't allow otherwise — Background's own luminance is low enough that a genuinely "muted" text tone (dim enough to read as a third tier below Primary/Secondary, not a near-duplicate of them) cannot clear 4.5:1 against a surface as light as the original `#77727F`. Panels read as distinct primarily via border and shadow now, not a large background-color jump — which is also more consistent with this document's own "quiet elevation, restrained shadows" language than a dramatic ramp would have been.
 
 ---
 

@@ -13,18 +13,15 @@ select {
         box-shadow var(--duration-fast) var(--ease-precise);
 }
 
-/* No distinct focus treatment existed before this — every field relied on
-   the browser's own default outline. This is the highest-value use of the
-   glow system (docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md §6):
-   frequent (every form interaction) and functionally meaningful, closing
-   a real gap the 8D accessibility audit's own focus-visibility work
-   didn't extend to form fields specifically. */
+/* Solid, zero-blur focus ring (docs/BRAND.md prohibits glow/gradient/
+   neon effects) — closes a real gap the 8D accessibility audit's own
+   focus-visibility work didn't extend to form fields specifically. */
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
     outline: none;
-    border-color: var(--color-primary);
-    box-shadow: var(--glow-sm);
+    border-color: var(--color-primary-strong);
+    box-shadow: var(--focus-ring);
 }
 
 input::placeholder,

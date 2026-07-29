@@ -63,8 +63,8 @@
     height: 44px;
     flex-shrink: 0;
     border-radius: var(--radius-md);
-    background: rgba(165, 107, 199,.14);
-    border: 1px solid rgba(165, 107, 199,.25);
+    background: rgba(183, 154, 230,.14);
+    border: 1px solid rgba(183, 154, 230,.25);
     color: var(--primary);
     display: grid;
     place-items: center;
