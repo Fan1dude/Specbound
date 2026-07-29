@@ -591,3 +591,37 @@ it's small. Each migration gets a matching `..._rollback.sql`.
   migration, reported instead of synthesized/force-linked). Follows
   Migration A (`0017`, storage RLS hardening) and Migration B (client-side
   legacy URL compatibility layer, no migration file — read-path only).
+
+## 0019_fix_record_build_view_ambiguity
+
+- **Status**: Proposed — not yet applied. Depends on 0001-0018 being
+  applied first.
+- **File**: `migrations/0019_fix_record_build_view_ambiguity.sql`
+- **Rollback**: `migrations/0019_fix_record_build_view_ambiguity_rollback.sql`
+- **Fixes**: two confirmed issues in `record_build_view()` (0010), both
+  reproduced live against the real backend during the 2026-07-28
+  implementation review. (1) Every call failed with Postgres 42702
+  ("column reference \"views\" is ambiguous") — `returns table(views
+  integer)` implicitly declares a PL/pgSQL variable named `views` that
+  collided with the `builds.views` column read inside the increment
+  UPDATE; view counts have almost certainly never incremented since this
+  feature shipped, failing silently (caught and only `console.error`'d
+  client-side). (2) The function's final `return query` ran
+  unconditionally regardless of the visibility check above it, letting
+  any caller learn a private build's view count by calling the RPC
+  directly with its id, bypassing what RLS would otherwise prevent via a
+  direct SELECT.
+- **Behavior after this migration**: public builds — eligible visits may
+  increment, caller always receives the count. Private build, owner
+  asking — never increments, owner receives the count. Private build,
+  anyone else asking — never increments, count is not revealed (returns
+  `NULL`, not `0`, so it's distinguishable from a genuine zero-view
+  build). Nonexistent build — unchanged, still raises `'Project not
+  found.'`.
+- **Touches**: `public.record_build_view()` only. RPC name, parameters,
+  return shape (`table(views integer)`), and grants (`anon`,
+  `authenticated`) are all unchanged from 0010. No table, column, index,
+  policy, or grant added, dropped, or altered — RLS untouched.
+- **Context**: Milestone 11B (Confirmed Database Bug), found during the
+  2026-07-28 implementation review. Does not edit 0010 in place, per
+  this project's migration convention.

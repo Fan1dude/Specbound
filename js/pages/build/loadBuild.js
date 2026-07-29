@@ -178,14 +178,29 @@ export async function loadBuild() {
     // rest of the page should wait on. As soon as the RPC resolves,
     // the visible counter is patched in place with the authoritative
     // value (which may be unchanged, if this view didn't count — see
-    // record_build_view() for why: owner, private, or cooldown).
+    // record_build_view() for why: owner, private, or cooldown). views
+    // is null, not a number, for a private build viewed by anyone other
+    // than its owner (0019_fix_record_build_view_ambiguity.sql) — this
+    // page never actually reaches that case itself (RLS already governs
+    // whether the build's data loaded at all), but the RPC can be called
+    // directly, so the null case is guarded here rather than assumed away.
     recordBuildView(build.id)
         .then(views => {
             const el = document.getElementById("overviewViews");
 
-            if (el) el.textContent = views.toLocaleString();
+            if (el && views != null) el.textContent = views.toLocaleString();
         })
-        .catch(error => console.error("View recording error:", error));
+        // error.code/message are logged explicitly (not just the raw
+        // error object) so a future RPC failure like 0019's is
+        // diagnosable at a glance in the console, without expanding a
+        // nested object — never surfaced to the visitor, this is a
+        // background operation with no user-facing failure state.
+        .catch(error => console.error("View recording error:", {
+            buildId: build.id,
+            code: error.code,
+            message: error.message,
+            error
+        }));
 }
 
 async function retryTimeline(build) {
