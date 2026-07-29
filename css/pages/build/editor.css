@@ -63,6 +63,16 @@
     font-weight: 600;
 }
 
+/* Milestone 18: same [hidden]-vs-class-display specificity trap as
+   .btn[hidden] and .editor-recovery-banner[hidden] elsewhere in this app —
+   found by the static regression check (tools/ci/check-a11y-regressions.js),
+   not live browser testing, since this page requires auth. Without this,
+   "View live project" stayed visible even before the project's first
+   publish, when #editorViewLiveLink's href isn't set to anything real yet. */
+.editor-view-live-link[hidden] {
+    display: none;
+}
+
 .editor-publish-hint {
     margin-top: var(--space-2);
     color: var(--text-muted);

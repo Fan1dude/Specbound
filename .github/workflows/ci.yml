@@ -16,6 +16,7 @@ jobs:
           node-version: 20
       - run: node tools/ci/check-syntax.js
       - run: node tools/ci/check-references.js
+      - run: node tools/ci/check-a11y-regressions.js
 
   browser-tests:
     name: Browser test suite (tests/*.test.html)

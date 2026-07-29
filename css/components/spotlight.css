@@ -51,8 +51,13 @@
     padding: 8px 12px;
     border-radius: 999px;
 
+    /* Milestone 18: --color-primary's 4.66-5.48:1 verification (tokens.css)
+       was against solid surface tiers only — this pill's own translucent
+       tint composites on top of --surface and had drifted to 4.16:1
+       (axe-core: "insufficient color contrast"). .12 opacity measured
+       4.16:1; .05 measures 4.54:1, restoring AA with a small margin. */
     color: var(--primary);
-    background: rgba(183, 154, 230, .12);
+    background: rgba(183, 154, 230, .05);
     border: 1px solid rgba(183, 154, 230, .22);
 
     font-size: .78rem;

@@ -170,7 +170,11 @@
 }
 
 .follow-hint a {
+    /* Milestone 18: --primary on --text-secondary measured 1.07:1
+       (axe-core "link-in-text-block") — too close to distinguish by
+       color alone. Underline satisfies WCAG 1.4.1 without a color change. */
     color: var(--primary);
+    text-decoration: underline;
 }
 
 .follow-hint[hidden] {

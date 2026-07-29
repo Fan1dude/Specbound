@@ -25,3 +25,19 @@
 .fade-in {
     animation: fadeIn .35s ease;
 }
+
+/* Milestone 18: the global transition rule above and .fade-in were the
+   only motion in the app with no prefers-reduced-motion override — every
+   other animation (skeleton.css's shimmer, etc.) already had one. This
+   follows the same pattern: near-instant instead of literally none, since
+   an abrupt 0ms cut can itself feel jarring, but functionally removes the
+   motion for anyone who has asked for it. */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        transition-duration: .001ms !important;
+    }
+
+    .fade-in {
+        animation-duration: .001ms !important;
+    }
+}

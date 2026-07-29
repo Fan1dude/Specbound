@@ -43,7 +43,11 @@
     display: inline-flex;
     padding: 7px 11px;
     border-radius: 999px;
-    background: rgba(183, 154, 230, .1);
+    /* Milestone 18: same --color-surface-composite contrast gap as
+       .featured-label (spotlight.css) — .1 opacity measured 4.25:1
+       (axe-core) for --primary text on a .journal-entry.card
+       (--color-surface) background; .05 measures 4.54:1. */
+    background: rgba(183, 154, 230, .05);
     color: var(--primary);
     font-size: .82rem;
     font-weight: 700;

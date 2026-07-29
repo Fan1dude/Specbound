@@ -18,7 +18,7 @@ This is a live pointer to the approved milestone plan, not a third copy of it. D
 | 15 | Workshop/Dashboard resolution — merge any unique Dashboard functionality into Workshop, remove the orphaned page | Complete |
 | 16 | Documentation and changelog completion — backfill Milestones 5–10 | Complete |
 | 17 | Minimal CI and automated test execution | Complete |
-| 18 | Formal WCAG 2.1 AA accessibility audit | In progress |
+| 18 | Formal WCAG 2.1 AA accessibility audit | Complete |
 
 ---
 

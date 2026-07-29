@@ -188,8 +188,14 @@
 
 .filter-pill:hover,
 .filter-pill.active {
+    /* Milestone 18: --color-primary-soft (12% tint) composites on top of
+       .filter-panel's solid --color-surface background here and measured
+       4.16:1 (axe-core) for this pill's --primary text — the same
+       surface-composite gap as .featured-label in spotlight.css. Using a
+       lower-opacity override instead of changing the shared token (which
+       other components rely on for its current depth) restores AA (4.54:1). */
     color: var(--primary);
-    background: var(--color-primary-soft);
+    background: rgba(183, 154, 230, .05);
     border-color: rgba(183, 154, 230, .45);
 }
 

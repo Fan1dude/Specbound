@@ -143,7 +143,11 @@
 }
 
 .like-hint a {
+    /* Milestone 18: same underline fix as .follow-hint a in profile.css —
+       --primary on --text-secondary measured 1.07:1 (axe-core
+       "link-in-text-block"), too close to distinguish by color alone. */
     color: var(--primary);
+    text-decoration: underline;
 }
 
 /* Same [hidden]-vs-class-display specificity trap as .revision-banner[hidden]
@@ -195,7 +199,11 @@
 }
 
 .save-hint a {
+    /* Milestone 18: same underline fix as .follow-hint a in profile.css —
+       --primary on --text-secondary measured 1.07:1 (axe-core
+       "link-in-text-block"), too close to distinguish by color alone. */
     color: var(--primary);
+    text-decoration: underline;
 }
 
 .save-hint[hidden] {
