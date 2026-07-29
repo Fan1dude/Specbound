@@ -1,3 +1,51 @@
+## Unreleased — Milestone 15: Workshop/Dashboard resolution
+
+Removed the orphaned `pages/dashboard.html` (unreachable — zero inbound links, already flagged dead in this changelog's own Milestone 3 notes) after porting its one piece of functionality Workshop didn't already have — a Builds/Build Logs/Completed stats row — into `renderWorkshop.js`, using data `loadWorkshop.js` had already been fetching unused. `dashboardRepository.js` kept (shared with Workshop, not Dashboard-exclusive).
+
+## Unreleased — Milestone 14: Brand implementation
+
+Rolled out the approved warm-graphite + lavender palette, typography scale, spacing, radius, shadows, and logo mark — a token/asset swap only, no layout or navigation changes. WCAG AA reverification found the approved package's literal hex values failed badly in many places (unreadable text on the lightest surface tier, white text illegible on every fill, borders below the 3:1 non-text minimum); every fill color ships as approved, every surface and text color was corrected. Full before/after table and reasoning: `docs/BRAND.md`. All glow effects removed per the brand's explicit prohibition (solid focus rings replace them; the homepage's ambient gradient background is gone).
+
+## Unreleased — Milestone 13: Database correctness
+
+Removed `ensureProfile()`'s dead `.insert()` fallback (RLS has no INSERT policy on `profiles` at all, so it could never succeed) in favor of an honest existence check. Removed the three empty, non-authoritative `supabase/schema.sql`/`policies.sql`/`triggers.sql` placeholder files. Formalizing the live `profiles`/`auth.users` trigger into a tracked migration remains open — blocked on a manual, read-only introspection query this implementation environment has no path to run itself; tracked as a standing backlog item, not a blocking one.
+
+## Unreleased — Milestone 12: Authentication completeness
+
+Added the two required V1 auth flows that were fully missing: password recovery (`pages/forgotPassword.html` → email link → `pages/updatePassword.html`, using Supabase's `resetPasswordForEmail`/`PASSWORD_RECOVERY` event) and password change (Settings, re-authenticates the current password before calling `updateUser()`). The recovery-request page always shows the same message regardless of whether the email exists — no account-enumeration path. Found and fixed along the way: `.auth-form`'s `display: grid` was silently overriding the `hidden` attribute's `display: none` (same class-vs-`[hidden]` specificity trap already documented elsewhere in this codebase), never triggered before because no page had toggled that class's `hidden` state at runtime until this milestone.
+
+## Unreleased — Milestone 11B: Confirmed database bug
+
+Fixed `record_build_view()` (migration `0019`, new — `0010` was not edited in place): every real call had been failing with a Postgres ambiguous-column error since the feature shipped, caught client-side and only logged, never surfaced. Also closed a related information-disclosure gap found during the same investigation — a caller with no RLS-authorized visibility into a private build could still learn its view count via direct RPC call; the fixed function now returns `NULL`, not `0`, for that case.
+
+## Unreleased — Milestone 11A: Documentation foundation reset
+
+Consolidated `docs/` from 21 scattered, frequently self-contradictory files (7 of them empty) into a single non-contradictory set of authoritative documents — `VISION.md`, `TERMINOLOGY.md`, `SCOPE.md`, `PRODUCT_PRINCIPLES.md`, `BRAND.md`, `ARCHITECTURE.md`, `DATABASE.md`, `PRODUCT_ARCHITECTURE.md`, `ROADMAP.md` — replacing a fragmented planning history where five different documents used five different names for the same core concepts and three different color palettes were each still described as "current" somewhere. Superseded docs archived under `docs/archive/` (not deleted); milestone architecture docs moved under `docs/milestones/`.
+
+## Unreleased — Milestone 10: Brand refresh
+
+A complete visual design-system refresh (10 steps, each independently verified and committed): new design tokens (three-tier color model, 4px/8px spacing, one radius scale, a separated elevation/glow system), a shared stroke-icon system, every component's CSS rewritten to the new standard (buttons, cards, inputs, badges, dropdowns, navigation, toasts), a new modal component replacing every native `confirm()` call site, skeleton loading, branded empty states, consolidated responsive breakpoints, a restrained ambient-background system, and new brand assets (favicon, OG image, loading/empty-state iconography). Two follow-up refinements shipped after initial review: a palette rebalance from an indigo-leaning primary to "Deep Plum + Lavender Mist" (along with ~20 hardcoded pre-refresh color literals found still bypassing the token system), and a homepage ambient-lighting pass (later removed in Milestone 14, when the brand direction changed again).
+
+## Unreleased — Milestone 9: Production cleanup & launch
+
+Storage security repair (Migration A) and legacy media linkage backfill (Migration C, migration `0018`) closed real gaps found during the Milestone 8 audit; `docs/STORAGE_ARCHITECTURE.md` written as the resulting system's durable record. Phase 9C: dead-code removal, duplicate-utility consolidation, and production-asset fixes across the codebase. Phase 9D: Cloudflare Pages deployment configuration, production metadata on all real pages, a strict CSP with no `unsafe-inline`, `docs/DEPLOYMENT.md`/`docs/OPERATIONS.md`. Phase 9E: final security/functional/accessibility re-verification and a launch-readiness scorecard. Storage RLS hardening (migration `0017`) removed four `storage.objects` policies that predated migration tracking and let an anonymous session enumerate and read arbitrary upload paths.
+
+## Unreleased — Milestone 8: Production hardening & full codebase audit
+
+A full-repository audit (26 HTML pages, 122 JS files, 56 CSS files, 21 test files) found the codebase architecturally sound in the areas that matter most (every write path through a `SECURITY DEFINER` RPC reading `auth.uid()` internally, RLS everywhere, consistent batch-fetch patterns) but not launch-ready: two clusters of completely empty pages (5 category, 4 legal), a real privacy gap (unpublishing didn't revoke Storage-level access to already-generated image URLs), and a silently-broken test on a destructive action. Milestone 8A (migrations `0014`-`0016`) closed the storage-visibility gap, added two missing indexes, and fixed one `SECURITY DEFINER`/`INVOKER` misconfiguration found by a full audit of every custom function. Milestone 8C: eliminated duplicate `getCurrentUser()` auth round-trips firing twice on every single page load, site-wide. Milestone 8D: a 62-finding accessibility and polish pass (5 critical, 21 high, 25 medium, 11 low) across keyboard navigation, focus management, screen-reader support, color contrast, and mobile behavior.
+
+## Unreleased — Milestones 7A–7D: View tracking, notifications, following, activity feed
+
+`0010_build_view_tracking`: cooldown-deduped view counting (30-minute window per viewer, signed-in or anonymous), later found to have shipped broken and fixed in Milestone 11B. `0011_notifications`: private in-app notifications for comments, likes, and saves on a user's own projects. `0012_follows`: follow/unfollow builders with cached follower/following counts. `0013_activity_feed`: Following/Explore activity feeds computed live from the existing `build_revisions` log, no new table.
+
+## Unreleased — Milestones 6A, 6D, 6E: Comments, likes, saved projects
+
+`0007_comments`: comments on published projects. `0008_project_likes`: authenticated like/unlike on a public project. `0009_saved_builds`: authenticated users can privately save a public project to revisit later, surfaced in Workshop's Saved Projects section.
+
+## Unreleased — Milestones 5A, 5C, 5D: Publishing, revision history, unpublish
+
+`0002`-`0004`: transactional draft-to-build publishing via a `SECURITY DEFINER` `publish_draft()` function, plus an avatar-delivery follow-on and a column-naming correction. `0005_revision_history_and_restore`: an immutable content snapshot per revision and the ability to restore a build to an earlier one. `0006_unpublish`: `set_build_visibility()`, letting an owner take a published build back to private.
+
 ## Unreleased — draftValidation.js test matrix
 
 ### Added
