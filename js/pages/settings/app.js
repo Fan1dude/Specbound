@@ -16,6 +16,7 @@ const user = await requireAuth("login.html");
 
 if (user) {
     await loadSettings(user);
+    initPasswordForm(user);
 }
 
 async function loadSettings(user) {
@@ -147,4 +148,57 @@ async function renderAvatarPreview(container, profile) {
     }
 
     container.textContent = avatarInitial(profile?.username);
+}
+
+function initPasswordForm(user) {
+    const form = document.getElementById("passwordForm");
+    const submitButton = document.getElementById("changePasswordSubmit");
+
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const currentPassword = document.getElementById("currentPassword").value;
+        const newPassword = document.getElementById("newPassword").value;
+        const confirmNewPassword = document.getElementById("confirmNewPassword").value;
+
+        if (newPassword !== confirmNewPassword) {
+            showToast("Those new passwords don't match.", "warning");
+            return;
+        }
+
+        submitButton.disabled = true;
+        submitButton.textContent = "Updating...";
+
+        try {
+            // Supabase has no direct "verify current password" call —
+            // signing in again with it is the standard way to confirm it's
+            // correct before allowing the change. This is the user's own
+            // account and they're already signed in, so a specific "wrong
+            // password" message here is fine — unlike the reset-request
+            // flow, there's no other account whose existence this could leak.
+            const { error: reauthError } = await supabase.auth.signInWithPassword({
+                email: user.email,
+                password: currentPassword
+            });
+
+            if (reauthError) {
+                showToast("Current password is incorrect.", "error");
+                return;
+            }
+
+            const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+
+            if (updateError) {
+                console.error("Password update error:", { code: updateError.code, message: updateError.message });
+                showToast(updateError.message || "Could not update your password.", "error");
+                return;
+            }
+
+            showToast("Password updated.", "success");
+            form.reset();
+        } finally {
+            submitButton.disabled = false;
+            submitButton.textContent = "Update Password";
+        }
+    });
 }

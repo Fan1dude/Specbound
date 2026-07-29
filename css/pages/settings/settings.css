@@ -16,6 +16,10 @@
     padding: var(--space-4);
 }
 
+.settings-card + .settings-card {
+    margin-top: var(--space-4);
+}
+
 .settings-card h2 {
     margin-bottom: var(--space-4);
 }

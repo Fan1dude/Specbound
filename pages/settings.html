@@ -120,6 +120,37 @@
 
         </section>
 
+        <section class="settings-card">
+
+            <h2>Password</h2>
+
+            <form id="passwordForm" class="settings-grid">
+
+                <div class="form-group full-width">
+                    <label for="currentPassword">Current Password</label>
+                    <input id="currentPassword" type="password" required autocomplete="current-password">
+                </div>
+
+                <div class="form-group">
+                    <label for="newPassword">New Password</label>
+                    <input id="newPassword" type="password" required autocomplete="new-password" minlength="6">
+                </div>
+
+                <div class="form-group">
+                    <label for="confirmNewPassword">Confirm New Password</label>
+                    <input id="confirmNewPassword" type="password" required autocomplete="new-password" minlength="6">
+                </div>
+
+                <div class="form-group full-width">
+                    <button type="submit" class="btn btn-primary" id="changePasswordSubmit">
+                        Update Password
+                    </button>
+                </div>
+
+            </form>
+
+        </section>
+
     </main>
 
     <footer id="footer" class="footer"></footer>

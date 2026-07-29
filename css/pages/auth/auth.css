@@ -24,9 +24,33 @@
     gap: var(--space-3);
 }
 
+/* Same [hidden]-vs-class-display specificity trap as .btn[hidden] and
+   .editor-recovery-banner[hidden] elsewhere in this app — without this,
+   display: grid above beats the browser's [hidden] { display: none }.
+   Never triggered before updatePassword.html, the first page to toggle
+   this class's hidden attribute at runtime. */
+.auth-form[hidden] {
+    display: none;
+}
+
 .auth-form .btn {
     width: 100%;
     margin-top: var(--space-1);
+}
+
+.auth-forgot {
+    margin-top: calc(var(--space-3) * -1);
+    text-align: right;
+    font-size: var(--font-size-sm);
+}
+
+.auth-forgot a {
+    color: var(--text-secondary);
+}
+
+.auth-forgot a:hover {
+    color: var(--primary);
+    text-decoration: underline;
 }
 
 .auth-switch {
