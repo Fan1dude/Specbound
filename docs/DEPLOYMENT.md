@@ -1,6 +1,6 @@
 # Deployment
 
-**Status: current and accurate as of Phase 9D implementation, 2026-07-27.** Hosting platform: **Cloudflare Pages** (approved choice, see `docs/MILESTONE_9_PHASE_9D_ARCHITECTURE.md` §1.1 for the evaluated alternatives).
+**Status: current and accurate as of Phase 9D implementation, 2026-07-27.** Hosting platform: **Cloudflare Pages** (approved choice, see `docs/milestones/MILESTONE_9_PHASE_9D_ARCHITECTURE.md` §1.1 for the evaluated alternatives).
 
 This document describes how Specbound is deployed to production. Where a step can only be performed by a human with Cloudflare/DNS/domain-registrar access, it's written as an instruction, not a claim that it's already been done.
 
@@ -44,10 +44,10 @@ Everything else: `index.html`, `404.html`, `robots.txt`, `sitemap.xml`, `manifes
 Production assets already committed at the repo root, all verified locally (§7):
 
 - `robots.txt` — disallows `/pages/settings.html`, `/pages/dashboard.html`, `/pages/workshop.html`, `/pages/notifications.html`, `/pages/login.html`, `/pages/signup.html`, `/pages/build/edit.html`, `/design-system.html`, `/tests/` (all account-specific/private or developer-only, zero public SEO value); references `sitemap.xml`.
-- `sitemap.xml` — 13 URLs: homepage, Explore, Search, the 6 category pages, and the 4 legal pages. Individual build/profile pages are deliberately excluded (dynamic, numerous, already reachable via internal links — see `docs/MILESTONE_9_PHASE_9D_ARCHITECTURE.md` §2.2 for the reasoning).
+- `sitemap.xml` — 13 URLs: homepage, Explore, Search, the 6 category pages, and the 4 legal pages. Individual build/profile pages are deliberately excluded (dynamic, numerous, already reachable via internal links — see `docs/milestones/MILESTONE_9_PHASE_9D_ARCHITECTURE.md` §2.2 for the reasoning).
 - `manifest.webmanifest` — linked from every real page's `<head>`, referencing the two PNG icon sizes below. Not a full PWA (no service worker) — just closes the "missing manifest" gap cheaply.
 - `assets/brand/logo/favicon.svg`, `favicon-32.png`, `favicon-192.png`, `apple-touch-icon.png` — SVG favicon (Phase 9C) plus PNG fallbacks for browsers/platforms that don't reliably support SVG favicons (notably Safari/iOS).
-- `assets/brand/og/og-image.png` (1200×630) — the generic brand Open Graph/Twitter Card image used by every page, including dynamic ones (`build.html`, `profile.html`, `followers.html`, `following.html`, `pages/build/edit.html`). **This app has no server-side rendering**, so a single static HTML template cannot emit a different `og:image` per build — a real, disclosed limitation, not an oversight. See `docs/MILESTONE_9_PHASE_9D_ARCHITECTURE.md` §2.5.
+- `assets/brand/og/og-image.png` (1200×630) — the generic brand Open Graph/Twitter Card image used by every page, including dynamic ones (`build.html`, `profile.html`, `followers.html`, `following.html`, `pages/build/edit.html`). **This app has no server-side rendering**, so a single static HTML template cannot emit a different `og:image` per build — a real, disclosed limitation, not an oversight. See `docs/milestones/MILESTONE_9_PHASE_9D_ARCHITECTURE.md` §2.5.
 - `404.html` — custom branded 404 page, auto-detected by Cloudflare Pages (no configuration needed; Cloudflare looks for `404.html` at the deployment root and any matching subdirectory).
 - `_headers` — CSP and security headers (§5 below). **No 500 page exists or is planned** — this architecture has no server-side code path that could produce one; Supabase-layer failures are already handled by the app's own client-side toast/error UI.
 
@@ -94,7 +94,7 @@ Cloudflare Pages keeps every deployment. To roll back:
 3. Click **Retry deployment** / use the "..." menu → **Rollback to this deployment** (exact label may vary slightly by dashboard version).
 4. This takes effect immediately — no rebuild, no waiting, no git operation required. Git history and Cloudflare's deployment history are independent; a bad deploy can be undone without touching the repository at all.
 
-This directly closes the **L3 rollback plan** gap flagged in the original Milestone 9 audit (`docs/MILESTONE_9_ARCHITECTURE.md`).
+This directly closes the **L3 rollback plan** gap flagged in the original Milestone 9 audit (`docs/milestones/MILESTONE_9_ARCHITECTURE.md`).
 
 ## 8. Cache invalidation
 

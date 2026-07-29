@@ -1,5 +1,5 @@
 // Assembled skeleton-loading compositions — Milestone 10 brand refresh.
-// See docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md's Skeleton Loading
+// See docs/milestones/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md's Skeleton Loading
 // section: css/components/skeleton.css already had the shimmer animation
 // and atomic shape classes (skeleton-text/-title/-image/-avatar), but
 // nothing assembled them into layouts matching this app's real content —

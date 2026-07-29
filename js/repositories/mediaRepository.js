@@ -26,7 +26,7 @@ const FULL_URL_PATTERN = /^https?:\/\//i;
 
 // Milestone 9 Migration B — legacy compatibility layer. Storage RLS was
 // hardened and the project-images bucket flipped to Private (see
-// docs/MILESTONE_9_STORAGE_RLS_MIGRATION.md); this bucket's own public
+// docs/milestones/MILESTONE_9_STORAGE_RLS_MIGRATION.md); this bucket's own public
 // object URLs no longer resolve to anything at all, so any stored value
 // still shaped like one needs to be converted to a signable path before
 // use. Deliberately read-path-only: nothing here ever writes back to the

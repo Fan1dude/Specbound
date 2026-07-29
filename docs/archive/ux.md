@@ -1,3 +1,5 @@
+> **Archived 2026-07-28 — superseded by `../TERMINOLOGY.md` and `../PRODUCT_ARCHITECTURE.md`. Historical reference only; do not treat as current.**
+
 # Specbound User Experience
 
 ## The Goal

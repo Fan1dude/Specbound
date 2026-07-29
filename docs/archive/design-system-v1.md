@@ -1,7 +1,9 @@
+> **Archived 2026-07-28 — superseded by `../BRAND.md`. Historical reference only; do not treat as current.**
+
 # Blueprint Design System
 
 Version: 1.0
-Status: Locked for Specbound Version 1.0
+Status: Locked for Specbound Version 1.0 (historical — see archive notice above)
 
 ## Brand
 

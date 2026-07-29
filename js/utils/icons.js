@@ -1,5 +1,5 @@
 // Shared icon system — Milestone 10 brand refresh.
-// See docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md's Iconography
+// See docs/milestones/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md's Iconography
 // Standards section: stroke-based construction only, 1.5px stroke at the
 // 20px base size (scaled proportionally at the other 3 allowed sizes),
 // rounded joins/caps, currentColor fill — never a hardcoded color, never a

@@ -1,6 +1,6 @@
 # Milestone 9 — Production Cleanup & Launch: Architecture Proposal
 
-**Status:** Storage subsystem (originally S1/S3/S6 below) is **complete and verified live** — see [Storage subsystem — complete](#storage-subsystem--complete) just below. All other findings in this document are unchanged from the original audit (re-verified fresh 2026-07-26, after the storage remediation work — see `docs/MILESTONE_9_PHASE_9CDE_ARCHITECTURE.md` for their organization into Phases 9C/9D/9E). Architecture only for everything else. No implementation beyond storage has occurred. Awaiting review.
+**Status:** Storage subsystem (originally S1/S3/S6 below) is **complete and verified live** — see [Storage subsystem — complete](#storage-subsystem--complete) just below. All other findings in this document are unchanged from the original audit (re-verified fresh 2026-07-26, after the storage remediation work — see `docs/milestones/MILESTONE_9_PHASE_9CDE_ARCHITECTURE.md` for their organization into Phases 9C/9D/9E). Architecture only for everything else. No implementation beyond storage has occurred. Awaiting review.
 
 **Goal (as given):** Prepare Specbound for public release — comprehensive production-readiness audit across dead code, production build, performance, security, launch readiness, and code quality.
 
@@ -165,4 +165,4 @@ Scored honestly against where the app stands *today*, not where it will be after
 6. **Deployment pipeline + rollback plan + domain/SSL checklist** (L2, L3, L7) — once there's a real host to point at.
 7. **`robots.txt`** (B7) before public launch; `sitemap.xml` (B8) can follow shortly after.
 
-**Superseded by**: [`docs/MILESTONE_9_PHASE_9CDE_ARCHITECTURE.md`](MILESTONE_9_PHASE_9CDE_ARCHITECTURE.md), which reorganizes items 2-7 above (everything except the storage work, now complete) into Phase 9C (production cleanup), Phase 9D (deployment prep), and Phase 9E (final launch verification), re-verified fresh against the current codebase. That document is the one awaiting approval now.
+**Superseded by**: [`docs/milestones/MILESTONE_9_PHASE_9CDE_ARCHITECTURE.md`](MILESTONE_9_PHASE_9CDE_ARCHITECTURE.md), which reorganizes items 2-7 above (everything except the storage work, now complete) into Phase 9C (production cleanup), Phase 9D (deployment prep), and Phase 9E (final launch verification), re-verified fresh against the current codebase. That document is the one awaiting approval now.

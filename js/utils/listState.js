@@ -9,7 +9,7 @@ import { icon } from "./icons.js";
 // `skeleton`, if provided (one of the composed HTML strings from
 // js/utils/skeletons.js), replaces the plain "Loading..." text with an
 // assembled skeleton matching the real content's shape — see
-// docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md's Skeleton Loading
+// docs/milestones/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md's Skeleton Loading
 // section. `message` is still used as the accessible label either way
 // (screen readers get an announcement regardless of which visual is
 // shown), defaulting to the original plain-text behavior when no
@@ -25,7 +25,7 @@ export function renderLoadingState(container, message = "Loading...", skeleton =
 
 // `icon`, if provided, is a name from js/utils/icons.js rendered at the
 // 32px empty-state size (Iconography Standards' fourth and last defined
-// size) above the title — see docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md's
+// size) above the title — see docs/milestones/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md's
 // Empty States section for the one-icon-per-context language this replaces
 // plain text-only empty states with.
 export function renderEmptyState(container, { title, description = "", actionHtml = "", icon: iconName = "" } = {}) {

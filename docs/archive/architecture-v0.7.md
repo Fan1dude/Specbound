@@ -1,3 +1,5 @@
+> **Archived 2026-07-28 — superseded by `../ARCHITECTURE.md` and `../PRODUCT_ARCHITECTURE.md`. Historical reference only; do not treat as current.**
+
 # Specbound Architecture
 
 Version: 0.7 (Project Blueprint)

@@ -1,3 +1,5 @@
+> **Archived 2026-07-28 — superseded by `../BRAND.md`. Historical reference only; do not treat as current.**
+
 # Specbound Design System
 
 Version: 2.0

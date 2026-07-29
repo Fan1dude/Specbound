@@ -2,7 +2,7 @@
 
 **Status: current and accurate as of Migration C (`0018_legacy_media_linkage_backfill`), applied and verified 2026-07-26.**
 
-This document describes the final, live state of Specbound's Supabase Storage subsystem after the Milestone 9 security remediation (Migrations A, B, C). It supersedes the storage-related sections of `docs/MILESTONE_9_ARCHITECTURE.md` (findings S1, S3, S6), which are historical/pre-fix.
+This document describes the final, live state of Specbound's Supabase Storage subsystem after the Milestone 9 security remediation (Migrations A, B, C). It supersedes the storage-related sections of `docs/milestones/MILESTONE_9_ARCHITECTURE.md` (findings S1, S3, S6), which are historical/pre-fix.
 
 ---
 
@@ -112,7 +112,7 @@ Two further classes of legacy object were identified during Migration C's audit 
 
 Both sets fall through `extractStoragePath()` → `getMediaSignedUrl()` → RLS denial ("Object not found") → the Migration B compatibility layer's fail-soft `.catch(() => "")` → an empty string → the app's existing placeholder-image fallback. **No code change is needed for orphans to degrade gracefully — this was true before Migration C and remains true after.** They are not a bug; they are storage-layer garbage with no database claim on them, and the correct behavior is exactly what already happens: render a placeholder, expose nothing.
 
-Anonymous listing of these objects' containing folders is restricted by the same `storage.objects` RLS as everything else (Migration A) — an anonymous session cannot enumerate them to discover their existence, let alone read them. There is no plan to backfill, claim, or delete these objects as part of any tracked migration; a full listing was captured once, before Migration A restricted anonymous `list()`, and is preserved in `docs/MILESTONE_9_MIGRATION_C_DRY_RUN_REPORT.md` for reference. A small number of subfolders under the legacy `{userId}/` path (`revisions/`, `updates/`) were not fully enumerated before that restriction took effect — an explicitly disclosed visibility gap that affects only whether more *unclaimed* orphans might exist there, not anything this or any other migration depends on.
+Anonymous listing of these objects' containing folders is restricted by the same `storage.objects` RLS as everything else (Migration A) — an anonymous session cannot enumerate them to discover their existence, let alone read them. There is no plan to backfill, claim, or delete these objects as part of any tracked migration; a full listing was captured once, before Migration A restricted anonymous `list()`, and is preserved in `docs/milestones/MILESTONE_9_MIGRATION_C_DRY_RUN_REPORT.md` for reference. A small number of subfolders under the legacy `{userId}/` path (`revisions/`, `updates/`) were not fully enumerated before that restriction took effect — an explicitly disclosed visibility gap that affects only whether more *unclaimed* orphans might exist there, not anything this or any other migration depends on.
 
 ## 10. Migrations affecting storage
 

@@ -559,9 +559,8 @@ it's small. Each migration gets a matching `..._rollback.sql`.
   public/private flag (a separate action after this migration is applied
   and live-verified) and any legacy-URL/`revision_media` backfill work
   (a separate follow-up migration). See
-  `docs/MILESTONE_9_STORAGE_RLS_MIGRATION.md` for the full design and
-  `docs/MILESTONE_9_STORAGE_ARCHITECTURE.md` (once written) for the
-  resulting model.
+  `docs/milestones/MILESTONE_9_STORAGE_RLS_MIGRATION.md` for the full design and
+  `docs/STORAGE_ARCHITECTURE.md` for the resulting model.
 - **Context**: Milestone 9 (Production Cleanup & Launch). Split from a
   combined proposal into two tracked migrations per explicit review
   feedback — this one (Migration A, storage security repair) and a
@@ -582,7 +581,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
   further 3 legacy objects ("Category B" — build-level-only covers with
   no corroborating revision) are deliberately NOT backfilled here, since
   only their ownership (not revision linkage) is provable; see
-  `docs/MILESTONE_9_MIGRATION_C_LEGACY_BACKFILL.md` for the full
+  `docs/milestones/MILESTONE_9_MIGRATION_C_LEGACY_BACKFILL.md` for the full
   categorization and the 3 options considered for handling them later.
 - **Touches**: `revision_media` only (7 new rows). Never touches
   `image_url` on `builds`/`build_revisions`, `storage.objects`, any

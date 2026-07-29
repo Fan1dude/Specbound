@@ -3,7 +3,7 @@ import { escapeHtml } from "./escapeHtml.js";
 // Shared confirmation modal — Milestone 10 brand refresh. Replaces this
 // app's previous confirm() call sites (comment delete, gallery image
 // delete, unpublish, restore revision) with a styled, on-brand <dialog>,
-// per docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md §7's Modals spec.
+// per docs/milestones/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md §7's Modals spec.
 // Native <dialog> is used deliberately — accessible focus-trapping and
 // Esc-to-close come from the browser for free, no custom JS needed for
 // either.

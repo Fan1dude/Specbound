@@ -19,7 +19,7 @@ Not yet committed to git — awaiting the user's decision on that.
 
 ---
 
-**Scope:** the remaining Milestone 9 production work, now that the storage subsystem (originally findings S1/S3/S6 in `docs/MILESTONE_9_ARCHITECTURE.md`) is complete and verified — see `docs/STORAGE_ARCHITECTURE.md`. This document reorganizes the original audit's still-open findings into three phases, after re-verifying every one of them fresh against the current codebase (2026-07-26, post-storage-remediation) to confirm none drifted while that work was in progress. All 27 re-checked items came back unchanged except D11 (escaping duplication — now confirmed 20 files, not the original document's approximate ~18-20 estimate).
+**Scope:** the remaining Milestone 9 production work, now that the storage subsystem (originally findings S1/S3/S6 in `docs/milestones/MILESTONE_9_ARCHITECTURE.md`) is complete and verified — see `docs/STORAGE_ARCHITECTURE.md`. This document reorganizes the original audit's still-open findings into three phases, after re-verifying every one of them fresh against the current codebase (2026-07-26, post-storage-remediation) to confirm none drifted while that work was in progress. All 27 re-checked items came back unchanged except D11 (escaping duplication — now confirmed 20 files, not the original document's approximate ~18-20 estimate).
 
 ---
 
@@ -88,7 +88,7 @@ Not yet committed to git — awaiting the user's decision on that.
 
 *Git verification, production configuration, robots.txt, sitemap.xml, manifest, caching, error pages.*
 
-**Complete and verified (2026-07-27).** Full detail, including corrections made during implementation, in [`docs/MILESTONE_9_PHASE_9D_ARCHITECTURE.md`](MILESTONE_9_PHASE_9D_ARCHITECTURE.md)'s Implementation Notes section, [`docs/DEPLOYMENT.md`](DEPLOYMENT.md), and [`docs/OPERATIONS.md`](OPERATIONS.md). Cloudflare Pages approved and configured as the hosting platform; production metadata added to all 25 real pages; robots.txt/sitemap.xml/manifest.webmanifest/favicon assets/generic OG image/404 page all implemented and locally verified; a strict CSP with no `unsafe-inline` shipped and verified against the live app surface with zero violations.
+**Complete and verified (2026-07-27).** Full detail, including corrections made during implementation, in [`docs/milestones/MILESTONE_9_PHASE_9D_ARCHITECTURE.md`](MILESTONE_9_PHASE_9D_ARCHITECTURE.md)'s Implementation Notes section, [`docs/DEPLOYMENT.md`](DEPLOYMENT.md), and [`docs/OPERATIONS.md`](OPERATIONS.md). Cloudflare Pages approved and configured as the hosting platform; production metadata added to all 25 real pages; robots.txt/sitemap.xml/manifest.webmanifest/favicon assets/generic OG image/404 page all implemented and locally verified; a strict CSP with no `unsafe-inline` shipped and verified against the live app surface with zero violations.
 
 ### Git verification
 

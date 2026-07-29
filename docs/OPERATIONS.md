@@ -16,7 +16,7 @@ Full procedure in `docs/DEPLOYMENT.md` §7. Summary: Cloudflare dashboard → De
 
 ## 3. Releasing updates
 
-This is a solo/small-scale project today (single `master` branch, no staging environment — see `docs/MILESTONE_9_PHASE_9D_ARCHITECTURE.md` §1.5 for why a dedicated staging branch isn't recommended). The release flow:
+This is a solo/small-scale project today (single `master` branch, no staging environment — see `docs/milestones/MILESTONE_9_PHASE_9D_ARCHITECTURE.md` §1.5 for why a dedicated staging branch isn't recommended). The release flow:
 
 1. Make the change locally, verify it against the local dev server (`.claude/nocache_server.py` on port 8431) as this project has done throughout Milestones 1-9.
 2. Commit with a clear message describing *why*, not just *what* (matches this project's established commit convention — see recent commits for examples).

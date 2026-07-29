@@ -1,5 +1,11 @@
 # Specbound Product Principles
 
+Status: Authoritative. Approved 2026-07-28.
+
+This is the belief system behind `SCOPE.md`'s explicit in/out list — the "why" for every line in that document's Explicitly Out of Scope section.
+
+---
+
 ## Our Mission
 
 Help creators preserve the story behind everything they build.
@@ -61,3 +67,10 @@ it probably doesn't belong in Specbound.
 Success is not measured by likes.
 
 Success is measured by knowledge preserved.
+
+---
+
+## Related Documents
+
+- `VISION.md` — what Specbound is
+- `SCOPE.md` — the explicit Version 1 in/out list this belief system justifies

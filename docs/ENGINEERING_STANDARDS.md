@@ -4,6 +4,8 @@ Version: 1.0
 
 Last Updated: July 2026
 
+Status: Authoritative, kept from the original numbered doc series. Renamed from `00-Engineering-Standards.md` and lightly updated (example names below) to match `TERMINOLOGY.md`, approved 2026-07-28.
+
 ---
 
 # Purpose
@@ -95,11 +97,13 @@ badge.css
 
 PascalCase
 
-BlueprintCard.js
+ProjectCard.js
 
-CreatorCard.js
+BuilderCard.js
 
 SearchBar.js
+
+(Existing files still use the prior naming — e.g. `BlueprintCard.js` — see `TERMINOLOGY.md`'s Migration Status. New components should follow the naming above; existing ones are renamed only as part of an approved migration, not incidentally.)
 
 ---
 
@@ -129,11 +133,11 @@ const creatorName
 
 PascalCase
 
-Blueprint
+Project
 
-Creator
+Builder
 
-Revision
+BuildLog
 
 ---
 
@@ -268,9 +272,9 @@ Commit messages should explain why.
 
 Example
 
-feat: add blueprint card component
+feat: add project card component
 
-fix: correct profile routing
+fix: correct builder archive routing
 
 refactor: move upload logic into service
 
@@ -303,3 +307,10 @@ Repositories fetch.
 Utilities help.
 
 Config defines.
+
+---
+
+# Related Documents
+
+- `ARCHITECTURE.md` — how these standards show up in the actual system
+- `TERMINOLOGY.md` — the naming this document's examples follow
