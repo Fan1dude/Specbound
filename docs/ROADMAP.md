@@ -10,9 +10,9 @@ This is a live pointer to the approved milestone plan, not a third copy of it. D
 
 | Milestone | Objective | Status |
 |---|---|---|
-| 11A | Foundation reset — vision, terminology, brand, and scope documentation | In progress |
-| 11B | Fix the confirmed `record_build_view()` database bug | Not started |
-| 12 | Authentication completeness — password recovery, password change | Not started |
+| 11A | Foundation reset — vision, terminology, brand, and scope documentation | Complete |
+| 11B | Fix the confirmed `record_build_view()` database bug | Complete — 3 private-build cases implementation-reviewed only, not live-verified (see commit) |
+| 12 | Authentication completeness — password recovery, password change | In progress |
 | 13 | Database correctness — formalize the `profiles` trigger, resolve `ensureProfile()`'s dead fallback, resolve the empty top-level SQL files | Not started |
 | 14 | Brand implementation — roll out the approved palette and logo, recheck WCAG AA | Not started |
 | 15 | Workshop/Dashboard resolution — merge any unique Dashboard functionality into Workshop, remove the orphaned page | Not started |
