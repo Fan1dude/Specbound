@@ -206,7 +206,7 @@ export function loadFooter(pathPrefix = "") {
         <div>
             <h2>SPECBOUND</h2>
             <p>Document Every Build.</p>
-            <p>v0.6.0</p>
+            <p>v0.9.0</p>
         </div>
 
         <div>

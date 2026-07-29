@@ -6,7 +6,10 @@
     background: rgba(183, 154, 230,.14);
     border: 1px solid rgba(183, 154, 230,.25);
     color: var(--primary);
-    font-weight: 900;
+    /* 800, not 900 — Inter is only loaded at 400-800 (see every page's
+       Google Fonts <link>); 900 would render as a browser-synthesized
+       faux-bold instead of a true weight. */
+    font-weight: 800;
     overflow: hidden;
 }
 

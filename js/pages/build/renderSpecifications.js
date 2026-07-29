@@ -1,3 +1,5 @@
+import { escapeHtml } from "../../utils/escapeHtml.js";
+
 // specifications === null means "not recorded for this revision" (a
 // revision published before Milestone 5C captured per-revision snapshots)
 // — distinct from {} / undefined, which means "recorded, and there just
@@ -22,8 +24,8 @@ export function renderSpecifications(specifications) {
         .filter(([_, value]) => value)
         .map(([key, value]) => `
             <div class="spec-item">
-                <h3>${formatSpecName(key)}</h3>
-                <p>${value}</p>
+                <h3>${escapeHtml(formatSpecName(key))}</h3>
+                <p>${escapeHtml(value)}</p>
             </div>
         `)
         .join("");

@@ -21,7 +21,10 @@
     display: grid;
     place-items: center;
     font-size: 3rem;
-    font-weight: 900;
+    /* 800, not 900 — Inter is only loaded at 400-800 (see every page's
+       Google Fonts <link>); 900 would render as a browser-synthesized
+       faux-bold instead of a true weight. */
+    font-weight: 800;
 }
 
 .profile-hero-info {
@@ -197,7 +200,10 @@
 
 .profile-stat span {
     font-size: 2.5rem;
-    font-weight: 900;
+    /* 800, not 900 — Inter is only loaded at 400-800 (see every page's
+       Google Fonts <link>); 900 would render as a browser-synthesized
+       faux-bold instead of a true weight. */
+    font-weight: 800;
 }
 
 .profile-stat p {

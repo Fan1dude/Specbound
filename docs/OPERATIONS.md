@@ -57,9 +57,27 @@ To update:
 
 Google Fonts and the Supabase project's own API/Storage/Auth endpoints are the only other external dependencies — neither is a "package" to version/update; they're services consumed via URL, unaffected by this process.
 
-## 7. Incident response basics
+## 7. Error monitoring
 
-This app has **no error-tracking/monitoring service** configured (Sentry or equivalent) — a real, disclosed gap, tracked as **L10** in the original Milestone 9 audit and deferred to Phase 9E's launch checklist, not fixed here. Until that's addressed, production errors are only visible to whichever single user hits them, in their own browser console — there is no way to be automatically notified of a client-side error today.
+This app has no error-tracking/monitoring service today — production errors are only visible to whichever single user hits them, in their own browser console, with no automatic notification. Tracked as **L10** in the original Milestone 9 audit. This section documents the recommended fix; it hasn't been implemented yet (no new table, no new client code shipped as part of this entry — a deliberate, separate follow-up).
+
+**Recommended approach: log to a Supabase table, not a new vendor.** This app already has exactly one backend dependency (Supabase) and an explicit preference for not adding new external services where an existing one covers the need (§6). The lightest path that actually closes the L10 gap:
+
+1. **A new `client_errors` table**, migration-tracked like everything else in `supabase/migrations/`: `id`, `created_at`, `message`, `stack` (truncated), `url`, `user_id` (nullable — anonymous visitors hit errors too), `user_agent`. RLS: **INSERT-only for `anon`/`authenticated`, no SELECT policy for either** — the same "write-only from the client, read only via the dashboard" shape already used correctly elsewhere in this schema. Only the project owner (via the Supabase dashboard's table editor or SQL editor) can read it.
+2. **A single global handler**, added once to `js/core/layout.js` (already loaded on every page via `loadNavbar()`/`loadFooter()`) or as its own small `js/core/errorMonitoring.js` module:
+   ```js
+   window.addEventListener("error", (e) => reportError(e.error ?? e.message));
+   window.addEventListener("unhandledrejection", (e) => reportError(e.reason));
+   ```
+   `reportError()` writes one row via the existing `supabase` client — the same publishable key already used for everything else, no new credential. Debounce/dedupe identical messages within a short window (e.g. per page load) so a loop-shaped bug can't flood the table.
+3. **Deliberately excluded from this table**: request/response bodies, form field values, anything that could contain user-entered content beyond an error message — this is a debugging aid, not a session replay tool. Keep it to what a developer needs to reproduce the bug (message, stack, URL, rough "was this user signed in" context), nothing more.
+4. **Checking it**: no dashboard needed at first — an occasional `select * from client_errors order by created_at desc limit 50` in the Supabase SQL editor (§9's periodic-checks table already includes this cadence). If error volume ever justifies it, this table is also a normal Supabase data source a lightweight internal dashboard (or a scheduled digest email via Supabase's own cron/Edge Functions) could read from later — not needed at launch.
+
+**Why not a third-party service (Sentry, etc.) instead**: not ruled out permanently — if error volume or team size grows, a dedicated tool's stack-trace grouping and alerting genuinely earns its keep. At today's scale (solo/small-scale, per §3), it's an extra account, an extra script tag to add to the CSP `script-src` (§9's "CSP footprint" item), and a dependency this app doesn't otherwise have, for a problem the existing backend already solves adequately.
+
+## 8. Incident response basics
+
+Until the above is implemented, the same manual constraint applies: there is no way to be automatically notified of a client-side error today.
 
 Given that constraint, incident response for this app is necessarily more manual:
 
@@ -69,12 +87,13 @@ Given that constraint, incident response for this app is necessarily more manual
 4. **If a security issue is discovered** (e.g. an RLS gap like the ones found and fixed in Migrations A/B/C): treat with the same rigor this project already established — audit live via the anon key first, design a scoped migration with a rollback file, verify anonymous/owner/cross-user behavior explicitly before and after, document in `supabase/migrations.md`. Do not patch RLS live in the Supabase dashboard without a corresponding tracked migration file — that's exactly the untracked-policy problem Migration A (`0017_storage_rls_hardening.sql`) had to clean up.
 5. **If credentials need emergency rotation**: see §5. Given the only client-side credential is a publishable key with no meaningful "compromise" blast radius (RLS is the real boundary), this is a low-urgency scenario in this app's current architecture.
 
-## 8. Production maintenance
+## 9. Production maintenance
 
 Recurring things worth checking periodically, not because anything is currently wrong, but because they're easy to forget on a project with no automated reminders:
 
 | Item | Frequency | What to check |
 |---|---|---|
+| `client_errors` table (§7, once implemented) | Weekly, or after any deploy touching a high-traffic page | New rows since the last check — anything recurring or new since the last deploy? |
 | Supabase CDN pin (§6) | Occasionally | Is a newer Supabase JS client version available? Worth the upgrade? |
 | Supabase backup/PITR tier | Once, then rarely | Confirm the project's plan tier still matches actual data-loss tolerance (tracked as **L4** in the original audit, part of Phase 9E) |
 | SMTP/email provider | Once, before real signup volume | Supabase's default email service has strict rate limits — confirm custom SMTP is configured before relying on password-reset/signup emails at any scale (tracked as **L9**) |
