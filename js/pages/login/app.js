@@ -30,15 +30,12 @@ loginForm.addEventListener("submit", async (e) => {
         return;
     }
 
-    // Covers the case where the profiles row couldn't be created at signup
-    // time (email confirmation was pending, so there was no authenticated
-    // session yet to satisfy RLS). Safe to call on every login: it only
-    // inserts when no row exists yet, never overwrites one.
+    // Confirms the auth.users trigger actually created a profiles row for
+    // this account (see profileRepository.js's ensureProfile()) — cheap,
+    // safe to call on every login, and the only way this page would ever
+    // learn that something went wrong with an account's profile setup.
     try {
-        await ensureProfile({
-            id: data.user.id,
-            username: data.user.user_metadata?.username || data.user.email.split("@")[0]
-        });
+        await ensureProfile({ id: data.user.id });
     } catch (profileError) {
         console.error("Profile setup error:", profileError);
     }

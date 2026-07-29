@@ -70,31 +70,34 @@ export async function attachBuildProfiles(builds) {
     }));
 }
 
-// Creates a profiles row for a new user only if one doesn't already exist.
-// Deliberately not an upsert: a blind upsert would overwrite a username the
-// user later changed in settings every time this runs (e.g. on each login,
-// since we don't know whether a DB trigger already created the row before
-// email confirmation completes).
-export async function ensureProfile({ id, username }) {
-    const { data: existing, error: lookupError } = await supabase
+// Confirms a profiles row exists for a signed-up user — created by an
+// auth.users trigger (see docs/AUTH_ARCHITECTURE.md), not by this
+// function. This used to also attempt an .insert() as a fallback for
+// the case where the trigger hadn't run yet, "since we don't know
+// whether a DB trigger already created the row before email
+// confirmation completes." That fallback is removed: profiles has no
+// INSERT policy at all (by design, confirmed live — see
+// docs/AUTH_ARCHITECTURE.md), so the insert could never actually
+// succeed. It wasn't a working safety net, just a call guaranteed to
+// fail with a confusing RLS-denial error in the one scenario it was
+// meant to handle. If the row genuinely doesn't exist, that means the
+// trigger didn't fire — a real, rare failure worth surfacing honestly
+// rather than papering over with an attempt that was always going to
+// fail the same way.
+export async function ensureProfile({ id }) {
+    const { data: existing, error } = await supabase
         .from("profiles")
         .select("id")
         .eq("id", id)
         .maybeSingle();
 
-    if (lookupError) throw lookupError;
-
-    if (existing) return existing;
-
-    const { data, error } = await supabase
-        .from("profiles")
-        .insert([{ id, username }])
-        .select()
-        .single();
-
     if (error) throw error;
 
-    return data;
+    if (!existing) {
+        throw new Error("Your profile wasn't created. Try refreshing, or contact support if this keeps happening.");
+    }
+
+    return existing;
 }
 
 export async function updateAvatarPath(id, avatarPath) {

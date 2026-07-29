@@ -60,7 +60,7 @@ signupForm.addEventListener("submit", async (e) => {
     }
 
     try {
-        await ensureProfile({ id: data.user.id, username });
+        await ensureProfile({ id: data.user.id });
     } catch (profileError) {
         console.error("Profile setup error:", profileError);
 

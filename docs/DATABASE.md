@@ -52,13 +52,13 @@ Indexes: named for what they serve — `<table>_<columns>_idx` (e.g. `project_dr
 
 # Known Gap: The `profiles` Table
 
-`profiles` and its `auth.users` trigger predate migration tracking — there's no tracked migration for its `CREATE TABLE` or the trigger that populates it on signup. This is a real audit-trail gap, not a design flaw (see `AUTH_ARCHITECTURE.md` for the full verification). Formalizing it into a tracked migration — capturing current behavior exactly, not a reimagined version — is Milestone 13.
+`profiles` and its `auth.users` trigger predate migration tracking — there's no tracked migration for its `CREATE TABLE` or the trigger that populates it on signup. This is a real audit-trail gap, not a design flaw (see `AUTH_ARCHITECTURE.md` for the full verification). Formalizing it into a tracked migration requires capturing the trigger's and function's exact current definitions first — `pg_get_triggerdef()`/`pg_get_functiondef()` output isn't reachable through the anon/authenticated PostgREST API this project's implementation environment has access to, so this step is blocked on a one-time, read-only introspection query run manually against the live database. Still open as of Milestone 13 — see that milestone's implementation report for the exact query needed.
 
 ---
 
 # The Empty Top-Level SQL Files
 
-`supabase/schema.sql`, `policies.sql`, and `triggers.sql` currently exist as 0-byte files, dated before the migrations folder started. They're not authoritative — `supabase/migrations/` is. Resolving these (populate as a generated current-state snapshot, or remove them) is also Milestone 13.
+Resolved in Milestone 13: `supabase/schema.sql`, `policies.sql`, and `triggers.sql` were removed. They were 0-byte files predating the migrations folder, not authoritative even when they existed — `supabase/migrations/` always was. Deleting them didn't lose any information; there was none to lose.
 
 ---
 
