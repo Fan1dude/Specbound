@@ -33,7 +33,7 @@ These terms are retired from product copy and documentation, effective immediate
 |---|---|---|
 | Blueprint | Project | `builds` table, `project_drafts` table, `BlueprintCard.js`, `BlueprintFeed.js`, page title "Blueprint \| Specbound" |
 | Revision | Build Log | `build_revisions` table, `renderTimeline.js`, UI copy ("Start Your Project Log") |
-| Dashboard | Workshop | `pages/dashboard.html` (orphaned — see Milestone 15) |
+| Dashboard | Workshop | Resolved (Milestone 15, 2026-07-29) — `pages/dashboard.html` removed; its one piece of unique functionality (Builds/Build Logs/Completed stats) ported into Workshop |
 | Profile / Creator | Builder Archive / Builder | `profiles` table, `profileRepository.js`, "Creator Profile" page title |
 | Activity Feed | Build Timeline | `activityRepository.js`, `renderActivityFeed.js` |
 

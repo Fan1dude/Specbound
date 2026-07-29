@@ -80,7 +80,7 @@ The Workshop answers one question: *what should I continue building?* It priorit
 
 **Future:** Team Workspaces, Scheduled Publishing.
 
-The orphaned `pages/dashboard.html` is not a separate system — any unique functionality it has belongs here, in Workshop, or nowhere. See Milestone 15.
+`pages/dashboard.html` was never a separate system — it was removed in Milestone 15 (2026-07-29). Its one piece of functionality Workshop didn't already have (a Builds/Build Logs/Completed stats row) was ported in first; everything else it did, Workshop already did better (Continue, Drafts, Saved, Quick Actions all had no Dashboard equivalent).
 
 ---
 

@@ -21,6 +21,7 @@ export function renderWorkshop({ user, profile, builds, revisionCount, drafts, l
             .map(draft => [draft.published_build_id, draft.id])
     );
 
+    renderStats(builds, revisionCount);
     renderContinueSection(latestBuild, latestRevision, draftIdByBuildId);
     // Once a draft is published, it's the backing state for its Project
     // card (which already has its own "Continue Editing" link) — showing
@@ -35,6 +36,31 @@ export function renderWorkshop({ user, profile, builds, revisionCount, drafts, l
     if (profileLink) {
         profileLink.href = `profile.html?user=${encodeURIComponent(user.id)}`;
     }
+}
+
+function renderStats(builds, revisionCount) {
+    const container = document.getElementById("workshopStats");
+
+    if (!container) return;
+
+    const completed = builds.filter(build => build.status === "completed").length;
+
+    container.innerHTML = `
+        <div class="workshop-stat">
+            <span>${builds.length}</span>
+            <p>Builds</p>
+        </div>
+
+        <div class="workshop-stat">
+            <span>${revisionCount}</span>
+            <p>Build Logs</p>
+        </div>
+
+        <div class="workshop-stat">
+            <span>${completed}</span>
+            <p>Completed</p>
+        </div>
+    `;
 }
 
 function renderContinueSection(latestBuild, latestRevision, draftIdByBuildId) {

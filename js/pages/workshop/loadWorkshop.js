@@ -118,6 +118,10 @@ function showWorkshopUnavailable() {
     const projectCount = document.getElementById("workshopProjectCount");
 
     if (projectCount) projectCount.textContent = "—";
+
+    const stats = document.getElementById("workshopStats");
+
+    if (stats) stats.innerHTML = "";
 }
 
 // Saved projects are a build_id list (saved_builds) joined against builds

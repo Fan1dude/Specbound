@@ -16,6 +16,45 @@
     margin: var(--space-1) 0;
 }
 
+/* Milestone 15: ported from the retired pages/dashboard.html, the one
+   piece of that page Workshop didn't already have — a builder's own
+   Builds/Build Logs/Completed counts. loadWorkshop.js already fetched
+   revisionCount for this before it existed anywhere on the page (see
+   its own comment); this is that data finally rendered. Three plain
+   numbers about the builder's own work, not a comparison or a
+   leaderboard — matches docs/PRODUCT_ARCHITECTURE.md's Workshop System
+   entry ("not approved for V1: engagement analytics, vanity metrics")
+   by staying first-person and non-comparative. */
+.workshop-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-3);
+    margin-bottom: var(--space-6);
+}
+
+.workshop-stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
+}
+
+.workshop-stat span {
+    font-size: 2.25rem;
+    font-weight: 800;
+}
+
+.workshop-stat p {
+    color: var(--text-secondary);
+    margin-top: var(--space-0);
+}
+
+@media (max-width: 700px) {
+    .workshop-stats {
+        grid-template-columns: 1fr;
+    }
+}
+
 .workshop-continue {
     margin-bottom: var(--space-6);
 }

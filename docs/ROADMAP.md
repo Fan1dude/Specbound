@@ -14,8 +14,8 @@ This is a live pointer to the approved milestone plan, not a third copy of it. D
 | 11B | Fix the confirmed `record_build_view()` database bug | Complete — 3 private-build cases implementation-reviewed only, not live-verified (see commit) |
 | 12 | Authentication completeness — password recovery, password change | Complete |
 | 13 | Database correctness — resolve `ensureProfile()`'s dead fallback, resolve the empty top-level SQL files | Complete for Version 1 — trigger formalization split out below, not blocking |
-| 14 | Brand implementation — roll out the approved palette and logo, recheck WCAG AA | In progress |
-| 15 | Workshop/Dashboard resolution — merge any unique Dashboard functionality into Workshop, remove the orphaned page | In progress |
+| 14 | Brand implementation — roll out the approved palette and logo, recheck WCAG AA | Complete |
+| 15 | Workshop/Dashboard resolution — merge any unique Dashboard functionality into Workshop, remove the orphaned page | Complete |
 | 16 | Documentation and changelog completion — backfill Milestones 5–10 | Not started |
 | 17 | Minimal CI and automated test execution | Not started |
 | 18 | Formal WCAG 2.1 AA accessibility audit | Not started |
