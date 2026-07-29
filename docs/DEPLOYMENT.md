@@ -8,7 +8,7 @@ This document describes how Specbound is deployed to production. Where a step ca
 
 ## 1. Cloudflare Pages setup
 
-Specbound is a static site with **no build step** — no bundler, no `package.json`, every file in the repo (minus a couple of exclusions below) is served exactly as committed.
+Specbound is a static site with **no build step** — no bundler, no root-level `package.json`, every file in the repo (minus a couple of exclusions below) is served exactly as committed. (Milestone 17 added `tools/ci/package.json` for CI-only tooling — deliberately kept out of the repo root, and out of what Cloudflare Pages' root-directory build detection sees, so it changes nothing here. See `docs/CI.md`.)
 
 **One real "build command" is needed anyway**, not to build anything, but to keep two developer-only directories out of the live deployment. Cloudflare Pages has **no `.pagesignore`-style file-exclusion mechanism** for git-connected deployments (verified against Cloudflare's own documentation and community-confirmed as a known, longstanding gap — there is no built-in way to exclude files from what gets published). The workaround: a build command that deletes them before Pages publishes the directory.
 
@@ -17,12 +17,12 @@ Specbound is a static site with **no build step** — no bundler, no `package.js
 | Setting | Value |
 |---|---|
 | Framework preset | None |
-| Build command | `rm -rf tests .claude` |
+| Build command | `rm -rf tests .claude tools .github` |
 | Build output directory | `/` (repository root) |
 | Root directory | `/` (repository root) |
 | Production branch | `master` (or `main`, if renamed — see §2) |
 
-The build command isn't building anything — it's pruning `tests/` (21 developer-only `*.test.html` files) and `.claude/` (local dev tooling, no secrets) from the published output before Cloudflare serves it. Both directories contain nothing sensitive (already confirmed repo-wide — no `.env`, no service-role key, no credentials anywhere), so this is tidiness, not a security fix; it just keeps test scaffolding off the public site and out of search-engine crawl budget.
+The build command isn't building anything — it's pruning developer-only directories from the published output before Cloudflare serves it: `tests/` (24 `*.test.html` files), `.claude/` (local dev tooling), `tools/` (Milestone 17's CI scripts and `tools/ci/package.json` — see `docs/CI.md`), and `.github/` (the CI workflow itself). None of these contain anything sensitive (already confirmed repo-wide — no `.env`, no service-role key, no credentials anywhere), so this is tidiness, not a security fix; it just keeps test/CI scaffolding off the public site and out of search-engine crawl budget.
 
 `design-system.html` (an unlinked internal style-guide page) is **not** excluded from the deploy — it's harmless to publish (no sensitive content) and excluding it would need its own bespoke `rm` line for marginal benefit. It's already covered by `robots.txt`'s disallow list (§3 below) so it won't be crawled/indexed.
 

@@ -1,0 +1,14 @@
+{
+    "name": "specbound-ci-tools",
+    "private": true,
+    "type": "module",
+    "description": "CI-only tooling. Not a site dependency — the deployed app remains a build-step-free static site (see docs/DEPLOYMENT.md). Deliberately kept out of the repo root so Cloudflare Pages' root-directory build detection never sees a package.json.",
+    "scripts": {
+        "check-syntax": "node check-syntax.js",
+        "check-references": "node check-references.js",
+        "test": "node run-tests.js"
+    },
+    "devDependencies": {
+        "playwright": "^1.48.0"
+    }
+}
