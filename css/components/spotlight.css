@@ -1,15 +1,12 @@
 /* Milestone 19: less top padding than the other .home-block sections —
    real builds are meant to land closer to the fold now that the hero
    itself is shorter (62vh, was 78vh). Bottom padding unchanged.
-   background is Concept 1's approved builds-band tier verbatim — a
-   step lighter than the hero's --hero-bg (#201E26), which is what
-   makes the hero-to-content handoff read as two tiers, not a cliff.
-   Text already used here (--text, --text-secondary) stays well above
-   AA against this value (13.4:1+ verified), so no other rule in this
-   file needs to change for the darker background. */
+   No background override anymore — this section shares .home-block's
+   single unified post-hero tone (see css/pages/home/home.css) instead
+   of its own distinct shade, per the "one continuous environment, no
+   section-to-section color jumps" instruction. */
 .featured {
     padding: 48px 0 96px;
-    background: #2a2833;
 }
 
 /* Post-M10 refinement: this section's own local ambient glow was

@@ -1,0 +1,25 @@
+<!-- Reusable ambient texture — a two-weight technical/blueprint grid,
+     tileable at 96x96. Opacity is baked into the file itself (stroke-
+     opacity .015 / .03 — literally 1.5% / 3%) so it's genuinely a
+     drop-in "1-3% opacity" layer wherever it's used, not something a
+     consumer has to remember to dim. Matches docs/BRAND.md's Interface
+     Character allowance verbatim: "Subtle ambient workshop backgrounds
+     are allowed — blueprint grids, PCB traces, CAD diagrams... at low
+     contrast... a faint static line pattern is permitted." Static only
+     — no animation, no glow (stroke-opacity, not filter/blur). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+    <g stroke="#B79AE6" fill="none" stroke-width="1">
+        <g stroke-opacity="0.015">
+            <line x1="24" y1="0" x2="24" y2="96"/>
+            <line x1="48" y1="0" x2="48" y2="96"/>
+            <line x1="72" y1="0" x2="72" y2="96"/>
+            <line x1="0" y1="24" x2="96" y2="24"/>
+            <line x1="0" y1="48" x2="96" y2="48"/>
+            <line x1="0" y1="72" x2="96" y2="72"/>
+        </g>
+        <g stroke-opacity="0.03">
+            <line x1="0" y1="0" x2="96" y2="0"/>
+            <line x1="0" y1="0" x2="0" y2="96"/>
+        </g>
+    </g>
+</svg>
