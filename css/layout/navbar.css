@@ -1,18 +1,41 @@
+/* .navbar is the full-viewport-width shell — background, sticky
+   behavior, and the bottom divider all live here with no horizontal
+   padding of their own, so they span edge to edge on every page (same
+   full-bleed-outer/constrained-inner split already used for .footer,
+   see css/layout/footer.css). .navbar-inner (wrapped around the
+   injected content in js/core/layout.js's loadNavbar()) carries the
+   actual row: logo, search, nav links, aligned to width: min(1200px,
+   92%) — the same max-width/gutter formula as the homepage's own
+   .container (css/pages/home/home.css) — so the header's content lines
+   up with the page content below it instead of using its own 5%-of-
+   viewport inset, which drifted further out than the page's 1200px cap
+   on anything wider than ~1500px. (Explore's own content column uses a
+   wider --container-xl/1400px cap, so perfect alignment with both Home
+   and Explore simultaneously isn't possible with one shared header —
+   1200px was chosen as the site's more representative/default value,
+   already reused verbatim via its own .container class; the Explore-
+   vs-Home content-width difference is a separate, pre-existing
+   inconsistency, not something this change is meant to resolve.) */
 .navbar {
     position: sticky;
     top: 0;
     z-index: 1000;
     width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    padding: var(--space-2) 5%;
     /* Frosted-glass treatment (already existed pre-refresh, kept — just
        repointed from a hardcoded rgba to the new --color-bg value). */
     background: rgba(10, 11, 15, .78);
     backdrop-filter: blur(18px);
     border-bottom: 1px solid var(--border);
+}
+
+.navbar-inner {
+    width: min(1200px, 92%);
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
 }
 
 .logo {
@@ -98,7 +121,7 @@
    identically to Desktop and only Mobile (700px and below) collapses to
    the hamburger pattern below. */
 @media (max-width: 700px) {
-    .navbar {
+    .navbar-inner {
         flex-wrap: wrap;
     }
 

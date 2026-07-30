@@ -11,6 +11,18 @@ import { icon } from "../../utils/icons.js";
 
 const PAGE_SIZE = 20;
 
+// Mobile shows a short teaser (3 cards) instead of the full paginated
+// feed, with a "View All Activity" link to Explore standing in for
+// Load More. Matches the .hero-content mobile breakpoint in
+// css/pages/home/home.css so the two stay visually consistent, though
+// they're independent — nothing here depends on that CSS rule existing.
+const MOBILE_BREAKPOINT = 640;
+const MOBILE_LIMIT = 3;
+
+function isMobileViewport() {
+    return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches;
+}
+
 // currentUser is whoever is viewing the home page (or null if signed
 // out) — decides the default tab and whether Following is offered at
 // all. BlueprintCard itself is never modified — each activity wraps the
@@ -19,6 +31,7 @@ const PAGE_SIZE = 20;
 export async function renderActivityFeed(currentUser) {
     const gridEl = document.getElementById("activityFeedGrid");
     const loadMoreBtn = document.getElementById("activityFeedLoadMore");
+    const viewAllLink = document.getElementById("activityFeedViewAll");
     const followingTab = document.getElementById("activityFeedFollowingTab");
     const exploreTab = document.getElementById("activityFeedExploreTab");
 
@@ -57,17 +70,35 @@ export async function renderActivityFeed(currentUser) {
     }
 
     async function loadFirstPage() {
+        const mobile = isMobileViewport();
+
         gridEl.setAttribute("role", "status");
         gridEl.setAttribute("aria-live", "polite");
         gridEl.setAttribute("aria-label", "Loading activity");
-        gridEl.innerHTML = cardGridSkeleton();
+        gridEl.innerHTML = cardGridSkeleton(mobile ? MOBILE_LIMIT : 6);
         if (loadMoreBtn) loadMoreBtn.hidden = true;
+        if (viewAllLink) viewAllLink.hidden = true;
 
         try {
-            const page = await getActivityFeed({ scope, limit: PAGE_SIZE });
+            // Mobile fetches MOBILE_LIMIT + 1 (not the full PAGE_SIZE) — just
+            // enough to know whether a "View All Activity" link is needed,
+            // without pulling and then discarding 17 unused rows. Desktop's
+            // fetch/render/Load More behavior is completely unchanged.
+            const limit = mobile ? MOBILE_LIMIT + 1 : PAGE_SIZE;
+            const page = await getActivityFeed({ scope, limit });
+            const enriched = await enrich(page);
 
-            activities = await enrich(page);
-            hasMore = page.length === PAGE_SIZE;
+            if (mobile) {
+                // enrich() can drop rows (a build gone private/deleted), so
+                // "is there more" is judged on the enriched count, not the
+                // raw fetch size — an extra row that got filtered out isn't
+                // really "more" to show.
+                hasMore = enriched.length > MOBILE_LIMIT;
+                activities = enriched.slice(0, MOBILE_LIMIT);
+            } else {
+                hasMore = page.length === PAGE_SIZE;
+                activities = enriched;
+            }
 
             renderGrid();
         } catch (error) {
@@ -152,13 +183,20 @@ export async function renderActivityFeed(currentUser) {
                 `;
 
             if (loadMoreBtn) loadMoreBtn.hidden = true;
+            if (viewAllLink) viewAllLink.hidden = true;
             return;
         }
 
         gridEl.innerHTML = activities.map(renderCard).join("");
         hydrateProgressBars(gridEl);
 
-        if (loadMoreBtn) loadMoreBtn.hidden = !hasMore;
+        // Mutually exclusive: mobile shows View All Activity instead of
+        // Load More (mobile never paginates in place — see loadFirstPage),
+        // desktop keeps the original Load More behavior untouched.
+        const mobile = isMobileViewport();
+
+        if (loadMoreBtn) loadMoreBtn.hidden = mobile || !hasMore;
+        if (viewAllLink) viewAllLink.hidden = !mobile || !hasMore;
     }
 
     function renderCard(activity) {

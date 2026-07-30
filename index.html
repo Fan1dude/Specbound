@@ -45,7 +45,7 @@
     <link rel="stylesheet" href="css/styles.css">
 </head>
 
-<body class="home-page">
+<body class="page-foundation home-page">
 
     <!-- Ambient lighting — one continuous backdrop behind every section
          on this page, not a per-section device. See css/pages/home/home.css's
@@ -103,34 +103,42 @@
 
                 <div class="hero-visual" aria-hidden="true">
 
-                    <!-- A modular composition derived from the official mark
-                         (assets/brand/logo/favicon.svg). Same 6 pieces, same
-                         source coordinates (hex-boundary points + the 6
-                         tile-gap-line endpoints) and same corner treatment as
-                         the previous pass — the only change is how far each
-                         piece moves outward from the hexagon's center along
-                         its own centroid direction. Earlier passes used 20
-                         and 7.5 units too generously/too far; this one uses
-                         7.5 units, chosen to land gaps at ~6.3-7.7 (avg ~7.3)
-                         against the real mark's own ~6.5-unit gap-line width
-                         — "10-20% more spacing than the original," not a
-                         new arrangement. The result reads as the official
-                         mark gently opened up, not a different composition:
-                         same hexagonal position, same relative proportions,
-                         just enough separation that the S softens without
-                         disappearing. No internal S-channel, no gradient —
-                         flat single-tone fill, same as the rest of this
-                         hero. See .hero-mark-tile in css/pages/home/home.css
-                         for the resting treatment and the align/assemble/
-                         settle animation (unchanged from the previous pass). -->
-                    <svg class="hero-mark" viewBox="-15 -12 153 153" xmlns="http://www.w3.org/2000/svg">
+                    <!-- The real Specbound mark, traced directly from the
+                         source logo (C:\Users\Odane\Pictures\Screenshots\
+                         specboundlogo\Specbound logo.png — the same image
+                         used for the site favicon) rather than approximated
+                         from the older flat-vector favicon.svg hexagon. That
+                         file's pixels resolve to 5 disconnected shapes, not
+                         6 — two of the "wedges" a hexagon-ring reading would
+                         expect are each one continuous organic piece (the
+                         upper-left hook and the lower-right hook-plus-
+                         diagonal-stroke), not two touching pieces. Traced by
+                         connected-component + contour extraction (see
+                         scratchpad tooling used this pass), then scaled to
+                         this viewBox; every path below is straight-line
+                         (L-only) at high enough point density to read as
+                         smoothly rounded at render size, matching the
+                         source's actual rounded corners without inventing a
+                         bezier radius that isn't really there. No per-piece
+                         tilt (--fr) this time — unlike the old synthetic
+                         hexagon wedges, these pieces are precisely fitted to
+                         their neighbors, so any artificial rotation would
+                         visibly misalign the gaps between them. --i (0-4) is
+                         each piece's index in clockwise order (starting at
+                         the diagonal/lower-right piece) — see
+                         css/pages/home/home.css's hero-mark-enter/hero-mark-
+                         spiral keyframes, which stagger every piece's
+                         opacity/scale off this single number. No piece ever
+                         translates, rotates, or leaves its exact resting
+                         position: the motion is opacity + scale only, so the
+                         mark itself never appears to spin as one object. -->
+                    <svg class="hero-mark" viewBox="-10 -10 150 177.7" xmlns="http://www.w3.org/2000/svg">
                         <g class="hero-mark-tiles">
-                            <path class="hero-mark-tile" style="--fr:5deg;--tr:-26deg;--tx:39px;--ty:-39px;animation-delay:0ms" d="M 82.91 16.96 Q 83.33 7.72 89.78 14.36 L 110.01 35.19 Q 117.33 42.72 108.26 48.01 L 102.40 51.43 Q 93.33 56.72 89.37 47.00 L 85.82 38.29 Q 82.33 29.72 82.75 20.48 L 82.91 16.96 Z"></path>
-                            <path class="hero-mark-tile" style="--fr:-6deg;--tr:30deg;--tx:54px;--ty:11px;animation-delay:55ms" d="M 110.29 54.74 Q 119.36 49.45 118.45 59.91 L 116.27 84.99 Q 115.36 95.45 106.24 90.24 L 93.88 83.18 Q 87.36 79.45 90.72 72.73 L 92.00 70.17 Q 95.36 63.45 101.85 59.66 L 110.29 54.74 Z"></path>
-                            <path class="hero-mark-tile" style="--fr:4deg;--tr:-24deg;--tx:14px;--ty:53px;animation-delay:110ms" d="M 100.83 96.03 Q 109.94 101.24 100.07 104.82 L 61.04 118.95 Q 51.94 122.24 52.36 112.58 L 52.52 108.90 Q 52.94 99.24 61.65 95.04 L 72.49 89.81 Q 81.94 85.24 91.06 90.45 L 100.83 96.03 Z"></path>
-                            <path class="hero-mark-tile" style="--fr:-5deg;--tr:28deg;--tx:-42px;--ty:36px;animation-delay:165ms" d="M 44.74 110.24 Q 44.32 119.90 37.13 113.43 L 12.12 90.92 Q 4.32 83.90 13.42 78.65 L 21.23 74.15 Q 30.32 68.90 35.28 78.15 L 40.75 88.37 Q 45.32 96.90 44.90 106.56 L 44.74 110.24 Z"></path>
-                            <path class="hero-mark-tile" style="--fr:6deg;--tr:-30deg;--tx:-54px;--ty:-11px;animation-delay:220ms" d="M 11.73 72.32 Q 2.64 77.57 4.70 67.27 L 9.58 42.86 Q 11.64 32.57 20.61 38.02 L 33.52 45.86 Q 39.64 49.57 35.02 55.03 L 33.26 57.11 Q 28.64 62.57 22.44 66.14 L 11.73 72.32 Z"></path>
-                            <path class="hero-mark-tile" style="--fr:-4deg;--tr:26deg;--tx:-15px;--ty:-53px;animation-delay:275ms" d="M 25.92 32.24 Q 16.95 26.79 26.84 23.27 L 67.23 8.89 Q 75.95 5.79 75.53 15.03 L 75.37 18.55 Q 74.95 27.79 66.79 32.14 L 54.21 38.85 Q 44.95 43.79 35.97 38.34 L 25.92 32.24 Z"></path>
+                            <path class="hero-mark-tile" style="--i:0" d="M 70.12 50.43 L 51.87 61.0 L 50.59 63.24 L 90.62 89.33 L 91.58 103.26 L 89.17 109.19 L 89.17 134.48 L 92.38 139.45 L 97.66 140.09 L 124.88 124.08 L 128.72 119.91 L 130.0 116.07 L 129.84 85.49 L 125.84 79.89 L 77.17 51.71 Z"></path>
+                            <path class="hero-mark-tile" style="--i:1" d="M 80.53 115.59 L 75.89 116.07 L 65.0 122.32 L 61.16 122.16 L 54.75 118.95 L 50.75 119.43 L 47.07 122.32 L 45.79 126.16 L 45.79 143.61 L 46.43 146.49 L 48.83 149.69 L 61.0 157.06 L 66.28 157.7 L 69.64 156.58 L 82.13 148.57 L 84.05 143.61 L 84.05 120.55 L 82.93 117.35 Z"></path>
+                            <path class="hero-mark-tile" style="--i:2" d="M 3.2 95.26 L 0.48 99.9 L 0.48 117.19 L 2.56 122.0 L 31.38 139.77 L 35.38 140.25 L 37.94 139.13 L 40.67 134.64 L 40.67 114.15 L 38.9 110.15 L 11.53 93.5 L 6.72 93.34 Z"></path>
+                            <path class="hero-mark-tile" style="--i:3" d="M 64.36 0.0 L 58.92 1.12 L 5.12 33.94 L 0.0 42.43 L 0.32 73.97 L 2.24 78.13 L 55.07 108.87 L 71.72 100.54 L 75.41 96.54 L 36.98 73.0 L 35.54 56.35 L 38.58 51.71 L 61.48 37.78 L 74.29 40.67 L 81.81 35.86 L 82.45 11.05 L 79.57 7.68 Z"></path>
+                            <path class="hero-mark-tile" style="--i:4" d="M 90.78 19.53 L 88.53 24.01 L 88.53 44.51 L 90.3 48.67 L 118.15 65.64 L 121.83 66.12 L 126.96 63.88 L 129.04 61.32 L 130.0 58.44 L 130.0 40.5 L 128.4 36.5 L 125.84 34.1 L 98.46 18.25 L 94.14 17.77 Z"></path>
                         </g>
                     </svg>
 
@@ -355,6 +363,10 @@
                     <button type="button" id="activityFeedLoadMore" class="btn btn-secondary" hidden>
                         Load More
                     </button>
+
+                    <a href="pages/explore.html" id="activityFeedViewAll" class="btn btn-secondary" hidden>
+                        View All Activity
+                    </a>
                 </div>
 
             </div>

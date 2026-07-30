@@ -33,55 +33,39 @@
    .home-block below via one background declaration, not duplicated
    per-selector, so a future palette change only happens in one place.
 
-   Milestone 20 (dark workspace rollout): --hero-bg now reads from
-   --surface-page (css/base/tokens.css) instead of repeating the literal
-   #201E26 — the same token also drives Explore (css/pages/explore/
-   explore.css) and Publish (css/pages/upload/upload.css), so all three
-   pages share one source of truth instead of three copies of the same
-   hex value. Purely a reference change: the rendered color is
-   identical to before. */
+   Milestone 21 (page foundation): the background itself — charcoal +
+   blueprint-grid — moved out of this file entirely. It's no longer a
+   homepage thing extended to other pages; it's the frozen visual
+   foundation for the whole site, defined once in css/base/foundation.css
+   as .page-foundation and applied via a body class on every top-level
+   page (see any page's <body> tag). This file no longer paints any
+   background at all — .landing-hero and .home-block are transparent and
+   simply let body's foundation show through, which also means the grid
+   tiles continuously under the whole page rather than restarting at
+   each section's own top-left corner. --hero-text/--hero-text-muted
+   stay here (hero-specific text tokens, not part of the page
+   foundation); --hero-bg is gone — it had exactly one consumer (this
+   selector's own background, now removed) and would've been dead
+   weight duplicating --surface-page for no reason. */
 .landing-hero,
 .home-block {
-    --hero-bg: var(--surface-page);
     --hero-text: #f3efe8;
     --hero-text-muted: #c7bfb6;
-
-    background: url("../../../assets/patterns/blueprint-grid.svg") repeat, var(--hero-bg);
 }
 
 .home-block {
     padding: 80px 0;
 }
 
-/* The footer is a shared component (css/layout/footer.css, injected via
-   js/core/layout.js's loadFooter() identically on every page) and stays
-   untouched there — it correctly uses the app-wide --color-bg on every
-   other page. Scoped here instead, via the .home-page class added to
-   index.html's <body>, so only the homepage's footer picks up the same
-   --surface-page + blueprint-grid treatment as the hero and every
-   .home-block above it. Without this, the page was deep charcoal
-   end-to-end except the very last section, which fell back to the
-   shared --color-bg (#4F4C55) — a mid-gray cliff at the bottom that
-   broke the "continuous engineering workspace, top to bottom" the rest
-   of the page achieves. Text/border tokens re-verified against
-   --surface-page specifically: --color-text 15.2:1, --color-text-
-   secondary 11.5:1, --color-border 7.1:1 — all still comfortably above
-   AA. .footer is now a full-viewport-width band (see footer.css) — this
-   background spans edge to edge, while .footer-inner still constrains
-   the actual link columns to the usual 1200px. */
-body.home-page .footer {
-    background: url("../../../assets/patterns/blueprint-grid.svg") repeat, var(--surface-page);
-}
-
-/* Milestone 19 (homepage redesign, revised): --hero-bg is Concept 1's
-   own approved hex value verbatim, not a blend toward Concept 2's
-   near-black — the brief asked for Concept 1's color hierarchy "much
-   more faithfully." Still scoped to this page, not the shared tokens
-   in css/base/tokens.css, so the rest of the app is untouched. Every
-   pairing below is WCAG AA-verified against --hero-bg specifically
-   (existing tokens were only ever verified against the lighter shared
-   surface ramp): --hero-text 14.4:1, --hero-text-muted 9.1:1,
-   --color-primary (badge/link text) 10.7:1. */
+/* Milestone 19 (homepage redesign, revised): --hero-text/--hero-text-
+   muted are Concept 1's own approved hex values verbatim, not a blend
+   toward Concept 2's near-black — the brief asked for Concept 1's color
+   hierarchy "much more faithfully." Every pairing below is WCAG AA-
+   verified against --surface-page (the page foundation's background,
+   css/base/foundation.css) specifically — existing shared tokens were
+   only ever verified against the lighter app-wide surface ramp:
+   --hero-text 14.4:1, --hero-text-muted 9.1:1, --color-primary
+   (badge/link text) 10.7:1. */
 .landing-hero {
     min-height: 62vh;
     display: flex;
@@ -118,15 +102,15 @@ body.home-page .footer {
 
 /* The badge and secondary button's default styles (--color-surface-2
    fill, --border outline) were verified against the shared, lighter
-   surface ramp — against --hero-bg they'd read as a flat gray block on
-   near-black. Overridden here to the same lavender-only-as-accent
-   language as the rest of this hero: transparent fills, lavender/warm-
-   white borders at opacities chosen to clear the 3:1 non-text minimum
-   against --hero-bg specifically (.6 lavender = 3.51:1, .4 warm white =
-   3.49:1 — verified, not eyeballed).
+   surface ramp — against the page foundation's --surface-page they'd
+   read as a flat gray block on near-black. Overridden here to the same
+   lavender-only-as-accent language as the rest of this hero: transparent
+   fills, lavender/warm-white borders at opacities chosen to clear the
+   3:1 non-text minimum against --surface-page specifically (.6 lavender
+   = 3.51:1, .4 warm white = 3.49:1 — verified, not eyeballed).
 
    Extended to .home-block too (not just .landing-hero) now that every
-   section shares the same #201E26 background — the Spotlight, Explore
+   section shares the same page-foundation background — the Spotlight, Explore
    Technologies, and Activity eyebrows use the same .hero-badge class
    and would otherwise still render in the lighter default treatment,
    the one thing left over from when only the hero was this dark. The
@@ -195,6 +179,49 @@ body.home-page .footer {
     }
 }
 
+/* Narrower than the 900px stack above — that breakpoint only collapses
+   .landing-hero .container to one column, it doesn't touch alignment,
+   so the now-full-width hero content stayed left-aligned, which read
+   too left-heavy on a phone. Below 640px it centers instead: badge,
+   h1, description, and the CTAs all align to the middle, buttons stack
+   and match width, and the section's forced 62vh min-height (a
+   deliberate desktop/tablet proportion) is dropped in favor of sizing
+   to content, since a shorter centered stack inside a fixed 62vh was
+   leaving a lot of empty space above and below it. Desktop and tablet
+   (>640px) are untouched — nothing here is declared outside this
+   query, and .hero-visual/.hero-mark's own sizing (already responsive
+   at 900px/600px above) isn't touched either. Selectors are the same
+   ones already used elsewhere in this file for these elements — no
+   new classes. */
+@media (max-width: 640px) {
+    .landing-hero {
+        min-height: auto;
+        padding: 48px 0;
+    }
+
+    .hero-content {
+        max-width: 32rem;
+        margin-inline: auto;
+        text-align: center;
+    }
+
+    .hero-content h1 {
+        font-size: clamp(2.5rem, 11vw, 3rem);
+        line-height: .92;
+    }
+
+    .hero-actions {
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+    }
+
+    .hero-actions .btn {
+        width: min(100%, 22rem);
+        justify-content: center;
+    }
+}
+
 /* Milestone 19 (homepage redesign, corrected): 6 modules, geometrically
    derived from the real mark's own construction, not the earlier
    AI-generated reference image. assets/brand/logo/favicon.svg's hexagon
@@ -234,91 +261,104 @@ body.home-page .footer {
     }
 }
 
-.hero-mark-tiles {
-    transform-box: fill-box;
-    transform-origin: center;
-}
-
 /* Two lavender tokens together, not a new invented color: --primary-
    strong as the flat fill, --primary as a 1px edge at low opacity for
    definition. Fill opacity is intentionally under 1 — full-opacity flat
-   rectangles read as "thick/graphic"; a hair of transparency plus a
-   thin edge reads closer to an engineered panel than a printed shape.
-   --fr (final resting rotation) applies unconditionally, even with no
-   animation running — the slight per-module tilt is part of the
-   permanent design, not just a flourish during motion. */
+   shapes read as "thick/graphic"; a hair of transparency plus a thin
+   edge reads closer to an engineered panel than a printed shape. No
+   per-piece rotation here (see index.html's comment on this markup) —
+   these are traced from the real logo's precisely-fitted pieces, not
+   synthetic wedges with room for an artistic tilt. */
 .hero-mark-tile {
     fill: var(--primary-strong);
     fill-opacity: .92;
     stroke: var(--primary);
     stroke-opacity: .35;
     stroke-width: 1;
-    transform: rotate(var(--fr));
     transform-box: fill-box;
     transform-origin: center;
 }
 
 /* Reduced motion — and any environment where the media feature can't be
    evaluated at all — is the DEFAULT above: every tile already at its
-   resting x/y/width/height/rotation, no translation, no animation.
-   Motion is strictly opt-in inside the no-preference query below, never
-   the reverse, so there's no window where motion could flash before a
-   browser applies the query. */
+   resting position, full opacity, no animation. Motion is strictly
+   opt-in inside the no-preference query below, never the reverse, so
+   there's no window where motion could flash before a browser applies
+   the query. This also directly satisfies "show the complete static
+   logo, no staggered animation" for prefers-reduced-motion: reduce —
+   that state needs no separate rule of its own, it's just what happens
+   when the query below doesn't match.
+
+   Two chained animations per tile, both driven off the same --i
+   (0-4, clockwise, set inline in index.html — 5 pieces, not 6; see that
+   file's comment for why) so the whole sequence's timing lives in one
+   formula instead of five hand-picked delays:
+
+   1. hero-mark-enter — one pass only (animation-iteration-count: 1).
+      Each tile fades and scales in, staggered 90ms apart in DOM/
+      clockwise order — "pieces appear one after another around the
+      circle."
+   2. hero-mark-spiral — infinite, starts only once the entire mark has
+      finished entering (900ms, just after the last tile's own enter
+      finishes at 4*90ms + 500ms = 860ms). Delayed a further
+      var(--i) * 1600ms per tile — 1600ms is exactly 1/5 of the 8s loop,
+      so the five tiles are always evenly spaced around the cycle. (An
+      earlier 4s/800ms pass read as too fast — this is the same design
+      at half speed, nothing else changed.) Each tile's own keyframe
+      dips low then recovers once per loop; because every tile runs the
+      identical keyframe just phase-shifted by a fifth of the loop, the
+      single dip appears to travel continuously clockwise around the
+      mark forever — "once all pieces are visible, the first
+      disappears, then the next, continuing around" — without ever
+      touching position or rotation, so the mark itself never reads as
+      spinning, only the gap moves. */
 @media (prefers-reduced-motion: no-preference) {
     .hero-mark-tile {
-        transform: translate(var(--tx), var(--ty)) rotate(var(--tr));
-        animation: hero-tile-place .7s var(--ease-precise) forwards;
-        /* per-module stagger set inline via animation-delay on each <path> */
-    }
-
-    .hero-mark-tiles {
-        animation: hero-tiles-settle .3s var(--ease-standard) .975s forwards;
+        animation-name: hero-mark-enter, hero-mark-spiral;
+        animation-duration: .5s, 8s;
+        animation-timing-function: var(--ease-precise), var(--ease-standard);
+        animation-delay: calc(var(--i) * 90ms), calc(900ms + var(--i) * 1600ms);
+        animation-iteration-count: 1, infinite;
+        animation-fill-mode: both, none;
     }
 }
 
-/* Five beats, matching the brief exactly:
-   1. scattered  — 0%, the --tx/--ty/--tr starting offset (--tr is each
-                    tile's full starting rotation, not just a delta)
-   2. align      — 0-35%, rotation resolves from --tr to the module's own
-                    --fr resting tilt while position is still only 40% of
-                    the way home — a distinct motion, not the same tween
-                    as the move itself
-   3. assemble   — 35-70%, position finishes closing the remaining gap
-   4. (see hero-tiles-settle below, applied once to the whole group)
-   5. remain still — 70-100% holds at --fr; nothing after this frame ever
-                    moves the tile again. Opacity is never touched — the
-                    tiles don't fade in or out, because they're not a
-                    placeholder for something else to replace. */
-@keyframes hero-tile-place {
+@keyframes hero-mark-enter {
     0% {
-        transform: translate(var(--tx), var(--ty)) rotate(var(--tr));
+        opacity: 0;
+        transform: scale(.92);
     }
 
-    35% {
-        transform: translate(calc(var(--tx) * .4), calc(var(--ty) * .4)) rotate(var(--fr));
-    }
-
-    70%,
     100% {
-        transform: translate(0, 0) rotate(var(--fr));
+        opacity: 1;
+        transform: scale(1);
     }
 }
 
-/* Beat 4, "one final settling movement" — applied once to the whole
-   composition together (not per tile), starting only after the last
-   tile has already arrived (275ms stagger + 700ms duration = 975ms).
-   A single pass, not a loop: this keyframe has no iteration-count above
-   the animation shorthand's default of 1. */
-@keyframes hero-tiles-settle {
-    0% {
+/* 0%/100% are identical (opacity 1, scale 1) so the infinite loop never
+   shows a jump at the wrap. The dip window is exactly 76%-96% — the
+   full 20% (1/5) per-tile stagger, not a narrower slice with idle time
+   on either side — so that the instant one tile finishes recovering
+   (96% of its own cycle) is the exact same global moment the next tile
+   in line starts dipping (76% of its own cycle, since consecutive
+   tiles are offset by exactly one stagger step = 20% of the loop): as
+   one piece finishes appearing, the next one immediately begins
+   disappearing, with no static all-visible pause between handoffs. */
+@keyframes hero-mark-spiral {
+    0%,
+    76% {
+        opacity: 1;
         transform: scale(1);
     }
 
-    60% {
-        transform: scale(1.012);
+    86% {
+        opacity: .12;
+        transform: scale(.92);
     }
 
+    96%,
     100% {
+        opacity: 1;
         transform: scale(1);
     }
 }

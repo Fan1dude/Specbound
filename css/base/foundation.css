@@ -1,0 +1,37 @@
+/* ---------- Page Foundation ---------- */
+/*
+ * This is the global Specbound page foundation — the one and only
+ * definition of the site's page background: the charcoal base
+ * (--surface-page, css/base/tokens.css) plus a low-opacity, tileable
+ * blueprint-grid texture (assets/patterns/blueprint-grid.svg — opacity
+ * is baked into that file itself, 1.5%/3%, not applied via an extra CSS
+ * opacity here). As of Milestone 21 this is FROZEN and considered
+ * complete: every top-level page uses it, and it is not expected to
+ * change again except for a genuine usability fix.
+ *
+ * DO NOT redefine the page background, blueprint-grid texture, or
+ * footer background anywhere else. Every top-level page's <body> must
+ * carry class="page-foundation" and inherit this rule rather than
+ * declaring its own background, its own --surface-page value, or
+ * another reference to the blueprint-grid SVG file. A new page gets
+ * the foundation automatically by adding this one class to its
+ * <body> — nothing else is required, and nothing else should touch
+ * background.
+ *
+ * Painting the background once here, on body, rather than per-section
+ * as earlier passes did, also means the grid tiles continuously under
+ * the whole page with no risk of a seam at a section boundary — every
+ * section above it is transparent and simply lets this show through.
+ *
+ * .footer is a full-viewport-width band on every page (see
+ * css/layout/footer.css's .footer/.footer-inner split) — giving it the
+ * identical background here keeps the bottom of the page part of the
+ * same continuous workspace.
+ */
+.page-foundation {
+    background: url("../../assets/patterns/blueprint-grid.svg") repeat, var(--surface-page);
+}
+
+.page-foundation .footer {
+    background: url("../../assets/patterns/blueprint-grid.svg") repeat, var(--surface-page);
+}

@@ -376,33 +376,45 @@
 }
 
 /* Milestone 20 (dark workspace rollout): extends the homepage's
-   #201E26 + blueprint-grid system to Explore, using the shared
-   --surface-* scale from css/base/tokens.css (page / card / raised /
-   input — see that file's own comment for the full rationale). Every
-   rule below is scoped behind body.explore-page (set in
-   pages/explore.html) so no other page that uses these same shared
-   classes — .blueprint-card also renders on the homepage, Workshop,
-   and Profile — is affected. Purple accents (--primary, --color-
-   primary-soft, --color-primary-strong) are untouched throughout;
-   only the gray fills change. Text/border tokens were already
-   re-verified against every step of this surface scale when it was
-   defined — --color-text/-secondary/-muted and --color-border all
-   clear AA against --surface-page, --surface-card, --surface-raised,
-   and --surface-input alike. */
-body.explore-page {
-    background: url("../../../assets/patterns/blueprint-grid.svg") repeat, var(--surface-page);
-}
+   dark-workspace system to Explore, using the shared --surface-* scale
+   from css/base/tokens.css (page / card / raised / input — see that
+   file's own comment for the full rationale). Every rule below is
+   scoped behind body.explore-shell (set in pages/explore.html) so no
+   other page that uses these same shared classes — .blueprint-card
+   also renders on the homepage, Workshop, and Profile — is affected.
+   Purple accents (--primary, --color-primary-soft, --color-primary-
+   strong) are untouched throughout; only the gray fills change. Text/
+   border tokens were already re-verified against every step of this
+   surface scale when it was defined — --color-text/-secondary/-muted
+   and --color-border all clear AA against --surface-page, --surface-
+   card, --surface-raised, and --surface-input alike.
 
-body.explore-page .footer {
-    background: url("../../../assets/patterns/blueprint-grid.svg") repeat, var(--surface-page);
-}
+   Milestone 21 (page foundation): the page/footer background itself
+   moved out of this file — it's no longer Explore-specific, it's the
+   site-wide foundation defined once in css/base/foundation.css as
+   .page-foundation (applied to <body> alongside .explore-shell). What
+   remains below is genuinely Explore-specific: its cards, inputs, and
+   controls sitting on top of that shared foundation.
+
+   Milestone 22 (navbar/body class collision fix): the body class used
+   to be .explore-page, same name as .explore-page below (the <main>
+   element's own content-width class, line 1 of this file) — harmless
+   on its own, but once .navbar became a full-bleed element whose
+   width:100% depends on <body> itself not being width-constrained
+   (css/layout/navbar.css), that collision meant .explore-page's
+   width: min(--container-xl, 94%); margin: 0 auto declaration was
+   silently also applying to <body>, centering and shrinking the whole
+   page and breaking the navbar's edge-to-edge width on Explore
+   specifically. Renamed to .explore-shell (pages/explore.html) so the
+   body-level scoping class can never collide with a content-width
+   class again, on this or any future page. */
 
 /* Actual text-entry fields — the darkest, most "recessed" tier. */
-body.explore-page .explore-search input,
-body.explore-page .filter-section input[type="text"],
-body.explore-page .filter-section select,
-body.explore-page .catalog-sort select,
-body.explore-page .search-suggestion {
+body.explore-shell .explore-search input,
+body.explore-shell .filter-section input[type="text"],
+body.explore-shell .filter-section select,
+body.explore-shell .catalog-sort select,
+body.explore-shell .search-suggestion {
     background: var(--surface-input);
 }
 
@@ -410,15 +422,15 @@ body.explore-page .search-suggestion {
    so hierarchy still reads without a big color jump. Hover/active
    states are re-declared immediately after each, at matching
    specificity, purely so the cascade still resolves in the same order
-   it did before (adding the body.explore-page prefix to the resting
+   it did before (adding the body.explore-shell prefix to the resting
    rule alone would otherwise outrank the existing :hover/.active rule
    by one selector level and break the accent highlight). Their values
    are untouched — same rgba(183, 154, 230, ...) lavender tints as
    before this pass. */
-body.explore-page .filter-panel,
-body.explore-page .lifecycle-filter,
-body.explore-page .filter-pill,
-body.explore-page .blueprint-card {
+body.explore-shell .filter-panel,
+body.explore-shell .lifecycle-filter,
+body.explore-shell .filter-pill,
+body.explore-shell .blueprint-card {
     background: var(--surface-card);
 }
 
@@ -439,14 +451,14 @@ body.explore-page .blueprint-card {
    below the 3:1 minimum — a pre-existing gap this pass fixes, not one
    introduced by the darker surface tokens (it was worse still, 1.67:1/
    1.84:1, against the mid-gray surfaces these sat on before). */
-body.explore-page .lifecycle-filter:hover,
-body.explore-page .lifecycle-filter.active {
+body.explore-shell .lifecycle-filter:hover,
+body.explore-shell .lifecycle-filter.active {
     background: var(--color-primary-soft);
     border-color: rgba(183, 154, 230, .75);
 }
 
-body.explore-page .filter-pill:hover,
-body.explore-page .filter-pill.active {
+body.explore-shell .filter-pill:hover,
+body.explore-shell .filter-pill.active {
     background: rgba(183, 154, 230, .05);
     border-color: rgba(183, 154, 230, .75);
 }
@@ -455,16 +467,16 @@ body.explore-page .filter-pill.active {
    page content on a shadow; the card's image slot and spec strip read
    as a step up from the card body around them. One step lighter than
    --surface-card for that separation. */
-body.explore-page .search-suggestions,
-body.explore-page .blueprint-card-image,
-body.explore-page .blueprint-card-specs {
+body.explore-shell .search-suggestions,
+body.explore-shell .blueprint-card-image,
+body.explore-shell .blueprint-card-specs {
     background: var(--surface-raised);
 }
 
 /* Same lavender-only-as-accent badge treatment as the homepage hero —
    the default --color-surface-2 fill reads as a flat gray block
    against this much darker page. */
-body.explore-page .hero-badge {
+body.explore-shell .hero-badge {
     background: rgba(183, 154, 230, .08);
     border: 1px solid rgba(183, 154, 230, .6);
     color: var(--primary);

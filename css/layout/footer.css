@@ -1,10 +1,10 @@
-/* .footer is now the full-viewport-width band (so a page-specific
-   background — see body.home-page/.explore-page/.upload-page in each
-   page's own CSS — can span edge to edge); .footer-inner (wrapped
-   around the injected content in js/core/layout.js's loadFooter())
-   carries every bit of the actual constrained layout this used to do
-   alone. Visually identical on every page that doesn't set a .footer
-   background: same width, centering, padding, border position, grid. */
+/* .footer is now the full-viewport-width band, so the page foundation's
+   background (.page-foundation .footer, css/base/foundation.css) can
+   span edge to edge on every page; .footer-inner (wrapped around the
+   injected content in js/core/layout.js's loadFooter()) carries every
+   bit of the actual constrained layout this used to do alone — same
+   width, centering, padding, border position, grid as before this
+   split, just on the inner element now instead of .footer itself. */
 .footer {
     width: 100%;
 }

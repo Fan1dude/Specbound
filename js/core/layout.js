@@ -46,40 +46,42 @@ export async function loadNavbar(pathPrefix = "") {
     }
 
     navbar.innerHTML = `
-        <h1 class="logo">
-            <a href="${pathPrefix}index.html">
-                SPECBOUND
-            </a>
-        </h1>
+        <div class="navbar-inner">
+            <h1 class="logo">
+                <a href="${pathPrefix}index.html">
+                    SPECBOUND
+                </a>
+            </h1>
 
-        <button
-            class="nav-toggle"
-            id="navToggle"
-            type="button"
-            aria-expanded="false"
-            aria-controls="navLinks"
-            aria-label="Toggle navigation menu"
-        >
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <line x1="3" y1="6" x2="21" y2="6"></line>
-                <line x1="3" y1="12" x2="21" y2="12"></line>
-                <line x1="3" y1="18" x2="21" y2="18"></line>
-            </svg>
-        </button>
+            <button
+                class="nav-toggle"
+                id="navToggle"
+                type="button"
+                aria-expanded="false"
+                aria-controls="navLinks"
+                aria-label="Toggle navigation menu"
+            >
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
 
-        <input
-            class="search-bar"
-            type="text"
-            placeholder="Search builds, builders, parts..."
-            aria-label="Search builds, builders, parts"
-        >
+            <input
+                class="search-bar"
+                type="text"
+                placeholder="Search builds, builders, parts..."
+                aria-label="Search builds, builders, parts"
+            >
 
-        <div class="nav-links" id="navLinks">
-            <a href="${pathPrefix}pages/explore.html">Explore</a>
-            <a href="${pathPrefix}pages/workshop.html">Workshop</a>
-            <a href="${pathPrefix}pages/upload.html">Publish</a>
-            ${user ? `<div id="notificationBellContainer"></div>` : ""}
-            ${authLinks}
+            <div class="nav-links" id="navLinks">
+                <a href="${pathPrefix}pages/explore.html">Explore</a>
+                <a href="${pathPrefix}pages/workshop.html">Workshop</a>
+                <a href="${pathPrefix}pages/upload.html">Publish</a>
+                ${user ? `<div id="notificationBellContainer"></div>` : ""}
+                ${authLinks}
+            </div>
         </div>
     `;
 

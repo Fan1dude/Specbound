@@ -1,13 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Specbound symbol">
-    <defs>
-        <mask id="specbound-mask">
-            <rect width="128" height="128" fill="black"/>
-            <path d="M56 9 C61 6 67 6 72 9 L112 33 C117 36 120 41 120 47 L120 81 C120 87 117 92 112 95 L72 119 C67 122 61 122 56 119 L16 95 C11 92 8 87 8 81 L8 47 C8 41 11 36 16 33 Z" fill="white"/>
-            <!-- Negative-space S -->
-            <path d="M91 39 C82 27 49 27 39 42 C31 54 40 63 58 67 L72 70 C87 73 97 81 89 95 C79 110 46 108 36 94" fill="none" stroke="black" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
-            <!-- Wide modular tile gaps -->
-            <path d="M19 34 L47 51 M78 13 L77 35 M112 48 L88 62 M108 94 L80 78 M50 115 L51 92 M10 79 L36 64" fill="none" stroke="black" stroke-width="6.5" stroke-linecap="round"/>
-        </mask>
-    </defs>
-    <rect width="128" height="128" fill="#B79AE6" mask="url(#specbound-mask)"/>
+    <!-- Traced directly from the real Specbound logo (the same source
+         image used for the site's raster favicon exports), not
+         approximated — connected-component + contour extraction on
+         that file's pixels, same geometry used by the animated hero
+         mark on the homepage (see index.html's .hero-mark and
+         css/pages/home/home.css). Replaces the previous version of
+         this file, which was a single hexagon shape with a masked-out
+         negative-space "S" — a different, earlier construction that no
+         longer matches the actual logo. Flat single-tone fill, no
+         gradient, per docs/BRAND.md. -->
+    <g fill="#B79AE6">
+        <path d="M 63.59 14.0 L 60.14 14.71 L 26.03 35.52 L 22.78 40.9 L 22.98 60.9 L 24.2 63.54 L 57.71 83.04 L 68.26 77.76 L 70.6 75.22 L 46.23 60.29 L 45.32 49.74 L 47.25 46.79 L 61.77 37.96 L 69.89 39.79 L 74.66 36.74 L 75.07 21.01 L 73.24 18.87 Z"/>
+        <path d="M 80.35 26.39 L 78.92 29.23 L 78.92 42.22 L 80.04 44.86 L 97.71 55.62 L 100.04 55.93 L 103.29 54.51 L 104.61 52.88 L 105.22 51.06 L 105.22 39.69 L 104.2 37.15 L 102.58 35.62 L 85.22 25.57 L 82.48 25.27 Z"/>
+        <path d="M 67.25 45.98 L 55.68 52.68 L 54.86 54.1 L 80.24 70.65 L 80.85 79.48 L 79.33 83.24 L 79.33 99.28 L 81.36 102.43 L 84.71 102.83 L 101.97 92.68 L 104.41 90.04 L 105.22 87.6 L 105.12 68.21 L 102.58 64.66 L 71.72 46.79 Z"/>
+        <path d="M 24.81 74.41 L 23.09 77.35 L 23.09 88.31 L 24.41 91.36 L 42.68 102.63 L 45.22 102.93 L 46.84 102.22 L 48.57 99.38 L 48.57 86.39 L 47.45 83.85 L 30.09 73.29 L 27.05 73.19 Z"/>
+        <path d="M 73.85 87.3 L 70.9 87.6 L 64.0 91.56 L 61.56 91.46 L 57.5 89.43 L 54.96 89.74 L 52.63 91.56 L 51.82 94.0 L 51.82 105.07 L 52.22 106.89 L 53.75 108.92 L 61.46 113.59 L 64.81 114.0 L 66.94 113.29 L 74.86 108.21 L 76.08 105.07 L 76.08 90.45 L 75.37 88.42 Z"/>
+    </g>
 </svg>

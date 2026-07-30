@@ -37,18 +37,22 @@
     --color-surface-2: #5A5760;
     --color-surface-3: #5A5760;
 
-    /* Dark workspace surfaces — additive, opt-in. Not part of the
-       warm-graphite ramp above and not used by default anywhere: only
-       pages that explicitly opt in via a body class (currently
-       body.home-page, body.explore-page, body.upload-page) reference
-       these, in css/pages/home/home.css, css/pages/explore/explore.css,
-       and css/pages/upload/upload.css. A fixed 4-step scale rather than
-       one-off hex values per component, so every dark-workspace surface
-       comes from the same family: page background, then progressively
-       lighter for a resting card, a raised/floating element (dropdowns,
-       popovers), and a recessed input field. All four re-verified
-       against every text/border token that pairs with them — see each
-       consuming file's own comments for the specific ratios. */
+    /* Dark workspace surfaces — additive. Not part of the warm-graphite
+       ramp above; --surface-page is the frozen site-wide page
+       background/foundation (css/base/foundation.css's .page-foundation,
+       applied via a body class on every top-level page), while
+       --surface-card/-raised/-input are consumed page-by-page as each
+       page's own cards/panels/inputs get migrated off the old mid-gray
+       fills (currently css/pages/home/home.css, css/pages/explore/
+       explore.css, css/pages/upload/upload.css, css/components/
+       spotlight.css — not yet every page). A fixed 4-step scale rather
+       than one-off hex values per component, so every dark-workspace
+       surface comes from the same family: page background, then
+       progressively lighter for a resting card, a raised/floating
+       element (dropdowns, popovers), and a recessed input field. All
+       four re-verified against every text/border token that pairs with
+       them — see each consuming file's own comments for the specific
+       ratios. */
     --surface-page: #201E26;
     --surface-card: #292631;
     --surface-raised: #302C39;

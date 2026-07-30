@@ -131,32 +131,40 @@
     text-align: right;
 }
 
-/* Milestone 20 (dark workspace rollout): same #201E26 + blueprint-grid
-   system as the homepage and Explore, using the shared --surface-*
-   scale from css/base/tokens.css. Scoped behind body.upload-page (set
-   in pages/upload.html) so no other page is affected — .btn-primary is
+/* Milestone 20 (dark workspace rollout): same dark-workspace system as
+   the homepage and Explore, using the shared --surface-* scale from
+   css/base/tokens.css. Scoped behind body.upload-shell (set in
+   pages/upload.html) so no other page is affected — .btn-primary is
    untouched everywhere (it's already a purple fill, not a gray one),
-   preserving the accent color as-is. */
-body.upload-page {
-    background: url("../../../assets/patterns/blueprint-grid.svg") repeat, var(--surface-page);
-}
+   preserving the accent color as-is.
 
-body.upload-page .footer {
-    background: url("../../../assets/patterns/blueprint-grid.svg") repeat, var(--surface-page);
-}
+   Milestone 21 (page foundation): the page/footer background itself
+   moved to css/base/foundation.css's .page-foundation (applied to
+   <body> alongside .upload-shell) — it's the site-wide foundation now,
+   not something Publish defines for itself. What remains below is
+   genuinely Publish-specific: the form card and its inputs.
 
-body.upload-page .form-card {
+   Milestone 22 (navbar/body class collision fix): the body class used
+   to be .upload-page, colliding with .upload-page below (the <main>
+   element's own content-width class, line 1 of this file). Once
+   .navbar became a full-bleed element depending on <body> itself not
+   being width-constrained (css/layout/navbar.css), that collision
+   silently applied .upload-page's own width: min(1100px, 92%); margin:
+   0 auto to <body>, breaking the navbar's edge-to-edge width on
+   Publish. Renamed to .upload-shell (pages/upload.html) so a body-level
+   scoping class can't collide with a content-width class again. */
+body.upload-shell .form-card {
     background: var(--surface-card);
 }
 
-body.upload-page .upload-form input,
-body.upload-page .upload-form textarea,
-body.upload-page .upload-form select,
-body.upload-page .progress-input {
+body.upload-shell .upload-form input,
+body.upload-shell .upload-form textarea,
+body.upload-shell .upload-form select,
+body.upload-shell .progress-input {
     background: var(--surface-input);
 }
 
-body.upload-page .hero-badge {
+body.upload-shell .hero-badge {
     background: rgba(183, 154, 230, .08);
     border: 1px solid rgba(183, 154, 230, .6);
     color: var(--primary);
