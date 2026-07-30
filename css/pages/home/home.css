@@ -11,19 +11,17 @@
    in index.html is inert (kept as an empty, harmless aria-hidden div
    rather than editing markup as part of a styling-only milestone). */
 
-/* Milestone 19 (homepage redesign): a deeper, hero-only foundation —
-   scoped to .landing-hero, not the shared tokens in css/base/tokens.css,
-   so the rest of the app (including the rest of this same page, below
-   the hero) is untouched. --hero-bg measures 0.008 relative luminance
-   vs --color-bg's 0.0749 — an order of magnitude darker, which is what
-   actually creates "surface separation" between the hero and the real-
-   builds section under it, without needing a second new color tier.
+/* Milestone 19 (homepage redesign, revised): --hero-bg is Concept 1's
+   own approved hex value verbatim, not a blend toward Concept 2's
+   near-black — the brief asked for Concept 1's color hierarchy "much
+   more faithfully." Still scoped to .landing-hero only, not the shared
+   tokens in css/base/tokens.css, so the rest of the app is untouched.
    Every pairing below is WCAG AA-verified against --hero-bg specifically
    (existing tokens were only ever verified against the lighter shared
-   surface ramp): --hero-text 15.8:1, --hero-text-muted 9.97:1,
-   --color-primary (badge/link text) 11.8:1. */
+   surface ramp): --hero-text 14.4:1, --hero-text-muted 9.1:1,
+   --color-primary (badge/link text) 10.7:1. */
 .landing-hero {
-    --hero-bg: #17151b;
+    --hero-bg: #201e26;
     --hero-text: #f3efe8;
     --hero-text-muted: #c7bfb6;
 
@@ -113,21 +111,23 @@
     }
 }
 
-/* Milestone 19 (homepage redesign): the mark stands free on the
-   background — no card, no box, no border, replacing the previous
-   .blueprint-card mock entirely. Built as one inline SVG (not
-   independent absolutely-positioned HTML blocks) so the whole
-   composition transforms/animates as real vector geometry: a handful
-   of simple tile <rect>s that assemble, plus the exact mark path data
-   from assets/brand/logo/favicon.svg (copied verbatim, not redrawn)
-   revealed underneath once the tiles resolve. Single accent color via
-   currentColor — this is the one saturated, non-warm-white, non-
-   charcoal element in the entire hero. */
+/* Milestone 19 (homepage redesign, revised): a modular tile composition,
+   not a logo rendering. Earlier version of this hero resolved the tiles
+   into the mark's own solid masked fill at rest — which read as exactly
+   what it was, a large logo. This version never fuses: the 7 tiles ARE
+   the permanent resting state. Their positions are the mark's own
+   interior construction (favicon.svg's tile-gap-line + S-channel
+   geometry) scaled ~1.5x outward from the mark's center and rendered as
+   genuinely separate pieces, so the implied S only emerges from noticing
+   the relationship between pieces — nothing here is one continuous
+   S-shaped silhouette. Smaller footprint than before (240px vs 340px)
+   and more internal negative space, on purpose: the composition should
+   read as spacious first, and only resolve into "oh, that's the mark"
+   on a second look. */
 .hero-mark {
-    width: min(340px, 80%);
+    width: min(240px, 60%);
     height: auto;
     overflow: visible;
-    color: var(--primary-strong);
 }
 
 /* Placed after the base .hero-mark rule (not inside the earlier 900px
@@ -135,84 +135,86 @@
    equal specificity, so source order is what decides it. */
 @media (max-width: 900px) {
     .hero-mark {
-        width: min(220px, 55%);
+        width: min(160px, 46%);
     }
 }
 
-.hero-mark-final {
-    fill: currentColor;
-    opacity: 1;
+.hero-mark-tiles {
     transform-box: fill-box;
     transform-origin: center;
 }
 
+/* Two lavender tokens together, not a new invented color: --primary-
+   strong as the flat fill, --primary as a 1px edge at low opacity for
+   definition. Fill opacity is intentionally under 1 — full-opacity flat
+   rectangles read as "thick/graphic"; a hair of transparency plus a
+   thin edge reads closer to an engineered panel than a printed shape. */
 .hero-mark-tile {
-    fill: currentColor;
-    opacity: 0;
+    fill: var(--primary-strong);
+    fill-opacity: .92;
+    stroke: var(--primary);
+    stroke-opacity: .35;
+    stroke-width: 1;
     transform-box: fill-box;
     transform-origin: center;
 }
 
 /* Reduced motion — and any environment where the media feature can't be
-   evaluated at all — is the DEFAULT above: no tiles rendered, the mark
-   already fully assembled and still. Motion is strictly opt-in inside
-   the no-preference query below, never the reverse, so there is no
-   window where motion could flash before a browser applies the query. */
+   evaluated at all — is the DEFAULT above: every tile already at its
+   resting x/y/width/height, no transform applied, no animation. Motion
+   is strictly opt-in inside the no-preference query below, never the
+   reverse, so there's no window where motion could flash before a
+   browser applies the query. */
 @media (prefers-reduced-motion: no-preference) {
-    .hero-mark-final {
-        opacity: 0;
-        animation:
-            hero-mark-resolve .3s ease-out .8s forwards,
-            hero-mark-settle .26s var(--ease-standard) 1.1s forwards;
-    }
-
     .hero-mark-tile {
-        opacity: 1;
         transform: translate(var(--tx), var(--ty)) rotate(var(--tr));
-        animation: hero-mark-assemble .65s var(--ease-precise) forwards;
+        animation: hero-tile-place .7s var(--ease-precise) forwards;
         /* per-tile stagger set inline via animation-delay on each <rect> */
     }
+
+    .hero-mark-tiles {
+        animation: hero-tiles-settle .3s var(--ease-standard) 1.03s forwards;
+    }
 }
 
-/* Tiles begin at their scattered --tx/--ty/--tr offset, converge to the
-   assembled grid position by 55% (still visible), then fade out — timed
-   to hand off to the precise mark fading in underneath (.hero-mark-
-   resolve) rather than snapping. One pass, no iteration count set above
-   1 (the default), so this never loops. */
-@keyframes hero-mark-assemble {
+/* Five beats, matching the brief exactly:
+   1. scattered  — 0%, the --tx/--ty/--tr starting offset
+   2. align      — 0-35%, rotation resolves to 0 while position is still
+                    only 40% of the way home (a distinct motion, not the
+                    same tween as the move itself)
+   3. assemble   — 35-70%, position finishes closing the remaining gap
+   4. (see hero-tiles-settle below, applied once to the whole group)
+   5. remain still — 70-100% holds; nothing after this frame ever moves
+                    the tile again. Opacity is never touched here — the
+                    tiles don't fade in or out, because they're not a
+                    placeholder for something else to replace. */
+@keyframes hero-tile-place {
     0% {
         transform: translate(var(--tx), var(--ty)) rotate(var(--tr));
-        opacity: 1;
     }
 
-    55% {
-        transform: translate(0, 0) rotate(0deg);
-        opacity: 1;
+    35% {
+        transform: translate(calc(var(--tx) * .4), calc(var(--ty) * .4)) rotate(0deg);
     }
 
+    70%,
     100% {
         transform: translate(0, 0) rotate(0deg);
-        opacity: 0;
     }
 }
 
-@keyframes hero-mark-resolve {
-    to {
-        opacity: 1;
-    }
-}
-
-/* "One very small adjustment" — a single, subtle scale pulse once the
-   real mark has resolved, then it holds still permanently. Not a loop:
-   this keyframe runs exactly once (animation shorthand's default
-   iteration-count), same as the two animations above it. */
-@keyframes hero-mark-settle {
+/* Beat 4, "one final settling movement" — applied once to the whole
+   composition together (not per tile), starting only after the last
+   tile has already arrived (330ms stagger + 700ms duration = 1030ms).
+   A single pass, not a loop: this keyframe has no iteration-count above
+   the animation shorthand's default of 1. */
+@keyframes hero-tiles-settle {
     0% {
         transform: scale(1);
     }
 
-    55% {
-        transform: scale(1.018);
+    60% {
+        transform: scale(1.012);
     }
 
     100% {
