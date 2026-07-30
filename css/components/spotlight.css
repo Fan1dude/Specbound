@@ -1,5 +1,8 @@
+/* Milestone 19: less top padding than the other .home-block sections —
+   real builds are meant to land closer to the fold now that the hero
+   itself is shorter (62vh, was 78vh). Bottom padding unchanged. */
 .featured {
-    padding: 96px 0;
+    padding: 48px 0 96px;
 }
 
 /* Post-M10 refinement: this section's own local ambient glow was
