@@ -131,3 +131,34 @@
     text-align: right;
 }
 
+/* Milestone 20 (dark workspace rollout): same #201E26 + blueprint-grid
+   system as the homepage and Explore, using the shared --surface-*
+   scale from css/base/tokens.css. Scoped behind body.upload-page (set
+   in pages/upload.html) so no other page is affected — .btn-primary is
+   untouched everywhere (it's already a purple fill, not a gray one),
+   preserving the accent color as-is. */
+body.upload-page {
+    background: url("../../../assets/patterns/blueprint-grid.svg") repeat, var(--surface-page);
+}
+
+body.upload-page .footer {
+    background: url("../../../assets/patterns/blueprint-grid.svg") repeat, var(--surface-page);
+}
+
+body.upload-page .form-card {
+    background: var(--surface-card);
+}
+
+body.upload-page .upload-form input,
+body.upload-page .upload-form textarea,
+body.upload-page .upload-form select,
+body.upload-page .progress-input {
+    background: var(--surface-input);
+}
+
+body.upload-page .hero-badge {
+    background: rgba(183, 154, 230, .08);
+    border: 1px solid rgba(183, 154, 230, .6);
+    color: var(--primary);
+}
+

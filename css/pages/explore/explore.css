@@ -374,3 +374,98 @@
     color: var(--primary);
     border-color: var(--primary);
 }
+
+/* Milestone 20 (dark workspace rollout): extends the homepage's
+   #201E26 + blueprint-grid system to Explore, using the shared
+   --surface-* scale from css/base/tokens.css (page / card / raised /
+   input — see that file's own comment for the full rationale). Every
+   rule below is scoped behind body.explore-page (set in
+   pages/explore.html) so no other page that uses these same shared
+   classes — .blueprint-card also renders on the homepage, Workshop,
+   and Profile — is affected. Purple accents (--primary, --color-
+   primary-soft, --color-primary-strong) are untouched throughout;
+   only the gray fills change. Text/border tokens were already
+   re-verified against every step of this surface scale when it was
+   defined — --color-text/-secondary/-muted and --color-border all
+   clear AA against --surface-page, --surface-card, --surface-raised,
+   and --surface-input alike. */
+body.explore-page {
+    background: url("../../../assets/patterns/blueprint-grid.svg") repeat, var(--surface-page);
+}
+
+body.explore-page .footer {
+    background: url("../../../assets/patterns/blueprint-grid.svg") repeat, var(--surface-page);
+}
+
+/* Actual text-entry fields — the darkest, most "recessed" tier. */
+body.explore-page .explore-search input,
+body.explore-page .filter-section input[type="text"],
+body.explore-page .filter-section select,
+body.explore-page .catalog-sort select,
+body.explore-page .search-suggestion {
+    background: var(--surface-input);
+}
+
+/* Resting card/panel-level surfaces — one step lighter than the page,
+   so hierarchy still reads without a big color jump. Hover/active
+   states are re-declared immediately after each, at matching
+   specificity, purely so the cascade still resolves in the same order
+   it did before (adding the body.explore-page prefix to the resting
+   rule alone would otherwise outrank the existing :hover/.active rule
+   by one selector level and break the accent highlight). Their values
+   are untouched — same rgba(183, 154, 230, ...) lavender tints as
+   before this pass. */
+body.explore-page .filter-panel,
+body.explore-page .lifecycle-filter,
+body.explore-page .filter-pill,
+body.explore-page .blueprint-card {
+    background: var(--surface-card);
+}
+
+/* border-color is bumped from the original rgba(183, 154, 230, .42/.45)
+   to .75 — same lavender hue, just more opaque; background/text tints
+   are untouched. WCAG 1.4.11 (non-text, 3:1) applies against whatever
+   is adjacent on either side of the border, so this was checked against
+   both: the surrounding .filter-panel (--surface-card) and each pill's
+   own tinted active/hover fill just inside the border (the tighter
+   constraint — --color-primary-soft's .12 alpha reads closest to the
+   border color of the two, so it was the binding case). At .65 the
+   lifecycle-filter case still fell short of its own fill (2.81:1); .75
+   clears every pairing with margin:
+     vs --surface-card (outer):        4.15:1
+     vs --color-primary-soft fill:     3.34:1  (lifecycle-filter, binding case)
+     vs rgba(lavender, .05) fill:      3.81:1  (filter-pill)
+   The original .42/.45 measured 2.26:1/2.40:1 against --surface-card,
+   below the 3:1 minimum — a pre-existing gap this pass fixes, not one
+   introduced by the darker surface tokens (it was worse still, 1.67:1/
+   1.84:1, against the mid-gray surfaces these sat on before). */
+body.explore-page .lifecycle-filter:hover,
+body.explore-page .lifecycle-filter.active {
+    background: var(--color-primary-soft);
+    border-color: rgba(183, 154, 230, .75);
+}
+
+body.explore-page .filter-pill:hover,
+body.explore-page .filter-pill.active {
+    background: rgba(183, 154, 230, .05);
+    border-color: rgba(183, 154, 230, .75);
+}
+
+/* Raised/floating surfaces — the search-suggestions dropdown sits above
+   page content on a shadow; the card's image slot and spec strip read
+   as a step up from the card body around them. One step lighter than
+   --surface-card for that separation. */
+body.explore-page .search-suggestions,
+body.explore-page .blueprint-card-image,
+body.explore-page .blueprint-card-specs {
+    background: var(--surface-raised);
+}
+
+/* Same lavender-only-as-accent badge treatment as the homepage hero —
+   the default --color-surface-2 fill reads as a flat gray block
+   against this much darker page. */
+body.explore-page .hero-badge {
+    background: rgba(183, 154, 230, .08);
+    border: 1px solid rgba(183, 154, 230, .6);
+    color: var(--primary);
+}

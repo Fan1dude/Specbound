@@ -11,7 +11,14 @@
 
 /* Post-M10 refinement: this section's own local ambient glow was
    folded into one continuous page-wide backdrop instead — see
-   css/pages/home/home.css's .home-ambient rule. */
+   css/pages/home/home.css's .home-ambient rule.
+
+   Milestone 20 (dark workspace rollout): this file is homepage-exclusive
+   (only index.html renders .featured-card), so unlike the shared
+   .blueprint-card component these backgrounds are updated directly
+   rather than scoped behind body.home-page — same --surface-card/
+   -raised scale as everywhere else in this rollout, no blast-radius
+   concern since nothing else consumes this file. */
 .featured-card {
     position: relative;
     z-index: 1;
@@ -20,7 +27,7 @@
     min-height: 520px;
     overflow: hidden;
 
-    background: var(--surface);
+    background: var(--surface-card);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
@@ -28,7 +35,7 @@
 
 .featured-image {
     min-height: 520px;
-    background: var(--surface-2);
+    background: var(--surface-raised);
 }
 
 .featured-image img {
@@ -96,7 +103,7 @@
     height: 10px;
     overflow: hidden;
     border-radius: 999px;
-    background: var(--surface-2);
+    background: var(--surface-raised);
 }
 
 .progress-fill {
@@ -130,7 +137,7 @@
 }
 
 .slide-arrow:hover {
-    background: var(--surface-2);
+    background: var(--surface-raised);
     border-color: rgba(183, 154, 230, .45);
 }
 

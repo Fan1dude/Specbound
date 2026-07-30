@@ -15,13 +15,13 @@
    first a hard cliff (hero #201E26 -> everything else the shared
    #4F4C55), then a softened single step (hero -> #3D3948). Both are
    gone. Every section, hero included, now sits on the exact same
-   #201E26 — no color step at all. Visual interest instead comes from
-   assets/patterns/blueprint-grid.svg, a static two-weight technical
-   grid layered under the flat color at 1.5%/3% opacity (baked into the
-   file itself, not applied via an extra CSS opacity — see that file's
-   own comment). This is docs/BRAND.md's own Interface Character
-   allowance, verbatim: "Subtle ambient workshop backgrounds are
-   allowed — blueprint grids, PCB traces, CAD diagrams... at low
+   page-background tone — no color step at all. Visual interest instead
+   comes from assets/patterns/blueprint-grid.svg, a static two-weight
+   technical grid layered under the flat color at 1.5%/3% opacity
+   (baked into the file itself, not applied via an extra CSS opacity —
+   see that file's own comment). This is docs/BRAND.md's own Interface
+   Character allowance, verbatim: "Subtle ambient workshop backgrounds
+   are allowed — blueprint grids, PCB traces, CAD diagrams... at low
    contrast... must never distract from content." (An older, more
    prominent graph-paper background was removed in Milestone 10 for
    being exactly that — a distraction, not because texture itself is
@@ -31,10 +31,18 @@
    every card/tab), which read more clearly against a darker, flatter
    base than they did before. Shared between .landing-hero and
    .home-block below via one background declaration, not duplicated
-   per-selector, so a future palette change only happens in one place. */
+   per-selector, so a future palette change only happens in one place.
+
+   Milestone 20 (dark workspace rollout): --hero-bg now reads from
+   --surface-page (css/base/tokens.css) instead of repeating the literal
+   #201E26 — the same token also drives Explore (css/pages/explore/
+   explore.css) and Publish (css/pages/upload/upload.css), so all three
+   pages share one source of truth instead of three copies of the same
+   hex value. Purely a reference change: the rendered color is
+   identical to before. */
 .landing-hero,
 .home-block {
-    --hero-bg: #201e26;
+    --hero-bg: var(--surface-page);
     --hero-text: #f3efe8;
     --hero-text-muted: #c7bfb6;
 
@@ -43,6 +51,26 @@
 
 .home-block {
     padding: 80px 0;
+}
+
+/* The footer is a shared component (css/layout/footer.css, injected via
+   js/core/layout.js's loadFooter() identically on every page) and stays
+   untouched there — it correctly uses the app-wide --color-bg on every
+   other page. Scoped here instead, via the .home-page class added to
+   index.html's <body>, so only the homepage's footer picks up the same
+   --surface-page + blueprint-grid treatment as the hero and every
+   .home-block above it. Without this, the page was deep charcoal
+   end-to-end except the very last section, which fell back to the
+   shared --color-bg (#4F4C55) — a mid-gray cliff at the bottom that
+   broke the "continuous engineering workspace, top to bottom" the rest
+   of the page achieves. Text/border tokens re-verified against
+   --surface-page specifically: --color-text 15.2:1, --color-text-
+   secondary 11.5:1, --color-border 7.1:1 — all still comfortably above
+   AA. .footer is now a full-viewport-width band (see footer.css) — this
+   background spans edge to edge, while .footer-inner still constrains
+   the actual link columns to the usual 1200px. */
+body.home-page .footer {
+    background: url("../../../assets/patterns/blueprint-grid.svg") repeat, var(--surface-page);
 }
 
 /* Milestone 19 (homepage redesign, revised): --hero-bg is Concept 1's
@@ -122,6 +150,26 @@
 .home-block .btn-secondary:hover {
     background: rgba(243, 239, 232, .06);
     border-color: rgba(243, 239, 232, .6);
+}
+
+/* Milestone 20 (dark workspace rollout): the Latest Activity feed
+   renders .blueprint-card (css/components/blueprint-card.css) — the
+   same shared component Explore, Workshop, and Profile use — and it
+   was missed in the earlier unification pass, so it was still sitting
+   on the mid-gray --surface/--surface-2/--color-bg-elevated fills
+   against this section's #201E26 background. Same --surface-card/
+   -raised treatment as Explore's cards now, scoped to .home-block so
+   Workshop/Profile's use of the same component is untouched. No
+   hover-state background changes exist on this component (hover only
+   moves transform/border/shadow — see blueprint-card.css), so this is
+   a plain override with no cascade-ordering concerns. */
+.home-block .blueprint-card {
+    background: var(--surface-card);
+}
+
+.home-block .blueprint-card-image,
+.home-block .blueprint-card-specs {
+    background: var(--surface-raised);
 }
 
 .hero-visual {

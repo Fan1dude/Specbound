@@ -37,6 +37,23 @@
     --color-surface-2: #5A5760;
     --color-surface-3: #5A5760;
 
+    /* Dark workspace surfaces — additive, opt-in. Not part of the
+       warm-graphite ramp above and not used by default anywhere: only
+       pages that explicitly opt in via a body class (currently
+       body.home-page, body.explore-page, body.upload-page) reference
+       these, in css/pages/home/home.css, css/pages/explore/explore.css,
+       and css/pages/upload/upload.css. A fixed 4-step scale rather than
+       one-off hex values per component, so every dark-workspace surface
+       comes from the same family: page background, then progressively
+       lighter for a resting card, a raised/floating element (dropdowns,
+       popovers), and a recessed input field. All four re-verified
+       against every text/border token that pairs with them — see each
+       consuming file's own comments for the specific ratios. */
+    --surface-page: #201E26;
+    --surface-card: #292631;
+    --surface-raised: #302C39;
+    --surface-input: #26232D;
+
     /* Border — lightened from BRAND.md's given #8A8491. That value
        only clears WCAG 1.4.11's 3:1 non-text minimum against
        Background itself (2.32:1) and fails against every surface tier
