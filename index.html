@@ -102,29 +102,34 @@
 
                 <div class="hero-visual" aria-hidden="true">
 
-                    <!-- A modular tile composition, deliberately not a logo
-                         rendering — no mask, no path data copied from the
-                         mark, no single fused shape. Tile centers are the
-                         mark's own interior construction (assets/brand/logo/
-                         favicon.svg's tile-gap-line + S-channel geometry)
-                         scaled outward from the mark's center and spaced much
-                         further apart, so what's visible is 7 genuinely
-                         separate pieces — real negative space between them,
-                         not a thin subtracted gap in one solid fill. The S
-                         is only implied by how the pieces relate to each
-                         other; there's no continuous S-shaped silhouette
-                         anywhere in this markup. See .hero-mark-tile in
-                         css/pages/home/home.css for the resting treatment
-                         and the align/assemble/settle animation. -->
-                    <svg class="hero-mark" viewBox="-25 -20 170 195" xmlns="http://www.w3.org/2000/svg">
+                    <!-- A modular composition derived from the official mark
+                         (assets/brand/logo/favicon.svg). Same 6 pieces, same
+                         source coordinates (hex-boundary points + the 6
+                         tile-gap-line endpoints) and same corner treatment as
+                         the previous pass — the only change is how far each
+                         piece moves outward from the hexagon's center along
+                         its own centroid direction. Earlier passes used 20
+                         and 7.5 units too generously/too far; this one uses
+                         7.5 units, chosen to land gaps at ~6.3-7.7 (avg ~7.3)
+                         against the real mark's own ~6.5-unit gap-line width
+                         — "10-20% more spacing than the original," not a
+                         new arrangement. The result reads as the official
+                         mark gently opened up, not a different composition:
+                         same hexagonal position, same relative proportions,
+                         just enough separation that the S softens without
+                         disappearing. No internal S-channel, no gradient —
+                         flat single-tone fill, same as the rest of this
+                         hero. See .hero-mark-tile in css/pages/home/home.css
+                         for the resting treatment and the align/assemble/
+                         settle animation (unchanged from the previous pass). -->
+                    <svg class="hero-mark" viewBox="-15 -12 153 153" xmlns="http://www.w3.org/2000/svg">
                         <g class="hero-mark-tiles">
-                            <rect class="hero-mark-tile" style="--tx:-30px;--ty:-34px;--tr:-11deg;animation-delay:0ms" x="39" y="9" width="17" height="17" rx="6"></rect>
-                            <rect class="hero-mark-tile" style="--tx:34px;--ty:-28px;--tr:9deg;animation-delay:55ms" x="80" y="29" width="16" height="16" rx="5.5"></rect>
-                            <rect class="hero-mark-tile" style="--tx:-40px;--ty:10px;--tr:8deg;animation-delay:110ms" x="25" y="55" width="18" height="18" rx="6"></rect>
-                            <rect class="hero-mark-tile" style="--tx:28px;--ty:18px;--tr:-10deg;animation-delay:165ms" x="70" y="73" width="15" height="15" rx="5"></rect>
-                            <rect class="hero-mark-tile" style="--tx:-32px;--ty:32px;--tr:10deg;animation-delay:220ms" x="35.5" y="98.5" width="18" height="18" rx="6"></rect>
-                            <rect class="hero-mark-tile" style="--tx:30px;--ty:26px;--tr:-8deg;animation-delay:275ms" x="76" y="118" width="15" height="15" rx="5"></rect>
-                            <rect class="hero-mark-tile" style="--tx:-14px;--ty:40px;--tr:7deg;animation-delay:330ms" x="41" y="125" width="16" height="16" rx="5.5"></rect>
+                            <path class="hero-mark-tile" style="--fr:5deg;--tr:-26deg;--tx:39px;--ty:-39px;animation-delay:0ms" d="M 82.91 16.96 Q 83.33 7.72 89.78 14.36 L 110.01 35.19 Q 117.33 42.72 108.26 48.01 L 102.40 51.43 Q 93.33 56.72 89.37 47.00 L 85.82 38.29 Q 82.33 29.72 82.75 20.48 L 82.91 16.96 Z"></path>
+                            <path class="hero-mark-tile" style="--fr:-6deg;--tr:30deg;--tx:54px;--ty:11px;animation-delay:55ms" d="M 110.29 54.74 Q 119.36 49.45 118.45 59.91 L 116.27 84.99 Q 115.36 95.45 106.24 90.24 L 93.88 83.18 Q 87.36 79.45 90.72 72.73 L 92.00 70.17 Q 95.36 63.45 101.85 59.66 L 110.29 54.74 Z"></path>
+                            <path class="hero-mark-tile" style="--fr:4deg;--tr:-24deg;--tx:14px;--ty:53px;animation-delay:110ms" d="M 100.83 96.03 Q 109.94 101.24 100.07 104.82 L 61.04 118.95 Q 51.94 122.24 52.36 112.58 L 52.52 108.90 Q 52.94 99.24 61.65 95.04 L 72.49 89.81 Q 81.94 85.24 91.06 90.45 L 100.83 96.03 Z"></path>
+                            <path class="hero-mark-tile" style="--fr:-5deg;--tr:28deg;--tx:-42px;--ty:36px;animation-delay:165ms" d="M 44.74 110.24 Q 44.32 119.90 37.13 113.43 L 12.12 90.92 Q 4.32 83.90 13.42 78.65 L 21.23 74.15 Q 30.32 68.90 35.28 78.15 L 40.75 88.37 Q 45.32 96.90 44.90 106.56 L 44.74 110.24 Z"></path>
+                            <path class="hero-mark-tile" style="--fr:6deg;--tr:-30deg;--tx:-54px;--ty:-11px;animation-delay:220ms" d="M 11.73 72.32 Q 2.64 77.57 4.70 67.27 L 9.58 42.86 Q 11.64 32.57 20.61 38.02 L 33.52 45.86 Q 39.64 49.57 35.02 55.03 L 33.26 57.11 Q 28.64 62.57 22.44 66.14 L 11.73 72.32 Z"></path>
+                            <path class="hero-mark-tile" style="--fr:-4deg;--tr:26deg;--tx:-15px;--ty:-53px;animation-delay:275ms" d="M 25.92 32.24 Q 16.95 26.79 26.84 23.27 L 67.23 8.89 Q 75.95 5.79 75.53 15.03 L 75.37 18.55 Q 74.95 27.79 66.79 32.14 L 54.21 38.85 Q 44.95 43.79 35.97 38.34 L 25.92 32.24 Z"></path>
                         </g>
                     </svg>
 

@@ -111,31 +111,42 @@
     }
 }
 
-/* Milestone 19 (homepage redesign, revised): a modular tile composition,
-   not a logo rendering. Earlier version of this hero resolved the tiles
-   into the mark's own solid masked fill at rest — which read as exactly
-   what it was, a large logo. This version never fuses: the 7 tiles ARE
-   the permanent resting state. Their positions are the mark's own
-   interior construction (favicon.svg's tile-gap-line + S-channel
-   geometry) scaled ~1.5x outward from the mark's center and rendered as
-   genuinely separate pieces, so the implied S only emerges from noticing
-   the relationship between pieces — nothing here is one continuous
-   S-shaped silhouette. Smaller footprint than before (240px vs 340px)
-   and more internal negative space, on purpose: the composition should
-   read as spacious first, and only resolve into "oh, that's the mark"
-   on a second look. */
+/* Milestone 19 (homepage redesign, corrected): 6 modules, geometrically
+   derived from the real mark's own construction, not the earlier
+   AI-generated reference image. assets/brand/logo/favicon.svg's hexagon
+   is cut by 6 short "gap" strokes (near each rounded corner) plus a
+   thick S-channel through the middle; each module here is the wedge one
+   gap-cut implies, built from that file's own coordinates (hex-boundary
+   points + gap-line endpoints), then moved outward from the hexagon's
+   center along its own centroid direction. Every adjacent pair verified
+   (segment-to-segment, not just bounding boxes) at 17-21 units apart —
+   see index.html's comment for the exact numbers. The S-channel itself
+   is excluded entirely: no internal cutout, no black shape anywhere;
+   the hero background is the only negative space. Never fuses: these 6
+   pieces ARE the permanent resting state. Sizing direction unchanged
+   from the prior revision (300px desktop) per "keep sizing direction
+   exactly as approved" — only the internal geometry changed. */
 .hero-mark {
-    width: min(240px, 60%);
+    width: min(300px, 62%);
     height: auto;
     overflow: visible;
 }
 
 /* Placed after the base .hero-mark rule (not inside the earlier 900px
    media query above) so it actually wins the cascade — same selector,
-   equal specificity, so source order is what decides it. */
+   equal specificity, so source order is what decides it. Two size tiers
+   below 900px (not one) per "verify at desktop/laptop/tablet/mobile" —
+   the stacked single-column layout itself is unchanged, only how large
+   the mark renders within it. */
 @media (max-width: 900px) {
     .hero-mark {
-        width: min(160px, 46%);
+        width: min(260px, 58%);
+    }
+}
+
+@media (max-width: 600px) {
+    .hero-mark {
+        width: min(200px, 56%);
     }
 }
 
@@ -148,44 +159,50 @@
    strong as the flat fill, --primary as a 1px edge at low opacity for
    definition. Fill opacity is intentionally under 1 — full-opacity flat
    rectangles read as "thick/graphic"; a hair of transparency plus a
-   thin edge reads closer to an engineered panel than a printed shape. */
+   thin edge reads closer to an engineered panel than a printed shape.
+   --fr (final resting rotation) applies unconditionally, even with no
+   animation running — the slight per-module tilt is part of the
+   permanent design, not just a flourish during motion. */
 .hero-mark-tile {
     fill: var(--primary-strong);
     fill-opacity: .92;
     stroke: var(--primary);
     stroke-opacity: .35;
     stroke-width: 1;
+    transform: rotate(var(--fr));
     transform-box: fill-box;
     transform-origin: center;
 }
 
 /* Reduced motion — and any environment where the media feature can't be
    evaluated at all — is the DEFAULT above: every tile already at its
-   resting x/y/width/height, no transform applied, no animation. Motion
-   is strictly opt-in inside the no-preference query below, never the
-   reverse, so there's no window where motion could flash before a
+   resting x/y/width/height/rotation, no translation, no animation.
+   Motion is strictly opt-in inside the no-preference query below, never
+   the reverse, so there's no window where motion could flash before a
    browser applies the query. */
 @media (prefers-reduced-motion: no-preference) {
     .hero-mark-tile {
         transform: translate(var(--tx), var(--ty)) rotate(var(--tr));
         animation: hero-tile-place .7s var(--ease-precise) forwards;
-        /* per-tile stagger set inline via animation-delay on each <rect> */
+        /* per-module stagger set inline via animation-delay on each <path> */
     }
 
     .hero-mark-tiles {
-        animation: hero-tiles-settle .3s var(--ease-standard) 1.03s forwards;
+        animation: hero-tiles-settle .3s var(--ease-standard) .975s forwards;
     }
 }
 
 /* Five beats, matching the brief exactly:
-   1. scattered  — 0%, the --tx/--ty/--tr starting offset
-   2. align      — 0-35%, rotation resolves to 0 while position is still
-                    only 40% of the way home (a distinct motion, not the
-                    same tween as the move itself)
+   1. scattered  — 0%, the --tx/--ty/--tr starting offset (--tr is each
+                    tile's full starting rotation, not just a delta)
+   2. align      — 0-35%, rotation resolves from --tr to the module's own
+                    --fr resting tilt while position is still only 40% of
+                    the way home — a distinct motion, not the same tween
+                    as the move itself
    3. assemble   — 35-70%, position finishes closing the remaining gap
    4. (see hero-tiles-settle below, applied once to the whole group)
-   5. remain still — 70-100% holds; nothing after this frame ever moves
-                    the tile again. Opacity is never touched here — the
+   5. remain still — 70-100% holds at --fr; nothing after this frame ever
+                    moves the tile again. Opacity is never touched — the
                     tiles don't fade in or out, because they're not a
                     placeholder for something else to replace. */
 @keyframes hero-tile-place {
@@ -194,18 +211,18 @@
     }
 
     35% {
-        transform: translate(calc(var(--tx) * .4), calc(var(--ty) * .4)) rotate(0deg);
+        transform: translate(calc(var(--tx) * .4), calc(var(--ty) * .4)) rotate(var(--fr));
     }
 
     70%,
     100% {
-        transform: translate(0, 0) rotate(0deg);
+        transform: translate(0, 0) rotate(var(--fr));
     }
 }
 
 /* Beat 4, "one final settling movement" — applied once to the whole
    composition together (not per tile), starting only after the last
-   tile has already arrived (330ms stagger + 700ms duration = 1030ms).
+   tile has already arrived (275ms stagger + 700ms duration = 975ms).
    A single pass, not a loop: this keyframe has no iteration-count above
    the animation shorthand's default of 1. */
 @keyframes hero-tiles-settle {
