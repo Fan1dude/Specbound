@@ -1,4 +1,3 @@
-
 # Specbound
 
 Document Every Build. Inspire Every Builder.
