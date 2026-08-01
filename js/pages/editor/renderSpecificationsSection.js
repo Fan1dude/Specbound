@@ -1,11 +1,16 @@
 import { getTechnology, getTechnologySpecifications } from "../../config/technologies/index.js";
 import { setupComponentAutocomplete } from "../../components/ComponentAutocomplete.js";
+import { openImportSpecificationsModal } from "../../components/ImportSpecificationsModal.js";
+import { submitComponent } from "../../repositories/componentRepository.js";
 import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
 import { icon } from "../../utils/icons.js";
+import { normalizeSpecEntry, getSpecDisplayName } from "../../utils/specifications.js";
+import { showToast } from "../../core/toast.js";
 
 export function renderSpecificationsSection(draft, autosave) {
     const container = document.getElementById("specificationsFields");
     const categoryField = document.getElementById("fieldCategory");
+    const importButton = document.getElementById("importSpecificationsBtn");
 
     // Specifications live in one jsonb column, so every save must send the
     // complete object, not just the field that changed — autosave's field
@@ -31,6 +36,18 @@ export function renderSpecificationsSection(draft, autosave) {
         render(categoryField.value);
     });
 
+    importButton?.addEventListener("click", () => {
+        const fields = getTechnologySpecifications(currentTechnologyId);
+
+        if (!fields.length) return;
+
+        openImportSpecificationsModal({
+            technologyId: currentTechnologyId,
+            fields,
+            onImport: applyImportedValues
+        });
+    });
+
     function render(technologyId) {
         currentTechnologyId = technologyId;
 
@@ -39,6 +56,8 @@ export function renderSpecificationsSection(draft, autosave) {
 
         const technology = getTechnology(technologyId);
         const fields = getTechnologySpecifications(technologyId);
+
+        if (importButton) importButton.hidden = !technology || !fields.length;
 
         if (!technology || !fields.length) {
             container.innerHTML = `
@@ -71,7 +90,7 @@ export function renderSpecificationsSection(draft, autosave) {
                             id="spec-${escapeAttribute(field.key)}"
                             type="text"
                             placeholder="Enter ${escapeAttribute(field.label)}"
-                            value="${escapeAttribute(currentSpecifications[field.key] || "")}"
+                            value="${escapeAttribute(getSpecDisplayName(currentSpecifications[field.key]))}"
                             autocomplete="off"
                         >
                     </div>
@@ -89,32 +108,83 @@ export function renderSpecificationsSection(draft, autosave) {
         fields.forEach(field => {
             const input = document.getElementById(`spec-${field.key}`);
 
+            // Free typing always clears componentId — the value on screen
+            // no longer necessarily matches the catalog entry it may have
+            // come from. A subsequent catalog selection (via onSelect
+            // below) is what re-attaches a componentId.
             input.addEventListener("input", () => {
-                const value = input.value.trim();
-
-                if (value === (lastKnownValues[field.key] || "")) return;
-
-                lastKnownValues[field.key] = value;
-                currentSpecifications = { ...currentSpecifications, [field.key]: value };
-
-                autosave.scheduleSave({ specifications: { ...currentSpecifications } });
+                setValue(field.key, { name: input.value, componentId: null });
             });
-        });
 
-        if (technologyId === "pc_build") {
             activeAutocompleteInstances.push(
                 setupComponentAutocomplete({
-                    input: "#spec-cpu",
-                    technologyId: "pc_build",
-                    componentType: "cpu"
-                }),
-                setupComponentAutocomplete({
-                    input: "#spec-gpu",
-                    technologyId: "pc_build",
-                    componentType: "gpu"
+                    input,
+                    technologyId,
+                    componentType: field.key,
+                    onSelect: component => {
+                        setValue(field.key, {
+                            name: component.canonical_name,
+                            componentId: component.id
+                        });
+                    },
+                    // No catalog match — offer to submit it for moderator
+                    // review (public.component_submissions) rather than
+                    // creating a catalog row directly; ordinary users can
+                    // no longer insert into public.components (see
+                    // 0020_components_catalog.sql). The typed value is
+                    // already saved as free text via the input listener
+                    // above regardless of whether this submission happens
+                    // or is ever approved.
+                    onSubmitNew: async submittedName => {
+                        try {
+                            await submitComponent({
+                                technologyId,
+                                fieldKey: field.key,
+                                submittedName
+                            });
+
+                            showToast("Submitted for catalog review. Your entry is already saved on this build.", "success");
+                        } catch (error) {
+                            showToast(error.message || "Could not submit this component for review.", "error");
+                            throw error;
+                        }
+                    }
                 })
             );
-        }
+        });
+    }
+
+    // Single write path for both free typing and catalog selection, so
+    // every save always writes the structured {componentId, name} shape
+    // (see js/utils/specifications.js) regardless of which one produced
+    // the change.
+    function setValue(fieldKey, { name, componentId = null }) {
+        const trimmedName = name.trim();
+        const lastEntry = normalizeSpecEntry(lastKnownValues[fieldKey]);
+
+        if (trimmedName === lastEntry.name && componentId === lastEntry.componentId) return;
+
+        const nextEntry = { componentId, name: trimmedName };
+
+        lastKnownValues[fieldKey] = nextEntry;
+        currentSpecifications = { ...currentSpecifications, [fieldKey]: nextEntry };
+
+        autosave.scheduleSave({ specifications: { ...currentSpecifications } });
+    }
+
+    // Callback for openImportSpecificationsModal — routes every imported
+    // value through the same setValue() write path free typing and
+    // catalog selection use, then syncs the now-stale visible inputs
+    // (setValue only updates state + schedules a save, it doesn't touch
+    // the DOM, since its other two callers already have the input in sync
+    // by construction).
+    function applyImportedValues(fieldValues) {
+        Object.entries(fieldValues).forEach(([fieldKey, entry]) => {
+            setValue(fieldKey, entry);
+
+            const input = document.getElementById(`spec-${fieldKey}`);
+            if (input) input.value = entry.name;
+        });
     }
 
     // Used by the recovery banner's Restore action. A buffered save may

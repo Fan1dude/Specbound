@@ -80,6 +80,12 @@
     margin-bottom: var(--space-3);
 }
 
+.specifications-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: var(--space-2);
+}
+
 .technology-form-heading > p:last-child {
     color: var(--text-secondary);
 }

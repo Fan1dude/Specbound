@@ -38,26 +38,17 @@
 
     <nav class="navbar" id="navbar"></nav>
 
-    <main class="content-page" id="main">
-        <p class="hero-badge">TECHNOLOGY</p>
-        <h1>Arduino</h1>
-        <p class="hero-description">Automation • Sensors • Embedded</p>
-
-        <p>
-            Browse Arduino projects documented by the Specbound community —
-            automation, sensors, and embedded electronics builds.
-        </p>
-
-        <a class="btn btn-primary" href="../explore.html">Browse All Projects</a>
-    </main>
+    <main id="main" data-category="arduino"></main>
 
     <footer class="footer" id="footer"></footer>
 
     <script type="module">
         import { loadNavbar, loadFooter } from "../../js/core/layout.js";
+        import { renderCategoryPage } from "../../js/pages/categories/renderCategoryPage.js";
 
         loadNavbar("../../");
         loadFooter("../../");
+        renderCategoryPage("../../");
     </script>
 
 </body>

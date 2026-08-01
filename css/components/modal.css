@@ -84,3 +84,112 @@
         background: transparent;
     }
 }
+
+/* Wider variant for the paste-and-review import flow — needs room for a
+   textarea and a review list, unlike the fixed-width confirm dialog this
+   component's base styles were designed around. */
+.modal-import-specifications {
+    max-width: min(560px, 92vw);
+}
+
+.modal-import-specifications textarea {
+    margin-top: var(--space-1);
+    font-size: var(--font-size-sm);
+}
+
+.import-specifications-review {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin-top: var(--space-2);
+    max-height: 40vh;
+    overflow-y: auto;
+}
+
+/* Same [hidden]-vs-class-display specificity trap as .btn[hidden] and
+   .editor-recovery-banner[hidden] elsewhere in this app — without this,
+   display: flex above beats the browser's [hidden] { display: none }. */
+.import-specifications-review[hidden] {
+    display: none;
+}
+
+.import-specifications-section + .import-specifications-section {
+    margin-top: var(--space-2);
+}
+
+.import-specifications-section-heading {
+    margin-bottom: var(--space-0-5);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.import-specifications-row {
+    display: grid;
+    grid-template-columns: minmax(0, 120px) 1fr auto;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-0-5) 0;
+}
+
+.import-specifications-row label {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+/* Confirmed/suggested share the base .badge treatment (badge.css) —
+   these only retint text/border, never the fill, so they stay outside
+   the "-strong fill must pair with inverse text" a11y check's scope. */
+.import-match-badge.is-confirmed {
+    border-color: var(--color-success-strong);
+    color: var(--color-success);
+}
+
+.import-match-badge.is-suggested {
+    border-color: var(--color-warning-strong);
+    color: var(--color-warning);
+}
+
+.import-suggestion-list {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-0-5);
+}
+
+.import-suggestion-confirm {
+    padding: var(--space-0-5) var(--space-1);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+}
+
+.import-suggestion-confirm:hover {
+    border-color: var(--color-primary-strong);
+    color: var(--color-text);
+}
+
+.import-specifications-row.is-unrecognized {
+    grid-template-columns: 1fr auto;
+}
+
+.import-unrecognized-line {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.import-unrecognized-line strong {
+    color: var(--color-text);
+}
+
+.import-assign-field {
+    width: auto;
+}

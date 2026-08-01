@@ -1,4 +1,5 @@
 import { escapeHtml } from "../../utils/escapeHtml.js";
+import { getSpecDisplayName, isSpecEntryFilled } from "../../utils/specifications.js";
 
 // specifications === null means "not recorded for this revision" (a
 // revision published before Milestone 5C captured per-revision snapshots)
@@ -21,11 +22,11 @@ export function renderSpecifications(specifications) {
     }
 
     container.innerHTML = Object.entries(specifications)
-        .filter(([_, value]) => value)
+        .filter(([, value]) => isSpecEntryFilled(value))
         .map(([key, value]) => `
             <div class="spec-item">
                 <h3>${escapeHtml(formatSpecName(key))}</h3>
-                <p>${escapeHtml(value)}</p>
+                <p>${escapeHtml(getSpecDisplayName(value))}</p>
             </div>
         `)
         .join("");

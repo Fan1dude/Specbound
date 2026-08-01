@@ -1,4 +1,5 @@
 import { supabase } from "../core/supabase.js";
+import { escapeLikeSpecialChars, quoteForOrFilter } from "../utils/sqlEscaping.js";
 
 export async function getBuildById(id) {
     const { data, error } = await supabase
@@ -61,6 +62,28 @@ export async function getFeaturedBuilds() {
     return data;
 }
 
+// Server-side filtered, unlike Explore's category filter which fetches
+// getNewestBuilds(100) and filters client-side — a category page only
+// ever needs a handful of builds, not the same 100-row fetch Explore
+// needs for its full in-page filter/search/sort experience. Featured
+// builds sort first (Postgres orders boolean false before true, so
+// ascending:false puts true first) so a category page's few slots show
+// curated picks before falling back to newest.
+export async function getBuildsByCategory(category, limit = 6) {
+    const { data, error } = await supabase
+        .from("builds")
+        .select("*")
+        .eq("visibility", "public")
+        .eq("category", category)
+        .order("featured", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(limit);
+
+    if (error) throw error;
+
+    return data || [];
+}
+
 export async function getNewestBuilds(limit = 12) {
     const { data, error } = await supabase
         .from("builds")
@@ -75,24 +98,6 @@ export async function getNewestBuilds(limit = 12) {
 }
 
 const SEARCH_RESULT_LIMIT = 60;
-
-// Postgres ILIKE treats %, _, and \ as special — escaping them first means
-// a literal "%" or "_" typed by the user matches literally instead of
-// acting as a wildcard.
-function escapeLikeSpecialChars(value) {
-    return value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
-}
-
-// PostgREST's .or() filter is a small DSL where "," "." "(" ")" are
-// structural, not literal — this is its own escaping layer on top of the
-// ILIKE escaping above, needed only for values embedded in an .or()
-// string. Wrapping a value in double quotes (escaping any literal quote/
-// backslash first) is PostgREST's documented way to pass an arbitrary
-// string safely, so a search containing a comma or parenthesis can't
-// corrupt or extend the filter.
-function quoteForOrFilter(value) {
-    return `"${value.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
-}
 
 // Public builds only, matched against title/description/category directly,
 // or against the builder's username via a separate profiles lookup first

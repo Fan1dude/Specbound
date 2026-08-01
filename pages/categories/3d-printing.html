@@ -38,26 +38,17 @@
 
     <nav class="navbar" id="navbar"></nav>
 
-    <main class="content-page" id="main">
-        <p class="hero-badge">TECHNOLOGY</p>
-        <h1>3D Printing</h1>
-        <p class="hero-description">Printers • Models • Fabrication</p>
-
-        <p>
-            Browse 3D printing projects documented by the Specbound community —
-            printers, models, and fabrication builds.
-        </p>
-
-        <a class="btn btn-primary" href="../explore.html">Browse All Projects</a>
-    </main>
+    <main id="main" data-category="3d_printer"></main>
 
     <footer class="footer" id="footer"></footer>
 
     <script type="module">
         import { loadNavbar, loadFooter } from "../../js/core/layout.js";
+        import { renderCategoryPage } from "../../js/pages/categories/renderCategoryPage.js";
 
         loadNavbar("../../");
         loadFooter("../../");
+        renderCategoryPage("../../");
     </script>
 
 </body>

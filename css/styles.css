@@ -40,6 +40,7 @@
 @import url("./pages/settings/settings.css");
 @import url("./pages/design-system/design-system.css");
 @import url("./pages/content/content.css");
+@import url("./pages/content/category-page.css");
 @import url("./pages/notifications/notifications.css");
 @import url("./pages/followlist/followlist.css");
 @import url("./pages/build/editor.css");
