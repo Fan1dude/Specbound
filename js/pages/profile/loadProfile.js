@@ -1,8 +1,11 @@
 import { getPublicProfile, getProfileBuilds } from "../../repositories/profileRepository.js";
 import { getCommentCountForBuilds } from "../../repositories/commentRepository.js";
+import { getRecentBuilderRevisions } from "../../repositories/revisionRepository.js";
 import { resolveBuildImageUrls } from "../../repositories/mediaRepository.js";
 import { getCurrentUser } from "../../core/auth.js";
 import { renderProfile, renderProfileError } from "./renderProfile.js";
+import { buildBuilderJourney } from "./buildBuilderJourney.js";
+import { cardGridSkeleton, listSkeleton } from "../../utils/skeletons.js";
 
 export async function loadProfile() {
     const params = new URLSearchParams(window.location.search);
@@ -12,6 +15,8 @@ export async function loadProfile() {
         window.location.href = "../index.html";
         return;
     }
+
+    showLoadingSkeletons();
 
     // Primary: the profile itself and its published projects — this IS
     // the page. A failure here means there's nothing real to show.
@@ -23,9 +28,7 @@ export async function loadProfile() {
         const rawBuilds = await getProfileBuilds(userId);
 
         // Every card on this page is this same profile's own project —
-        // attach it once here rather than a per-build lookup. Previously
-        // this was never attached at all, so BlueprintCard fell through to
-        // its "Unknown Creator" fallback on every card here.
+        // attach it once here rather than a per-build lookup.
         builds = (await resolveBuildImageUrls(rawBuilds)).map(build => ({
             ...build,
             profiles: profile
@@ -36,10 +39,10 @@ export async function loadProfile() {
         return;
     }
 
-    // Secondary: a pure cosmetic stat (Comments Received). A failure here
-    // shouldn't take down an otherwise-successfully-loaded profile — it
-    // just falls back to 0, same as the trigger-maintained counters
-    // elsewhere in this app default to 0 rather than blocking a page.
+    // Secondary: pure cosmetic/supplementary data. A failure in any of
+    // these shouldn't take down an otherwise-successfully-loaded profile
+    // — each falls back to an empty/default value, same as the
+    // trigger-maintained counters elsewhere in this app.
     let commentCount = 0;
 
     try {
@@ -48,10 +51,6 @@ export async function loadProfile() {
         console.error("Comment count load error:", error);
     }
 
-    // Secondary: who's viewing the page — needed to decide whether a
-    // Follow control makes sense at all (never shown on your own
-    // profile) and, if so, whether it starts in the followed state. A
-    // failure here degrades to "treated as signed out," not a broken page.
     let currentUser = null;
 
     try {
@@ -60,5 +59,41 @@ export async function loadProfile() {
         console.error("Current user load error:", error);
     }
 
-    await renderProfile({ profile, builds, commentCount, currentUser });
+    // Builder Journey (spec §17.3/§17.4) — a capped recent-revisions
+    // fetch, synthesized into a curated top-10 timeline. Only worth
+    // fetching when there's at least one public build; a failure here
+    // just means the Journey section is omitted, not a broken page.
+    let journeyEvents = [];
+
+    if (builds.length) {
+        try {
+            const revisions = await getRecentBuilderRevisions(userId);
+            journeyEvents = buildBuilderJourney(builds, revisions);
+        } catch (error) {
+            console.error("Builder journey load error:", error);
+        }
+    }
+
+    await renderProfile({ profile, builds, commentCount, currentUser, journeyEvents });
+}
+
+// Both sections start `hidden` in the static HTML (spec §7 — a
+// conditional section is omitted, not shown empty, until we know
+// whether it has content) and the real render functions later decide
+// their true final visibility. Unhiding them here just for the loading
+// state is safe: if there turns out to be nothing to show, renderProjectGallery()/
+// renderBuilderJourney() re-hide them once the real data resolves.
+function showLoadingSkeletons() {
+    const galleryEl = document.getElementById("profileGallery");
+    const gridEl = document.getElementById("profileBuilds");
+    if (galleryEl && gridEl) {
+        galleryEl.hidden = false;
+        gridEl.innerHTML = cardGridSkeleton(6);
+    }
+
+    const journeyEl = document.getElementById("profileJourney");
+    if (journeyEl) {
+        journeyEl.hidden = false;
+        journeyEl.innerHTML = listSkeleton(4);
+    }
 }
