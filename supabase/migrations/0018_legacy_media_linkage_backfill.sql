@@ -39,9 +39,26 @@
 -- Touches: revision_media (7 new rows, guarded by a NOT EXISTS check so
 -- re-running this migration is a no-op the second time).
 --
+-- Fresh-database safety (added 2026-08-01, after a dev dry run against an
+-- empty database failed here): revision_media.revision_id is a NOT NULL
+-- foreign key to build_revisions(id) (see 0002). On a freshly-bootstrapped
+-- database, none of the 7 hardcoded revision_id values below exist —
+-- they're specific rows from the real production database this migration
+-- was written against — so the INSERT violated that FK constraint
+-- outright instead of just finding nothing to guard against. The `join
+-- public.build_revisions br on br.id = v.revision_id` below fixes this:
+-- on a fresh/dev database it makes every one of the 7 candidate rows
+-- fail the join and the migration becomes a clean no-op (0 rows
+-- inserted, no error); on the real production database, where all 7
+-- revisions genuinely exist (confirmed live per this file's own header
+-- above), the join matches all 7 and behavior is unchanged. The existing
+-- NOT EXISTS duplicate guard is unchanged and still the thing preventing
+-- a second real-database run from double-inserting.
+--
 -- Rollback: see 0018_legacy_media_linkage_backfill_rollback.sql in
 -- supabase/rollbacks/. Deletes exactly these 7 rows by their precise
--- (revision_id, storage_path) pairs.
+-- (revision_id, storage_path) pairs — a no-op on a database where they
+-- were never inserted in the first place, same reasoning as above.
 
 begin;
 
@@ -56,6 +73,7 @@ from (values
     ('f59e6c5b-a71a-4828-9cd5-37f0d73067a5'::uuid, 'dacdf29e-ea56-4a85-a6a3-6a60cb7c1210/1783986632675-screenshot-2026-06-15-124317.png'),
     ('7f5be50a-f7b4-4f67-b34c-499bd3b5b822'::uuid, 'dacdf29e-ea56-4a85-a6a3-6a60cb7c1210/updates/1784082807634-screenshot-2026-06-15-124311.png')
 ) as v(revision_id, storage_path)
+join public.build_revisions br on br.id = v.revision_id
 where not exists (
     select 1 from public.revision_media rm
     where rm.revision_id = v.revision_id and rm.storage_path = v.storage_path

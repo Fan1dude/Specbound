@@ -641,6 +641,17 @@ Every other migration still only ever moves forward from `0001`.
 - **Touches**: `revision_media` only (7 new rows). Never touches
   `image_url` on `builds`/`build_revisions`, `storage.objects`, any
   storage RLS policy, or the bucket's public/private flag.
+- **Fresh-database safety (added 2026-08-01)**: the 7 `revision_id`
+  values are specific rows from the real production database — on a
+  freshly-bootstrapped database none of them exist, and since
+  `revision_media.revision_id` is a `NOT NULL` FK to `build_revisions(id)`,
+  the `INSERT` failed outright instead of just finding nothing to guard
+  against. Added a `join public.build_revisions` so the migration is a
+  clean no-op on a fresh/dev database (0 rows match) and unchanged on the
+  real one (all 7 still match). Audited every other migration mentioning
+  "backfill" for the same hardcoded-literal-data pattern — `0018` is the
+  only one; the rest are column-default backfills (`0002`) or explicitly
+  backfill nothing (`0003`, `0005`, `0012`).
 - **Context**: Milestone 9 (Production Cleanup & Launch) — Migration C,
   approved with one adjustment (Category B explicitly excluded from this
   migration, reported instead of synthesized/force-linked). Follows
