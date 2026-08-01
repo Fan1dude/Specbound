@@ -9,7 +9,6 @@ export async function renderFollow(profile, currentUser) {
     renderCounts(profile.followers_count, profile.following_count);
 
     const button = document.getElementById("followBtn");
-    const hint = document.getElementById("followHint");
 
     if (!button) return;
 
@@ -18,33 +17,40 @@ export async function renderFollow(profile, currentUser) {
     // No Follow control at all on your own profile — nothing to toggle.
     if (isOwnProfile) {
         button.hidden = true;
-        if (hint) hint.hidden = true;
         return;
     }
 
     button.hidden = false;
 
+    // Signed-out: the button itself is the sign-in affordance (Milestone
+    // 20 polish — previously a disabled button paired with a separate
+    // "Sign in to follow this builder" hint sentence below it, two
+    // competing controls doing one job). Returns before any of the
+    // toggle-follow wiring below, since a signed-out click should only
+    // ever navigate to login, never attempt a follow.
+    if (!currentUser) {
+        button.disabled = false;
+        button.classList.remove("is-following");
+        button.setAttribute("aria-pressed", "false");
+        button.textContent = "Sign In to Follow";
+        button.onclick = () => {
+            window.location.href = "../login.html";
+        };
+        return;
+    }
+
     let followed = false;
 
-    if (currentUser) {
-        try {
-            followed = await hasFollowed(currentUser.id, profile.id);
-        } catch (error) {
-            // Fail soft, same reasoning as renderLike.js/renderSave.js — a
-            // failed status check shouldn't block the rest of the page.
-            console.error("Follow status load error:", error);
-        }
+    try {
+        followed = await hasFollowed(currentUser.id, profile.id);
+    } catch (error) {
+        // Fail soft, same reasoning as renderLike.js/renderSave.js — a
+        // failed status check shouldn't block the rest of the page.
+        console.error("Follow status load error:", error);
     }
 
     setButtonState(followed);
-
-    if (!currentUser) {
-        button.disabled = true;
-        setHint(`<a href="../login.html">Sign in</a> to follow this builder.`);
-    } else {
-        button.disabled = false;
-        setHint(null);
-    }
+    button.disabled = false;
 
     button.onclick = async () => {
         if (button.disabled) return;
@@ -83,19 +89,6 @@ export async function renderFollow(profile, currentUser) {
         button.classList.toggle("is-following", isFollowed);
         button.setAttribute("aria-pressed", String(isFollowed));
         button.textContent = isFollowed ? "Following" : "Follow";
-    }
-
-    function setHint(html) {
-        if (!hint) return;
-
-        if (!html) {
-            hint.hidden = true;
-            hint.innerHTML = "";
-            return;
-        }
-
-        hint.hidden = false;
-        hint.innerHTML = html;
     }
 }
 

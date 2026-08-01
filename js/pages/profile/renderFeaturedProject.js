@@ -24,24 +24,26 @@ export function renderFeaturedProject(build, pathPrefix = "../") {
             <h2>Featured Project</h2>
         </div>
 
-        <a class="featured-project-image" href="${buildUrl}" aria-label="View ${escapeHtml(build.title || "Untitled project")}">
-            <img src="${escapeAttribute(imageUrl)}" alt="${escapeAttribute(build.title || "Featured project cover")}" loading="eager">
-        </a>
-
-        <div class="featured-project-body">
-            <span class="badge">${escapeHtml(formatCategory(build.category))}</span>
-
-            <h3 class="featured-project-title">
-                <a href="${buildUrl}">${escapeHtml(build.title || "Untitled project")}</a>
-            </h3>
-
-            <p class="featured-project-summary">
-                ${escapeHtml(build.description || "No project summary has been added yet.")}
-            </p>
-
-            <a href="${buildUrl}" class="btn btn-secondary featured-project-cta">
-                View Project ${icon("arrow-right", 16)}
+        <div class="featured-project-layout">
+            <a class="featured-project-image" href="${buildUrl}" aria-label="View ${escapeHtml(build.title || "Untitled project")}">
+                <img src="${escapeAttribute(imageUrl)}" alt="${escapeAttribute(build.title || "Featured project cover")}" loading="eager">
             </a>
+
+            <div class="featured-project-body">
+                <span class="badge">${escapeHtml(formatCategory(build.category))}</span>
+
+                <h3 class="featured-project-title">
+                    <a href="${buildUrl}">${escapeHtml(build.title || "Untitled project")}</a>
+                </h3>
+
+                <p class="featured-project-summary">
+                    ${escapeHtml(build.description || "No project summary has been added yet.")}
+                </p>
+
+                <a href="${buildUrl}" class="btn btn-secondary featured-project-cta">
+                    View Project ${icon("arrow-right", 16)}
+                </a>
+            </div>
         </div>
     `;
 }

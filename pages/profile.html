@@ -42,7 +42,6 @@
             <div class="profile-avatar" id="profileAvatar">?</div>
 
             <div class="profile-hero-info">
-                <p class="hero-badge">Creator</p>
                 <h1 id="profileUsername">Loading...</h1>
 
                 <p id="profileDisplayName" class="profile-display-name" hidden></p>
@@ -54,27 +53,22 @@
                 <div class="profile-follow-row">
                     <div id="profileFollowCounts" class="profile-follow-counts"></div>
 
-                    <div class="follow-action">
-                        <button
-                            type="button"
-                            id="followBtn"
-                            class="follow-btn"
-                            aria-pressed="false"
-                            aria-describedby="followHint"
-                            hidden
-                        >
-                            Follow
-                        </button>
-
-                        <p id="followHint" class="follow-hint" role="status" aria-live="polite" hidden></p>
-                    </div>
+                    <button
+                        type="button"
+                        id="followBtn"
+                        class="follow-btn"
+                        aria-pressed="false"
+                        hidden
+                    >
+                        Follow
+                    </button>
                 </div>
             </div>
         </section>
 
         <!-- 2. Builder Overview -->
         <section class="profile-overview" id="profileOverview">
-            <div class="overview-stats" id="profileStats">
+            <div class="overview-metrics" id="profileStats">
                 <span class="text-secondary">Loading stats...</span>
             </div>
 

@@ -60,8 +60,8 @@ export function renderTechnologyBreakdown(builds) {
                 .map(entry => `
                     <li>
                         <span class="tech-breakdown-swatch" style="background: ${entry.technology.accent};" aria-hidden="true"></span>
-                        ${escapeHtml(entry.technology.title)}
-                        <span class="tech-breakdown-count">${entry.count} · ${Math.round((entry.count / total) * 100)}%</span>
+                        <span class="tech-breakdown-title">${escapeHtml(entry.technology.title)}</span>
+                        <span class="tech-breakdown-count">${entry.count} ${entry.count === 1 ? "project" : "projects"}</span>
                     </li>
                 `)
                 .join("")}

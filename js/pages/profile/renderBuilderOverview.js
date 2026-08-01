@@ -3,13 +3,15 @@ import { getTechnology } from "../../config/technologies/index.js";
 import { formatJoinDate } from "./formatJoinDate.js";
 
 // Quiet stat strip — deliberately NOT the old .profile-stat's 2.5rem
-// bordered tiles (approved deviation, spec §11): a slim text-only row,
-// closer to GitHub's "12 repositories · 340 followers" line, so it
-// doesn't visually compete with Featured Project below it. Same four
-// numbers as before (Published Projects, Comments Received, Total Views,
-// Member Since) plus a new technology-focus chip row summarizing which
-// categories this builder works in, ahead of the fuller Technology
-// Breakdown section further down the page.
+// bordered tiles (approved deviation, spec §11), and — per the polish
+// pass — not a run-on inline sentence either: four evenly spaced
+// number/label metrics in a row, still quiet (no borders/fills), just
+// legible as four distinct facts rather than one sentence a screen
+// reader/scanner has to parse apart. Same four numbers as before
+// (Published Projects, Comments Received, Total Views, Member Since)
+// plus a technology-focus chip row summarizing which categories this
+// builder works in, ahead of the fuller Technology Breakdown section
+// further down the page.
 export function renderBuilderOverview(profile, builds, commentCount) {
     renderStats(profile, builds, commentCount);
     renderTechFocus(builds);
@@ -31,11 +33,12 @@ function renderStats(profile, builds, commentCount) {
 
     el.innerHTML = stats
         .map(stat => `
-            <span class="overview-stat">
-                <strong>${escapeHtml(stat.value)}</strong> ${escapeHtml(stat.label)}
-            </span>
+            <div class="overview-metric">
+                <span class="overview-metric-value">${escapeHtml(stat.value)}</span>
+                <span class="overview-metric-label">${escapeHtml(stat.label)}</span>
+            </div>
         `)
-        .join(`<span class="overview-stat-sep" aria-hidden="true">&middot;</span>`);
+        .join("");
 }
 
 function renderTechFocus(builds) {
