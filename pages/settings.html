@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#B79AE6">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Account Settings | Specbound</title>
-    <link rel="canonical" href="https://specbound.app/pages/settings.html">
+    <link rel="canonical" href="https://specboundapp.com/pages/settings.html">
     <meta name="robots" content="noindex">
 
     <meta
@@ -26,12 +26,12 @@
     <meta property="og:site_name" content="Specbound">
     <meta property="og:title" content="Account Settings | Specbound">
     <meta property="og:description" content="Manage your Specbound account, profile, and avatar.">
-    <meta property="og:url" content="https://specbound.app/pages/settings.html">
-    <meta property="og:image" content="https://specbound.app/assets/brand/og/og-image.png">
+    <meta property="og:url" content="https://specboundapp.com/pages/settings.html">
+    <meta property="og:image" content="https://specboundapp.com/assets/brand/og/og-image.png">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Account Settings | Specbound">
     <meta name="twitter:description" content="Manage your Specbound account, profile, and avatar.">
-    <meta name="twitter:image" content="https://specbound.app/assets/brand/og/og-image.png">
+    <meta name="twitter:image" content="https://specboundapp.com/assets/brand/og/og-image.png">
 
     <link rel="stylesheet" href="../css/styles.css">
 </head>
@@ -89,6 +89,15 @@
                 </div>
 
                 <div class="form-group full-width">
+                    <label for="headline">Headline</label>
+                    <input id="headline" type="text" maxlength="120">
+                    <p class="text-muted headline-hint">
+                        A short tagline shown at the top of your profile.
+                        <span id="headlineCount">0/120</span>
+                    </p>
+                </div>
+
+                <div class="form-group full-width">
                     <label for="bio">Bio</label>
                     <textarea id="bio" rows="5"></textarea>
                 </div>
@@ -111,6 +120,18 @@
                 <div class="form-group">
                     <label for="youtube">YouTube</label>
                     <input id="youtube" type="url">
+                </div>
+
+                <div class="form-group full-width">
+                    <label for="featuredBuild">Featured Project</label>
+                    <select id="featuredBuild">
+                        <option value="">Choose automatically</option>
+                    </select>
+                    <p class="text-muted">
+                        Pin one of your own published projects to the top of your profile.
+                        Only your published projects are shown here. If you don't choose
+                        one, your most recently updated completed project is shown instead.
+                    </p>
                 </div>
 
             </div>

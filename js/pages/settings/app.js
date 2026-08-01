@@ -2,11 +2,11 @@ import { loadNavbar, loadFooter } from "../../core/layout.js";
 import { supabase } from "../../core/supabase.js";
 import { showToast } from "../../core/toast.js";
 import { requireAuth } from "../../core/auth.js";
-import { updateAvatarPath } from "../../repositories/profileRepository.js";
+import { updateAvatarPath, getProfileBuilds } from "../../repositories/profileRepository.js";
 import { resolveAvatarUrl } from "../../repositories/mediaRepository.js";
 import { uploadAvatar } from "../../services/imageService.js";
 import { renderErrorState } from "../../utils/listState.js";
-import { escapeAttribute } from "../../utils/escapeHtml.js";
+import { escapeAttribute, escapeHtml } from "../../utils/escapeHtml.js";
 import { avatarInitial } from "../../utils/avatarInitial.js";
 
 loadNavbar("../");
@@ -65,17 +65,22 @@ async function loadSettings(user) {
 
     document.getElementById("displayName").value = profile?.display_name || "";
     document.getElementById("username").value = profile?.username || "";
+    document.getElementById("headline").value = profile?.headline || "";
     document.getElementById("bio").value = profile?.bio || "";
     document.getElementById("location").value = profile?.location || "";
     document.getElementById("website").value = profile?.website || "";
     document.getElementById("github").value = profile?.github || "";
     document.getElementById("youtube").value = profile?.youtube || "";
 
+    initHeadlineCounter();
+
     const avatarPreview = document.getElementById("avatarPreview");
 
     if (avatarPreview) {
         await renderAvatarPreview(avatarPreview, profile);
     }
+
+    await loadFeaturedBuildOptions(user, profile);
 
     const avatarInput = document.getElementById("avatar");
 
@@ -111,14 +116,22 @@ async function loadSettings(user) {
     }
 
     document.getElementById("saveProfile").addEventListener("click", async () => {
+        const featuredBuildValue = document.getElementById("featuredBuild").value;
+
         const updates = {
             display_name: document.getElementById("displayName").value.trim(),
             username: document.getElementById("username").value.trim(),
+            headline: document.getElementById("headline").value.trim() || null,
             bio: document.getElementById("bio").value.trim(),
             location: document.getElementById("location").value.trim(),
             website: document.getElementById("website").value.trim(),
             github: document.getElementById("github").value.trim(),
-            youtube: document.getElementById("youtube").value.trim()
+            youtube: document.getElementById("youtube").value.trim(),
+            // "Choose automatically" is the empty option — unpins any
+            // existing selection, falling back to the documented
+            // completed -> published -> hidden chain (see
+            // js/pages/profile/resolveFeaturedBuild.js).
+            featured_build_id: featuredBuildValue || null
         };
 
         const { error: updateError } = await supabase
@@ -133,6 +146,49 @@ async function loadSettings(user) {
 
         showToast("Profile updated successfully.", "success");
     });
+}
+
+function initHeadlineCounter() {
+    const input = document.getElementById("headline");
+    const countEl = document.getElementById("headlineCount");
+
+    if (!input || !countEl) return;
+
+    const update = () => {
+        countEl.textContent = `${input.value.length}/120`;
+    };
+
+    update();
+    input.addEventListener("input", update);
+}
+
+// Featured Build picker options are restricted to this builder's own
+// published (visibility "public") projects — the picker's data source is
+// the primary guard against picking an ineligible build (spec §19 Phase
+// 5 / §20.2); the 0024 migration's ownership trigger is defense in
+// depth, not the mechanism a user ever actually encounters. A failure
+// here degrades to "Choose automatically" being the only option, not a
+// broken settings page.
+async function loadFeaturedBuildOptions(user, profile) {
+    const select = document.getElementById("featuredBuild");
+
+    if (!select) return;
+
+    let builds = [];
+
+    try {
+        builds = await getProfileBuilds(user.id);
+    } catch (error) {
+        console.error("Featured build options load error:", error);
+        return;
+    }
+
+    const options = builds
+        .map(build => `<option value="${escapeAttribute(build.id)}">${escapeHtml(build.title || "Untitled project")}</option>`)
+        .join("");
+
+    select.innerHTML = `<option value="">Choose automatically</option>${options}`;
+    select.value = profile?.featured_build_id || "";
 }
 
 async function renderAvatarPreview(container, profile) {
