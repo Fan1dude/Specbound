@@ -1,7 +1,7 @@
 import { supabase } from "../core/supabase.js";
 
 const PUBLIC_PROFILE_COLUMNS =
-    "id, username, display_name, bio, location, website, github, youtube, avatar_path, avatar_url, created_at, followers_count, following_count";
+    "id, username, display_name, headline, bio, location, website, github, youtube, avatar_path, avatar_url, created_at, followers_count, following_count, featured_build_id";
 
 export async function getProfile(id) {
     const { data, error } = await supabase

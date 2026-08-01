@@ -465,7 +465,7 @@ function mostRecentlyUpdated(list) {
 
 ### 17.3 Builder Journey — recent revisions fetch
 
-New function in `js/repositories/buildRepository.js` (sibling to the existing build/revision queries there):
+New function in `js/repositories/revisionRepository.js` (sibling to the existing `getBuildRevisions`/`getLatestBuildRevision`/`getRevisionById` there — the dedicated `build_revisions` repository, not `buildRepository.js`):
 
 ```js
 export async function getRecentBuilderRevisions(userId, { limit = 100 } = {}) {
@@ -577,7 +577,7 @@ New/modified files, grouped by what they implement. CSS files are named but not 
 | `supabase/migrations.md` | Modified — new `## 0024` entry, existing convention |
 | `docs/DATABASE.md` | Modified — note new columns if the file's conventions warrant it (matches how prior migrations were logged) |
 | `js/repositories/profileRepository.js` | Modified — `PUBLIC_PROFILE_COLUMNS` (§17.1) |
-| `js/repositories/buildRepository.js` | Modified — add `getRecentBuilderRevisions` (§17.3) |
+| `js/repositories/revisionRepository.js` | Modified — add `getRecentBuilderRevisions` (§17.3) |
 | `js/pages/profile/resolveFeaturedBuild.js` | New — §17.2 |
 | `js/pages/profile/buildBuilderJourney.js` | New — §17.4 |
 | `js/utils/icons.js` | Modified — 6 new `PATHS` entries (§10.3) |
@@ -605,7 +605,7 @@ No changes to `BlueprintCard.js`, `technologies/*.js`, `badge.css`, `skeleton.cs
 Kept in small, separately-verifiable steps, matching this repo's established milestone convention (e.g. Milestone 19's phased build), and landing as separate logical commits per §20.
 
 1. **Schema.** Apply `0024` (§16) to a dev Supabase project only, per this repo's standing dev-application procedure — never applied directly to production from this environment. Verify the ownership trigger rejects a cross-user `featured_build_id` and accepts a same-user one, in both `insert`-via-trigger and profile-signup paths. *Commit: schema.*
-2. **Repository layer.** `profileRepository.js` column list, `buildRepository.js`'s `getRecentBuilderRevisions`, `resolveFeaturedBuild.js`, `buildBuilderJourney.js`. Pure-function pieces (§17.2, §17.4) can be exercised with hand-built fixture data before any live data exists. *Commit: repository/data logic.*
+2. **Repository layer.** `profileRepository.js` column list, `revisionRepository.js`'s `getRecentBuilderRevisions`, `resolveFeaturedBuild.js`, `buildBuilderJourney.js`. Pure-function pieces (§17.2, §17.4) can be exercised with hand-built fixture data before any live data exists. *Commit: repository/data logic.*
 3. **Icon system + section components.** Six new `PATHS` entries in `js/utils/icons.js` (§10.3, hand-authored to the existing construction rules), plus the new `render*.js` section files and `profile.css` changes from §18, built and visually checked one section at a time against §4's layout and §11's approved deviations. *Commit: shared icons/components.*
 4. **Page wiring + skeletons.** `pages/profile.html` restructuring, `renderProfile.js` becoming the thin orchestrator, `loadProfile.js`'s fetch sequencing (§13's non-blocking-fetch ordering), skeleton compositions (§8), the zero-project empty state with its "Publish Your First Build" → `../upload.html` CTA (§7, §20.1). *Commit: page wiring.*
 5. **Settings UI — required for this milestone, not deferred.** Headline field (120-char limit, live counter) and Featured Build picker added to `pages/settings.html`/`settings/app.js`. The picker's option list is fetched and filtered to the signed-in builder's own `visibility = 'public'` builds only (§20.2) — the database ownership trigger from §16 remains as defense in depth, not the primary UX guard; a builder should never even see an ineligible build as a choice. *Commit: Settings UI.*
