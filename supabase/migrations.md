@@ -10,7 +10,42 @@ change — `0001_description.sql`, `0002_description.sql`, etc. Never reused,
 never renumbered. A migration only gets edited in place if it's still
 `Proposed` (not yet applied); once a migration is marked `Applied` below,
 any further change to that schema is a new, higher-numbered file, even if
-it's small. Each migration gets a matching `..._rollback.sql`.
+it's small. Each migration gets a matching rollback file in
+`supabase/rollbacks/` (moved out of `supabase/migrations/` 2026-08-01 — a
+real Supabase project's tooling was treating every `.sql` file in that
+folder as a forward migration, applying rollbacks as forward changes).
+
+**The one exception to "sequential starting at 0001"**: `0000` exists
+specifically to sort *before* `0001` — added retroactively 2026-08-01 once
+a from-empty-database dry run revealed `profiles`/`builds`/`build_revisions`
+were never created by any tracked migration (see that file's own header).
+Every other migration still only ever moves forward from `0001`.
+
+## 0000_baseline_pre_tracked_tables
+
+- **Status**: Proposed — not yet applied to the real project. Depends on
+  nothing (this is the new floor of the migration sequence).
+- **File**: `migrations/0000_baseline_pre_tracked_tables.sql`
+- **Rollback**: `rollbacks/0000_baseline_pre_tracked_tables_rollback.sql`
+- **Adds**: `public.profiles`, `public.builds`, `public.build_revisions`,
+  and the `auth.users` signup trigger that populates `profiles` — none of
+  which any tracked migration ever created, despite `0001` onward freely
+  `ALTER`ing and foreign-keying against all three. Every column is
+  reconstructed from evidence (later `ALTER TABLE` statements, migration
+  function bodies, application code) — see the file's own header for the
+  full method and for what's deliberately *not* included (no `UNIQUE` on
+  `builds.slug` — that gap is `0015`'s to fix, faithfully; no `CHECK` on
+  `builds.status`/`build_revisions.update_type` — neither ever had one).
+- **Touches no existing table** (there is no earlier tracked state to
+  touch).
+- **Known limitation**: this is a reconstruction sufficient to bootstrap a
+  fresh project, not a captured-and-verified-identical copy of the real
+  production database's actual definitions. See `docs/DATABASE.md`'s
+  Known Gap section and the `docs/ROADMAP.md` backlog item for what
+  closing that remaining gap would require.
+- **Context**: found and fixed 2026-08-01, the first time a genuine
+  from-empty-database dry run of the full migration sequence was
+  attempted, for `docs/milestones/MILESTONE_19_DEV_APPLICATION_PROCEDURE.md`.
 
 ## 0001_project_drafts_and_media
 
