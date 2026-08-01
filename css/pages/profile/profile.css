@@ -616,6 +616,14 @@
         row-gap: var(--space-3);
     }
 
+    /* Slightly larger than the desktop --font-size-xs (12px) — small
+       uppercase, tracked labels get harder to read at mobile viewing
+       distances; bumping one step to --font-size-sm (14px) here only,
+       nothing else about the metric strip changes. */
+    .overview-metric-label {
+        font-size: var(--font-size-sm);
+    }
+
     .featured-project-layout {
         grid-template-columns: 1fr;
     }
@@ -627,12 +635,41 @@
     .gallery-toolbar {
         flex-direction: column;
         align-items: stretch;
+        /* A bit more room than the desktop --space-2 between the filter
+           row and the sort row now that they're stacked, so the sort
+           control doesn't read as crowded directly under the filters. */
+        gap: var(--space-3);
     }
 
+    /* Explicit width: 100% (not just min-width: 0) on both direct
+       children of the now-column .gallery-toolbar. align-items: stretch
+       alone doesn't reliably cap a nested flex container's cross size to
+       its parent's content width when that nested container itself has
+       nowrap + overflow-x children — confirmed live: with min-width: 0
+       only, a builder with enough categories to fill the row still
+       rendered .gallery-filters at its own 413px max-content width
+       (matching its nowrap pill row) instead of the toolbar's actual
+       345px, pushing the whole page 53px wider than the viewport. An
+       explicit width forces the container itself to the correct size,
+       so its genuine overflow (the pills that don't fit) becomes
+       properly scrollable instead of leaking out as page-level overflow. */
     .gallery-filters {
+        width: 100%;
         flex-wrap: nowrap;
         overflow-x: auto;
         padding-bottom: 4px;
+    }
+
+    /* The label + select row: let the select take the remaining width
+       instead of sizing to its own content, so it doesn't end up
+       squeezed into a narrow leftover space next to "Sort". */
+    .gallery-sort {
+        width: 100%;
+    }
+
+    .gallery-sort select {
+        flex: 1;
+        min-width: 0;
     }
 
     .builder-journey-event {
