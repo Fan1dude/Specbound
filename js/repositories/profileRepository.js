@@ -1,7 +1,22 @@
 import { supabase } from "../core/supabase.js";
 
+// Deliberately the SAME column list this had before Milestone 20 —
+// getPublicProfile()/getProfilesByIds() are used far beyond the profile
+// page itself (Home's Featured section, Explore, every build page's
+// creator attribution, comments, follow lists, search, notifications —
+// see the grep this comment is explaining) for simple build/comment
+// attribution that never needed headline or featured_build_id. A
+// PostgREST explicit column-list select fails ENTIRELY if any one named
+// column doesn't exist yet (unlike select("*"), which just omits it), so
+// adding those two columns here would have broken every one of those
+// unrelated call sites the moment migration 0024 was written, well
+// before it's actually applied to any database. getBuilderPortfolioProfile()
+// below carries the two new columns instead, scoped to the one call site
+// that actually needs them.
 const PUBLIC_PROFILE_COLUMNS =
-    "id, username, display_name, headline, bio, location, website, github, youtube, avatar_path, avatar_url, created_at, followers_count, following_count, featured_build_id";
+    "id, username, display_name, bio, location, website, github, youtube, avatar_path, avatar_url, created_at, followers_count, following_count";
+
+const PORTFOLIO_PROFILE_COLUMNS = `${PUBLIC_PROFILE_COLUMNS}, headline, featured_build_id`;
 
 export async function getProfile(id) {
     const { data, error } = await supabase
@@ -19,6 +34,23 @@ export async function getPublicProfile(id) {
     const { data, error } = await supabase
         .from("profiles")
         .select(PUBLIC_PROFILE_COLUMNS)
+        .eq("id", id)
+        .single();
+
+    if (error) throw error;
+
+    return data;
+}
+
+// The Builder Portfolio page's own fetch (js/pages/profile/loadProfile.js
+// only) — the one place headline/featured_build_id are actually read.
+// Kept separate from getPublicProfile() precisely so every OTHER caller
+// stays unaffected until migration 0024 is applied — see the comment on
+// PUBLIC_PROFILE_COLUMNS above.
+export async function getBuilderPortfolioProfile(id) {
+    const { data, error } = await supabase
+        .from("profiles")
+        .select(PORTFOLIO_PROFILE_COLUMNS)
         .eq("id", id)
         .single();
 

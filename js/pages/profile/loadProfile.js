@@ -1,4 +1,4 @@
-import { getPublicProfile, getProfileBuilds } from "../../repositories/profileRepository.js";
+import { getBuilderPortfolioProfile, getProfileBuilds } from "../../repositories/profileRepository.js";
 import { getCommentCountForBuilds } from "../../repositories/commentRepository.js";
 import { getRecentBuilderRevisions } from "../../repositories/revisionRepository.js";
 import { resolveBuildImageUrls } from "../../repositories/mediaRepository.js";
@@ -24,7 +24,7 @@ export async function loadProfile() {
     let builds;
 
     try {
-        profile = await getPublicProfile(userId);
+        profile = await getBuilderPortfolioProfile(userId);
         const rawBuilds = await getProfileBuilds(userId);
 
         // Every card on this page is this same profile's own project —
