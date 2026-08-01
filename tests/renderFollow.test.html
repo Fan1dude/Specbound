@@ -110,10 +110,14 @@
         test("following count renders from profile.following_count", countsEl.textContent.includes("3") && countsEl.textContent.includes("Following"));
         test("both counts are real links (clicking opens the corresponding list)", countsEl.querySelectorAll("a.profile-follow-count").length === 2);
 
-        // --- Case 2: signed out — button visible but disabled, sign-in hint ---
+        // --- Case 2: signed out — the button itself is the sign-in affordance
+        // (Milestone 20 polish pass): no separate disabled state + hint
+        // sentence anymore, the button is enabled and reads "Sign In to
+        // Follow", clicking it navigates to login. ---
         test("signed out: button is visible (not hidden)", button.hidden === false);
-        test("signed out: button is disabled", button.disabled === true);
-        test("signed out: a visible sign-in hint is shown", !hint.hidden && hint.textContent.includes("Sign in"));
+        test("signed out: button is enabled, not disabled", button.disabled === false);
+        test("signed out: button reads 'Sign In to Follow'", button.textContent.trim() === "Sign In to Follow");
+        test("signed out: no separate hint sentence is shown", hint.hidden === true);
         test("signed out: no hasFollowed call is made", !calls.some(c => c[0] === "hasFollowed"));
 
         // --- Case 3: viewing your own profile — no control at all -----------
