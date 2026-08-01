@@ -46,7 +46,7 @@
 -- this migration starts maintaining it but adds no new column to builds.
 -- Adds build_view_cooldowns, record_build_view().
 --
--- Rollback: see 0010_build_view_tracking_rollback.sql in this folder.
+-- Rollback: see 0010_build_view_tracking_rollback.sql in supabase/rollbacks/.
 
 begin;
 

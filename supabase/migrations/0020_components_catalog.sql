@@ -69,7 +69,7 @@
 -- public.set_updated_at() trigger function from 0001 — no new trigger
 -- function beyond is_catalog_moderator().
 --
--- Rollback: see 0020_components_catalog_rollback.sql in this folder.
+-- Rollback: see 0020_components_catalog_rollback.sql in supabase/rollbacks/.
 
 begin;
 

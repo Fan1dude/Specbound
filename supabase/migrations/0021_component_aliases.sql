@@ -41,7 +41,7 @@
 -- Touches: none (one new table, one new trigger function). Depends on
 -- public.components (0020).
 --
--- Rollback: see 0021_component_aliases_rollback.sql in this folder.
+-- Rollback: see 0021_component_aliases_rollback.sql in supabase/rollbacks/.
 
 begin;
 

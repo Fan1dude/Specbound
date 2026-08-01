@@ -48,7 +48,7 @@
 -- Touches: public.profiles (2 new columns, additive only). Adds follows,
 -- bump_follow_counts(), set_follow().
 --
--- Rollback: see 0012_follows_rollback.sql in this folder.
+-- Rollback: see 0012_follows_rollback.sql in supabase/rollbacks/.
 
 begin;
 

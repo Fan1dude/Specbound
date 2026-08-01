@@ -16,7 +16,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 
 - **Status**: Applied.
 - **File**: `migrations/0001_project_drafts_and_media.sql`
-- **Rollback**: `migrations/0001_project_drafts_and_media_rollback.sql`
+- **Rollback**: `rollbacks/0001_project_drafts_and_media_rollback.sql`
 - **Adds**: `project_drafts`, `project_media` (both new, owner-only RLS), a
   `cover_media_id` FK on `project_drafts`, storage policies for the
   `projects/{draftId}/...` path prefix in the existing `project-images`
@@ -42,7 +42,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
   file's own convention (accurate history, bug included) rather than
   patched in place.
 - **File**: `migrations/0002_publish_draft_and_visibility.sql`
-- **Rollback**: `migrations/0002_publish_draft_and_visibility_rollback.sql`
+- **Rollback**: `rollbacks/0002_publish_draft_and_visibility_rollback.sql`
 - **Adds**: `project_drafts.published_build_id`, `builds.visibility`
   (`public`/`private`, defaults + backfills every existing row to
   `public`), `revision_media` (immutable gallery snapshot per revision,
@@ -80,7 +80,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 
 - **Status**: Applied.
 - **File**: `migrations/0003_profile_avatar_path.sql`
-- **Rollback**: `migrations/0003_profile_avatar_path_rollback.sql`
+- **Rollback**: `rollbacks/0003_profile_avatar_path_rollback.sql`
 - **Adds**: `profiles.avatar_path`, a new nullable column — purely
   additive, not a rename. `avatar_url` is left in place untouched, holding
   whatever ready-to-use URL it already had. Needed because avatar delivery
@@ -105,7 +105,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Applied. Confirmed by real-backend test: publish and
   republish both succeeded, project reached v1.1 as expected.
 - **File**: `migrations/0004_fix_publish_draft_builds_columns.sql`
-- **Rollback**: `migrations/0004_fix_publish_draft_builds_columns_rollback.sql`
+- **Rollback**: `rollbacks/0004_fix_publish_draft_builds_columns_rollback.sql`
 - **Fixes**: `publish_draft()`'s real-backend test failed with `column
   "version" of relation "builds" does not exist`. Confirmed against the
   actual schema via `information_schema.columns`: `builds` has no
@@ -139,7 +139,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
   timeline navigation, multi-revision publishing (v1.0 → v1.1 → v1.2),
   and historical revision routing all verified working.
 - **File**: `migrations/0005_revision_history_and_restore.sql`
-- **Rollback**: `migrations/0005_revision_history_and_restore_rollback.sql`
+- **Rollback**: `rollbacks/0005_revision_history_and_restore_rollback.sql`
 - **Preflight**: checks for builds with more than one draft linked via
   `published_build_id` before creating the unique index below, and raises
   a clear exception (naming the count) rather than letting the index
@@ -185,7 +185,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 
 - **Status**: Applied.
 - **File**: `migrations/0006_unpublish.sql`
-- **Rollback**: `migrations/0006_unpublish_rollback.sql`
+- **Rollback**: `rollbacks/0006_unpublish_rollback.sql`
 - **Adds**: `public.set_build_visibility(p_build_id, p_visibility)` —
   `SECURITY DEFINER`, the only direct way to change `builds.visibility`
   (same "no direct-client writes to builds" posture as everything else on
@@ -226,7 +226,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0006 being
   applied first.
 - **File**: `migrations/0007_comments.sql`
-- **Rollback**: `migrations/0007_comments_rollback.sql`
+- **Rollback**: `rollbacks/0007_comments_rollback.sql`
 - **Adds**: `comments` (`build_id`, not `revision_id` — comments belong
   to the build as a whole), `deleted_at` (soft delete; nothing hard-
   deletes a comment through the app), `parent_comment_id` (added now for
@@ -258,7 +258,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0007 being
   applied first.
 - **File**: `migrations/0008_project_likes.sql`
-- **Rollback**: `migrations/0008_project_likes_rollback.sql`
+- **Rollback**: `rollbacks/0008_project_likes_rollback.sql`
 - **Adds**: `likes` (`build_id`, `user_id`, `unique (build_id, user_id)` —
   the hard duplicate-prevention guarantee, independent of any application
   logic). `public.set_build_like(p_build_id, p_liked)` — `SECURITY
@@ -299,7 +299,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0008 being
   applied first.
 - **File**: `migrations/0009_saved_builds.sql`
-- **Rollback**: `migrations/0009_saved_builds_rollback.sql`
+- **Rollback**: `rollbacks/0009_saved_builds_rollback.sql`
 - **Adds**: `saved_builds` (`build_id`, `user_id`,
   `unique (build_id, user_id)`). `public.set_build_saved(p_build_id,
   p_saved)` — `SECURITY DEFINER`, same idempotent desired-state shape as
@@ -327,7 +327,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0009 being
   applied first.
 - **File**: `migrations/0010_build_view_tracking.sql`
-- **Rollback**: `migrations/0010_build_view_tracking_rollback.sql`
+- **Rollback**: `rollbacks/0010_build_view_tracking_rollback.sql`
 - **Adds**: `build_view_cooldowns` — a bounded UPSERT table (one row per
   `(build_id, viewer_key)`, not an append-only events log), RLS enabled
   with **zero policies** (no legitimate direct-client read/write case
@@ -356,7 +356,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0010 being
   applied first.
 - **File**: `migrations/0011_notifications.sql`
-- **Rollback**: `migrations/0011_notifications_rollback.sql`
+- **Rollback**: `rollbacks/0011_notifications_rollback.sql`
 - **Adds**: `notifications` (`recipient_id`, `actor_id`, `type` — CHECK
   includes `'reply'` for future schema compatibility, though nothing
   creates one yet since threaded replies aren't implemented — `build_id`,
@@ -395,7 +395,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0011 being
   applied first.
 - **File**: `migrations/0012_follows.sql`
-- **Rollback**: `migrations/0012_follows_rollback.sql`
+- **Rollback**: `rollbacks/0012_follows_rollback.sql`
 - **Adds**: `follows` (`follower_id`, `following_id`,
   `unique (follower_id, following_id)`, `check (follower_id <>
   following_id)` — duplicate- and self-follow prevention enforced at the
@@ -424,7 +424,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0012 being
   applied first.
 - **File**: `migrations/0013_activity_feed.sql`
-- **Rollback**: `migrations/0013_activity_feed_rollback.sql`
+- **Rollback**: `rollbacks/0013_activity_feed_rollback.sql`
 - **Adds**: `public.get_activity_feed(p_scope, p_before_created_at,
   p_before_id, p_limit)` only — no table, no columns. Computes the
   Following/Explore feeds live from the existing `build_revisions` log
@@ -463,7 +463,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0013 being
   applied first.
 - **File**: `migrations/0014_storage_visibility_fix.sql`
-- **Rollback**: `migrations/0014_storage_visibility_fix_rollback.sql`
+- **Rollback**: `rollbacks/0014_storage_visibility_fix_rollback.sql`
 - **Fixes**: a real privacy gap found in the Milestone 8 audit —
   `0002`'s original `"Anyone can read files referenced by a published
   revision"` storage policy never checked the parent build's
@@ -491,7 +491,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0014 being
   applied first.
 - **File**: `migrations/0015_index_hardening.sql`
-- **Rollback**: `migrations/0015_index_hardening_rollback.sql`
+- **Rollback**: `rollbacks/0015_index_hardening_rollback.sql`
 - **Adds**: a unique index on `builds.slug` (with a preflight duplicate
   check, same pattern as `0005`'s duplicate-draft check — fails clearly
   rather than opaquely, never auto-resolves duplicates) — `builds.slug`
@@ -514,7 +514,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0015 being
   applied first.
 - **File**: `migrations/0016_security_definer_hygiene.sql`
-- **Rollback**: `migrations/0016_security_definer_hygiene_rollback.sql`
+- **Rollback**: `rollbacks/0016_security_definer_hygiene_rollback.sql`
 - **Fixes**: the one gap found by a full re-audit of every custom
   function's `SECURITY DEFINER`/`INVOKER` configuration —
   `set_updated_at()` (`0001`) was the only trigger function in the schema
@@ -536,7 +536,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0016 being
   applied first.
 - **File**: `migrations/0017_storage_rls_hardening.sql`
-- **Rollback**: `migrations/0017_storage_rls_hardening_rollback.sql`
+- **Rollback**: `rollbacks/0017_storage_rls_hardening_rollback.sql`
 - **Fixes**: four `storage.objects` policies confirmed live via a direct
   `pg_policies` dump and empirical anonymous-session testing, none of
   which appear in any tracked migration — `"Anyone can view project
@@ -572,7 +572,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0017 being
   applied first.
 - **File**: `migrations/0018_legacy_media_linkage_backfill.sql`
-- **Rollback**: `migrations/0018_legacy_media_linkage_backfill_rollback.sql`
+- **Rollback**: `rollbacks/0018_legacy_media_linkage_backfill_rollback.sql`
 - **Adds**: 7 `revision_media` rows (`desk`'s 5 revisions, `trap-open`'s
   2) for legacy pre-Milestone-5A storage objects whose ownership *and*
   revision linkage are both independently provable from the objects'
@@ -597,7 +597,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0018 being
   applied first.
 - **File**: `migrations/0019_fix_record_build_view_ambiguity.sql`
-- **Rollback**: `migrations/0019_fix_record_build_view_ambiguity_rollback.sql`
+- **Rollback**: `rollbacks/0019_fix_record_build_view_ambiguity_rollback.sql`
 - **Fixes**: two confirmed issues in `record_build_view()` (0010), both
   reproduced live against the real backend during the 2026-07-28
   implementation review. (1) Every call failed with Postgres 42702
@@ -630,7 +630,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 
 - **Status**: Proposed — not yet applied. Depends on 0001-0019.
 - **File**: `migrations/0020_components_catalog.sql`
-- **Rollback**: `migrations/0020_components_catalog_rollback.sql`
+- **Rollback**: `rollbacks/0020_components_catalog_rollback.sql`
 - **Adds**: `catalog_moderators` (the app's first admin-role concept,
   scoped to this one subsystem) and `is_catalog_moderator(uid)` (a
   `SECURITY DEFINER` helper other tables' RLS policies reference), then
@@ -650,7 +650,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 
 - **Status**: Proposed — not yet applied. Depends on 0020.
 - **File**: `migrations/0021_component_aliases.sql`
-- **Rollback**: `migrations/0021_component_aliases_rollback.sql`
+- **Rollback**: `rollbacks/0021_component_aliases_rollback.sql`
 - **Adds**: `component_aliases` — shorthand/misspelling mappings onto an
   existing `components` row (e.g. "4080" → "NVIDIA GeForce RTX 4080"),
   moderator-curated, no client-facing write path. `technology_id`/
@@ -669,7 +669,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 
 - **Status**: Proposed — not yet applied. Depends on 0020, 0021.
 - **File**: `migrations/0022_component_submissions.sql`
-- **Rollback**: `migrations/0022_component_submissions_rollback.sql`
+- **Rollback**: `rollbacks/0022_component_submissions_rollback.sql`
 - **Adds**: `component_submissions` — the only path an ordinary user has
   toward ever creating a canonical catalog entry, since `0020` locks
   direct inserts to moderators. `approve_component_submission(id,
@@ -692,7 +692,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 
 - **Status**: Proposed — not yet applied. Depends on 0020.
 - **File**: `migrations/0023_retailers_and_retail_variants.sql`
-- **Rollback**: `migrations/0023_retailers_and_retail_variants_rollback.sql`
+- **Rollback**: `rollbacks/0023_retailers_and_retail_variants_rollback.sql`
 - **Adds**: `retailers`, `component_retail_variants` (a specific buyable
   SKU under a generic `components` row — "ASUS TUF RTX 4080 OC" under
   "RTX 4080"), and `component_retailer_links` (attaches to a variant, not

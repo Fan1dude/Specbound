@@ -13,6 +13,7 @@ Covers: applying migrations `0020`–`0023`, running `supabase/tests/milestone_1
 - **Know which project you're pointing at.** `js/core/config.js` currently points to `xpxjqyraizntbtijzoyp.supabase.co`. Live-verified in this session, that project already has real user-generated content (real accounts, real builds). The migrations themselves are purely additive (new tables only — nothing here alters or drops an existing table), and the test file is written to roll back everything it does, but neither of those is the same as "verified safe in practice" in this environment. **If a disposable/staging Supabase project is available, prefer it for the test-file run and the rollback drill (§3, §5); use the real project only for the final forward-apply once those have passed elsewhere.** If a separate project isn't practical, the procedure below is still safe to run against the shared one — just be deliberate about the two test accounts in §6 (clearly-labeled, disposable, easy to tell apart from real users in Explore/search afterward).
 - **A way to run raw SQL and see `NOTICE`/`WARNING` output** — the Supabase SQL editor shows these inline; `psql` shows them on stderr by default. Either works for every step below.
 - **Two throwaway accounts you're prepared to create** through the app's normal signup flow for §6 — this procedure doesn't touch `auth.users` directly for the browser portion (only the SQL test file does, and only inside a rolled-back transaction).
+- **If using a brand-new project**: `public.profiles` and its `auth.users` signup trigger predate migration tracking and have no tracked `CREATE TABLE` migration (see `docs/AUTH_ARCHITECTURE.md` §1-2) — a fresh project applying `0001`–`0023` alone would have no `profiles` table at all, breaking signup/navbar/editor UI. Run `supabase/dev-bootstrap/bootstrap_profiles_for_fresh_project.sql` first (after `0001`-`0019`, before or after `0020`-`0023` — order relative to those doesn't matter, nothing in them touches `profiles`). This is a best-effort reconstruction for testing purposes only, **never** run it against the real project.
 
 ---
 
@@ -145,10 +146,10 @@ Run this as its own drill — ideally on the staging project, or scheduled for a
 
 Apply in **exact reverse order**:
 ```sql
--- 1. supabase/migrations/0023_retailers_and_retail_variants_rollback.sql
--- 2. supabase/migrations/0022_component_submissions_rollback.sql
--- 3. supabase/migrations/0021_component_aliases_rollback.sql
--- 4. supabase/migrations/0020_components_catalog_rollback.sql
+-- 1. supabase/rollbacks/0023_retailers_and_retail_variants_rollback.sql
+-- 2. supabase/rollbacks/0022_component_submissions_rollback.sql
+-- 3. supabase/rollbacks/0021_component_aliases_rollback.sql
+-- 4. supabase/rollbacks/0020_components_catalog_rollback.sql
 ```
 
 ### 3.1 Expected result after each rollback

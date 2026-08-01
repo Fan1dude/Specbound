@@ -46,7 +46,7 @@
 -- column, just never maintained). Adds likes, bump_likes_count(),
 -- set_build_like().
 --
--- Rollback: see 0008_project_likes_rollback.sql in this folder.
+-- Rollback: see 0008_project_likes_rollback.sql in supabase/rollbacks/.
 
 begin;
 

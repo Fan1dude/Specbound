@@ -68,7 +68,7 @@
 -- Adds notifications, create_notification(), mark_notification_read(),
 -- mark_all_notifications_read().
 --
--- Rollback: see 0011_notifications_rollback.sql in this folder. Note:
+-- Rollback: see 0011_notifications_rollback.sql in supabase/rollbacks/. Note:
 -- the rollback restores create_comment()/set_build_like()/
 -- set_build_saved() to their pre-7B bodies (copied from 0007/0008/0009)
 -- so a rollback doesn't leave dangling calls to a dropped function.

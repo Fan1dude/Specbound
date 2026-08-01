@@ -64,7 +64,7 @@
 -- Touches: public.record_build_view() only.
 --
 -- Rollback: see 0019_fix_record_build_view_ambiguity_rollback.sql in
--- this folder — restores 0010's original (buggy, and view-count-leaking)
+-- supabase/rollbacks/ — restores 0010's original (buggy, and view-count-leaking)
 -- function body verbatim. That is deliberate rollback semantics: undo
 -- only what this migration changed, not a "neutral" state.
 

@@ -32,7 +32,7 @@ Storage policies mirror table ownership and visibility (see `STORAGE_ARCHITECTUR
 
 # Migrations
 
-One file per migration, sequentially numbered (`000N_description.sql`), with a **paired rollback file** (`000N_description_rollback.sql`) every time, no exceptions.
+One file per migration, sequentially numbered (`000N_description.sql`), with a **paired rollback file** (`000N_description_rollback.sql`) every time, no exceptions. Forward migrations live in `supabase/migrations/`; their rollback pairs live in the separate `supabase/rollbacks/` folder, not alongside them — early on, rollback files sat in `supabase/migrations/` too, but a dry run against a real Supabase project showed its tooling treats every `.sql` file in that folder as a forward migration, applying rollbacks as if they were forward changes. Splitting the folders fixed that; each migration's own header comment points to its rollback's new location.
 
 Each migration file opens with a header comment stating its purpose, status, and blast radius (what tables/policies it touches, what it explicitly does not touch) before any DDL. Read any file in `supabase/migrations/` for the pattern.
 

@@ -46,7 +46,7 @@
 -- build_revisions (RLS rewrite), storage.objects (one replaced policy, two
 -- new policies). Adds: revision_media, publish_draft().
 --
--- Rollback: see 0002_publish_draft_and_visibility_rollback.sql in this folder.
+-- Rollback: see 0002_publish_draft_and_visibility_rollback.sql in supabase/rollbacks/.
 
 begin;
 

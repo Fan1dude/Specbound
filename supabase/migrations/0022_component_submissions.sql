@@ -51,7 +51,7 @@
 -- public.catalog_moderators, public.is_catalog_moderator() (0020) and
 -- public.component_aliases (0021).
 --
--- Rollback: see 0022_component_submissions_rollback.sql in this folder.
+-- Rollback: see 0022_component_submissions_rollback.sql in supabase/rollbacks/.
 
 begin;
 

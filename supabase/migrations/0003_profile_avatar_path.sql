@@ -22,7 +22,7 @@
 --
 -- Touches: public.profiles only.
 --
--- Rollback: see 0003_profile_avatar_path_rollback.sql in this folder.
+-- Rollback: see 0003_profile_avatar_path_rollback.sql in supabase/rollbacks/.
 
 begin;
 

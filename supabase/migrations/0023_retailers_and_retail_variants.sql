@@ -61,7 +61,7 @@
 -- Touches: none (three new tables only). Adds retailers,
 -- component_retail_variants, component_retailer_links.
 --
--- Rollback: see 0023_retailers_and_retail_variants_rollback.sql in this folder.
+-- Rollback: see 0023_retailers_and_retail_variants_rollback.sql in supabase/rollbacks/.
 
 begin;
 

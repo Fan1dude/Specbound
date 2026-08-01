@@ -31,8 +31,8 @@
 -- Touches: none — no table, column, or function body changes. Revokes a
 -- privilege on public.set_updated_at() only.
 --
--- Rollback: see 0016_security_definer_hygiene_rollback.sql in this
--- folder.
+-- Rollback: see 0016_security_definer_hygiene_rollback.sql in
+-- supabase/rollbacks/.
 
 begin;
 

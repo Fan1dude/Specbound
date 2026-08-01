@@ -38,8 +38,8 @@
 --
 -- Touches: public.publish_draft() only — no table/column changes.
 --
--- Rollback: see 0004_fix_publish_draft_builds_columns_rollback.sql in this
--- folder (restores 0002's original, buggy function body — rollback undoes
+-- Rollback: see 0004_fix_publish_draft_builds_columns_rollback.sql in
+-- supabase/rollbacks/ (restores 0002's original, buggy function body — rollback undoes
 -- the fix, it does not undo the underlying bug).
 
 begin;

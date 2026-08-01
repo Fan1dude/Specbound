@@ -39,8 +39,8 @@
 -- Touches: revision_media (7 new rows, guarded by a NOT EXISTS check so
 -- re-running this migration is a no-op the second time).
 --
--- Rollback: see 0018_legacy_media_linkage_backfill_rollback.sql in this
--- folder. Deletes exactly these 7 rows by their precise
+-- Rollback: see 0018_legacy_media_linkage_backfill_rollback.sql in
+-- supabase/rollbacks/. Deletes exactly these 7 rows by their precise
 -- (revision_id, storage_path) pairs.
 
 begin;

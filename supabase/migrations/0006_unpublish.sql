@@ -34,7 +34,7 @@
 --
 -- Touches: publish_draft() (replaced). Adds set_build_visibility().
 --
--- Rollback: see 0006_unpublish_rollback.sql in this folder.
+-- Rollback: see 0006_unpublish_rollback.sql in supabase/rollbacks/.
 
 begin;
 
