@@ -94,11 +94,37 @@
             }
         `;
 
+        // These four have no imports of their own, so the real files are
+        // used as-is.
+        const escapeHtmlUrl = new URL("../js/utils/escapeHtml.js", location.href).href;
+        const formatDateUrl = new URL("../js/utils/formatDate.js", location.href).href;
+        const avatarInitialUrl = new URL("../js/utils/avatarInitial.js", location.href).href;
+        const skeletonsUrl = new URL("../js/utils/skeletons.js", location.href).href;
+        const iconsUrl = new URL("../js/utils/icons.js", location.href).href;
+
+        // modal.js's real confirmDialog() opens an actual <dialog> that
+        // needs a real button click to resolve — window.confirm() has no
+        // effect on it. Mocked to delegate to window.confirm() instead, so
+        // this test's existing "window.confirm = () => false/true" lines
+        // (below) keep controlling the confirm/cancel outcome exactly as
+        // they did before modal.js was a real, unmocked import.
+        const modalSrc = `
+            export function confirmDialog() {
+                return Promise.resolve(window.confirm());
+            }
+        `;
+
         const rewrites = {
             '"../../repositories/commentRepository.js"': blobUrl(commentRepoSrc),
             '"../../repositories/profileRepository.js"': blobUrl(profileRepoSrc),
             '"../../repositories/mediaRepository.js"': blobUrl(mediaRepoSrc),
-            '"../../core/toast.js"': blobUrl(toastSrc)
+            '"../../core/toast.js"': blobUrl(toastSrc),
+            '"../../utils/escapeHtml.js"': escapeHtmlUrl,
+            '"../../utils/formatDate.js"': formatDateUrl,
+            '"../../utils/avatarInitial.js"': avatarInitialUrl,
+            '"../../utils/modal.js"': blobUrl(modalSrc),
+            '"../../utils/skeletons.js"': skeletonsUrl,
+            '"../../utils/icons.js"': iconsUrl
         };
 
         const realSrc = await (await fetch("../js/pages/build/renderComments.js")).text();
@@ -143,7 +169,7 @@
 
         test("signed out: no comment form is rendered", document.getElementById("commentForm") === null);
         test("signed out: a sign-in prompt is shown instead", document.getElementById("commentComposeArea").textContent.includes("Sign in"));
-        test("empty comments: an empty-state message is shown, not a blank list", document.getElementById("commentsList").textContent.includes("No comments yet"));
+        test("empty comments: an empty-state message is shown, not a blank list", document.getElementById("commentsList").textContent.includes("Be the first to weigh in"));
 
         // --- Case 2: signed in, existing comments — list renders correctly ---
         calls.length = 0;
@@ -283,11 +309,14 @@
             export async function createComment() { throw new Error("not used"); }
             export async function deleteComment() { throw new Error("not used"); }
         `;
-        const failRewritten = realSrc
-            .replaceAll('"../../repositories/commentRepository.js"', `"${blobUrl(failRepoSrc)}"`)
-            .replaceAll('"../../repositories/profileRepository.js"', `"${rewrites['"../../repositories/profileRepository.js"']}"`)
-            .replaceAll('"../../repositories/mediaRepository.js"', `"${rewrites['"../../repositories/mediaRepository.js"']}"`)
-            .replaceAll('"../../core/toast.js"', `"${rewrites['"../../core/toast.js"']}"`);
+        // Reuses every other entry from `rewrites` above (escapeHtml.js,
+        // formatDate.js, avatarInitial.js, modal.js, skeletons.js,
+        // icons.js included) — only commentRepository.js's mock changes
+        // for this failing-load case.
+        let failRewritten = realSrc;
+        for (const [from, to] of Object.entries({ ...rewrites, '"../../repositories/commentRepository.js"': blobUrl(failRepoSrc) })) {
+            failRewritten = failRewritten.replaceAll(from, `"${to}"`);
+        }
         const { renderComments: renderCommentsFailing } = await import(blobUrl(failRewritten));
 
         resetLoadMoreButton();

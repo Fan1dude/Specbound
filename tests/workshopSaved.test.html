@@ -68,11 +68,20 @@
             }
         `;
 
+        // escapeHtml.js, progressBar.js, and icons.js have no imports of
+        // their own either, so the real files are used as-is.
+        const escapeHtmlUrl = new URL("../js/utils/escapeHtml.js", location.href).href;
+        const progressBarUrl = new URL("../js/utils/progressBar.js", location.href).href;
+        const iconsUrl = new URL("../js/utils/icons.js", location.href).href;
+
         const rewrites = {
             '"../../components/BlueprintCard.js"': blueprintCardUrl,
             '"../../components/DraftCard.js"': blobUrl(draftCardSrc),
             '"../../repositories/savedRepository.js"': blobUrl(savedRepoSrc),
-            '"../../core/toast.js"': blobUrl(toastSrc)
+            '"../../core/toast.js"': blobUrl(toastSrc),
+            '"../../utils/escapeHtml.js"': escapeHtmlUrl,
+            '"../../utils/progressBar.js"': progressBarUrl,
+            '"../../utils/icons.js"': iconsUrl
         };
 
         const realSrc = await (await fetch("../js/pages/workshop/renderWorkshop.js")).text();

@@ -78,13 +78,19 @@
         // notificationFormat.js has no imports of its own, so the real file
         // is used as-is, same reasoning as BlueprintCard.js elsewhere.
         const formatUrl = new URL("../js/utils/notificationFormat.js", location.href).href;
+        // escapeHtml.js and skeletons.js have no imports of their own
+        // either, so the real files are used as-is.
+        const escapeHtmlUrl = new URL("../js/utils/escapeHtml.js", location.href).href;
+        const skeletonsUrl = new URL("../js/utils/skeletons.js", location.href).href;
 
         const rewrites = {
             '"../repositories/notificationRepository.js"': blobUrl(notificationRepoSrc),
             '"../utils/notificationFormat.js"': formatUrl,
             // Milestone 8B: notificationBell.js gained this import (a
             // missing error toast on Mark all read failure).
-            '"./toast.js"': blobUrl(toastSrc)
+            '"./toast.js"': blobUrl(toastSrc),
+            '"../utils/escapeHtml.js"': escapeHtmlUrl,
+            '"../utils/skeletons.js"': skeletonsUrl
         };
 
         const realSrc = await (await fetch("../js/core/notificationBell.js")).text();
@@ -260,7 +266,7 @@
         await waitFor(() => calls.some(c => c[0] === "getRecentNotifications"));
         await new Promise(r => setTimeout(r, 20));
 
-        test("zero notifications shows an empty-state message", document.getElementById("notificationDropdownList").textContent.includes("No notifications yet"));
+        test("zero notifications shows an empty-state message", document.getElementById("notificationDropdownList").textContent.includes("You're all caught up"));
 
         // --- Render + report ------------------------------------------------
         const resultsEl = document.getElementById("results");

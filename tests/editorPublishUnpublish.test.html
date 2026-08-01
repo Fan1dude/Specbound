@@ -107,6 +107,12 @@
         const tabsSrc = `export function setupEditorTabs() {}`;
         const statusSrc = `export function setEditorStatus() {}`;
         const recoverySrc = `export function maybeShowRecoveryBanner() {}`;
+        // Real confirmDialog() opens an actual <dialog> that needs a real
+        // button click to resolve — this test clicks Unpublish and waits
+        // for the resulting state change, never interacting with a
+        // confirmation dialog itself (that's not what this test is
+        // checking), so the mock always confirms.
+        const modalSrc = `export function confirmDialog() { return Promise.resolve(true); }`;
 
         const editorOrigin = new URL("../js/pages/editor/", location.href).href;
 
@@ -125,7 +131,8 @@
             '"./renderGallerySection.js"': blobUrl(gallerySrc),
             '"./editorTabs.js"': blobUrl(tabsSrc),
             '"./editorStatus.js"': blobUrl(statusSrc),
-            '"./draftRecoveryBanner.js"': blobUrl(recoverySrc)
+            '"./draftRecoveryBanner.js"': blobUrl(recoverySrc),
+            '"../../utils/modal.js"': blobUrl(modalSrc)
             // "./renderReadinessChecklist.js" deliberately left real — the
             // readiness-gating logic (isReady) is exactly what this test
             // needs to exercise for real.

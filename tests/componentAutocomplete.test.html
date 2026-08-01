@@ -50,8 +50,13 @@
             }
         `;
 
+        // escapeHtml.js has no imports of its own, so the real file is
+        // used as-is.
+        const escapeHtmlUrl = new URL("../js/utils/escapeHtml.js", location.href).href;
+
         const rewrites = {
-            '"../repositories/componentRepository.js"': blobUrl(componentRepoSrc)
+            '"../repositories/componentRepository.js"': blobUrl(componentRepoSrc),
+            '"../utils/escapeHtml.js"': escapeHtmlUrl
         };
 
         const realSrc = await (await fetch("../js/components/ComponentAutocomplete.js")).text();

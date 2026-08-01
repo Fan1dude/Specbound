@@ -93,7 +93,11 @@
             '"./renderGallerySection.js"': blobUrl(gallerySrc),
             '"./editorTabs.js"': blobUrl(tabsSrc),
             '"./editorStatus.js"': blobUrl(statusSrc),
-            '"./draftRecoveryBanner.js"': blobUrl(recoverySrc)
+            '"./draftRecoveryBanner.js"': blobUrl(recoverySrc),
+            // Real file, absolute URL — modal.js only imports escapeHtml.js
+            // itself (resolves fine on its own since this is a real file,
+            // not a blob), no reason to mock a plain confirm dialog.
+            '"../../utils/modal.js"': new URL("../js/utils/modal.js", location.href).href
         };
 
         history.replaceState(null, "", location.pathname + "?draft=draft-1");

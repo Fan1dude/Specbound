@@ -96,6 +96,13 @@
         const draftRepoUrl = blobUrl(draftRepoSrc);
         const imageServiceUrl = blobUrl(imageServiceSrc);
         const toastUrl = blobUrl(toastSrc);
+        // escapeHtml.js, modal.js, and skeletons.js have no imports of
+        // their own (modal.js's own import of escapeHtml.js resolves fine
+        // on its own since it's loaded via a real absolute URL, not a
+        // blob), so the real files are used as-is.
+        const escapeHtmlUrl = new URL("../js/utils/escapeHtml.js", location.href).href;
+        const modalUrl = new URL("../js/utils/modal.js", location.href).href;
+        const skeletonsUrl = new URL("../js/utils/skeletons.js", location.href).href;
 
         const realSrc = await (await fetch("../js/pages/editor/renderGallerySection.js")).text();
 
@@ -103,7 +110,10 @@
             .replace('"../../repositories/mediaRepository.js"', `"${mediaRepoUrl}"`)
             .replace('"../../repositories/draftRepository.js"', `"${draftRepoUrl}"`)
             .replace('"../../services/imageService.js"', `"${imageServiceUrl}"`)
-            .replace('"../../core/toast.js"', `"${toastUrl}"`);
+            .replace('"../../core/toast.js"', `"${toastUrl}"`)
+            .replace('"../../utils/escapeHtml.js"', `"${escapeHtmlUrl}"`)
+            .replace('"../../utils/modal.js"', `"${modalUrl}"`)
+            .replace('"../../utils/skeletons.js"', `"${skeletonsUrl}"`);
 
         const { renderGallerySection } = await import(blobUrl(rewritten));
 

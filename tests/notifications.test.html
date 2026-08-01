@@ -75,13 +75,19 @@
         `;
 
         const formatUrl = new URL("../js/utils/notificationFormat.js", location.href).href;
+        // escapeHtml.js and icons.js have no imports of their own either,
+        // so the real files are used as-is.
+        const escapeHtmlUrl = new URL("../js/utils/escapeHtml.js", location.href).href;
+        const iconsUrl = new URL("../js/utils/icons.js", location.href).href;
 
         const rewrites = {
             '"../../repositories/notificationRepository.js"': blobUrl(notificationRepoSrc),
             '"../../utils/notificationFormat.js"': formatUrl,
             // Milestone 8B: renderNotifications.js gained this import (a
             // missing error toast on Mark all read failure).
-            '"../../core/toast.js"': blobUrl(toastSrc)
+            '"../../core/toast.js"': blobUrl(toastSrc),
+            '"../../utils/escapeHtml.js"': escapeHtmlUrl,
+            '"../../utils/icons.js"': iconsUrl
         };
 
         const realSrc = await (await fetch("../js/pages/notifications/renderNotifications.js")).text();
@@ -203,7 +209,7 @@
 
         await renderNotifications();
 
-        test("zero notifications shows an empty-state message", document.getElementById("notificationsList").textContent.includes("No notifications yet"));
+        test("zero notifications shows an empty-state message", document.getElementById("notificationsList").textContent.includes("You're all caught up"));
         test("empty state hides Load More", loadMoreBtn.hidden === true);
 
         // --- Case 7: initial load failure shows a visible error, not a blank/stuck list ---

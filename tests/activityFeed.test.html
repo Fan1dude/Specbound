@@ -89,6 +89,13 @@
         // rather than mocked — same reasoning as profile.test.html.
         const blueprintCardUrl = new URL("../js/components/BlueprintCard.js", location.href).href;
         const notificationFormatUrl = new URL("../js/utils/notificationFormat.js", location.href).href;
+        // progressBar.js, skeletons.js, escapeHtml.js, and icons.js are
+        // likewise real, unmocked, absolute-URL loads — renderActivityFeed.js
+        // has grown these imports since this comment above was written.
+        const progressBarUrl = new URL("../js/utils/progressBar.js", location.href).href;
+        const skeletonsUrl = new URL("../js/utils/skeletons.js", location.href).href;
+        const escapeHtmlUrl = new URL("../js/utils/escapeHtml.js", location.href).href;
+        const iconsUrl = new URL("../js/utils/icons.js", location.href).href;
 
         const rewrites = {
             '"../../repositories/activityRepository.js"': blobUrl(activityRepoSrc),
@@ -96,7 +103,11 @@
             '"../../repositories/profileRepository.js"': blobUrl(profileRepoSrc),
             '"../../repositories/mediaRepository.js"': blobUrl(mediaRepoSrc),
             '"../../components/BlueprintCard.js"': blueprintCardUrl,
-            '"../../utils/notificationFormat.js"': notificationFormatUrl
+            '"../../utils/notificationFormat.js"': notificationFormatUrl,
+            '"../../utils/progressBar.js"': progressBarUrl,
+            '"../../utils/skeletons.js"': skeletonsUrl,
+            '"../../utils/escapeHtml.js"': escapeHtmlUrl,
+            '"../../utils/icons.js"': iconsUrl
         };
 
         const realSrc = await (await fetch("../js/pages/home/renderActivityFeed.js")).text();
