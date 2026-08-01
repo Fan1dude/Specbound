@@ -36,6 +36,16 @@ Every other migration still only ever moves forward from `0001`.
   full method and for what's deliberately *not* included (no `UNIQUE` on
   `builds.slug` — that gap is `0015`'s to fix, faithfully; no `CHECK` on
   `builds.status`/`build_revisions.update_type` — neither ever had one).
+- **Corrected 2026-08-01** (same day, second dry run): the first version
+  of this file reconstructed the *current* (post-`0023`) shape of these
+  tables instead of the state immediately before `0001` — it included
+  columns that `0002`/`0003`/`0005`/`0012` add themselves, so applying
+  `0000` then running forward hit "column already exists" at `0002`
+  (`builds.visibility`), then `0003` (`profiles.avatar_path`). Rewritten
+  to exclude every column any tracked migration (`0001`-`0023`) adds via
+  `ALTER TABLE` — full removal list, and which migration correctly owns
+  each one, in the file's own header comment and the audit that produced
+  it (see the commit that made this correction).
 - **Touches no existing table** (there is no earlier tracked state to
   touch).
 - **Known limitation**: this is a reconstruction sufficient to bootstrap a

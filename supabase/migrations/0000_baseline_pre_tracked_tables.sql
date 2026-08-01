@@ -1,19 +1,13 @@
 -- Migration: 0000_baseline_pre_tracked_tables
--- Milestone: none — retroactive baseline, added 2026-08-01 after a fresh-
--- project dry run of 0001-0023 failed at 0002 with "relation public.builds
--- does not exist."
+-- Milestone: none — retroactive baseline, added 2026-08-01, corrected
+-- 2026-08-01 after a second dry run.
 --
 -- Purpose: public.profiles, public.builds, and public.build_revisions all
 -- predate this repo's migration-tracking convention — they were already
 -- live in the real Supabase project before supabase/migrations/ started,
 -- and no tracked migration anywhere creates any of the three. Every
 -- migration from 0001 onward only ever ALTERs them or adds foreign keys
--- to them, silently assuming they already exist. This was a known,
--- explicitly documented gap for profiles specifically (see
--- docs/AUTH_ARCHITECTURE.md §1-2, docs/DATABASE.md's former "Known Gap"
--- section) — but builds/build_revisions had the identical problem without
--- ever being called out as such, and it only surfaced when an actual
--- from-empty-database dry run was attempted for the first time.
+-- to them, silently assuming they already exist.
 --
 -- Numbered 0000, not renumbered into the existing sequence — this
 -- project's migration convention (docs/DATABASE.md) is that files are
@@ -21,41 +15,44 @@
 -- lexical and numeric ordering, which is all that's required for a
 -- migration meant to represent "state that existed before 0001."
 --
--- Reconstruction method: every column below is sourced from direct
--- evidence in this repo — ALTER TABLE statements against these tables in
--- later migrations, column lists in INSERT/UPDATE/SELECT statements
--- inside migration functions (mainly publish_draft(), which evolved
--- across 0002/0004/0005/0006), and application code's own column
--- references (js/repositories/buildRepository.js and every page that
--- reads a build/revision). Nothing here is invented — where evidence was
--- ambiguous or absent (exact nullability on a handful of columns,
--- hours_worked's type), the choice made is the conservative one (nullable
--- rather than a guessed NOT NULL that could reject a legitimate future
--- write) and is called out inline. Two things are deliberately NOT
--- included despite being real production columns, to keep this baseline
--- honest about what it can actually verify:
+-- CORRECTION (2026-08-01): the first version of this file reconstructed
+-- the CURRENT (post-0023) shape of these three tables — it included
+-- columns that later migrations add via their own ALTER TABLE
+-- statements. Applying 0000 then running forward hit "column already
+-- exists" at 0002 (builds.visibility), then again at 0003
+-- (profiles.avatar_path) — proof by repeated failure that the
+-- reconstruction method itself was wrong, not just those two columns.
+-- This version represents the schema strictly as it stood immediately
+-- BEFORE 0001, built by auditing every ALTER TABLE statement against
+-- these three tables across 0001-0023 and excluding every column any of
+-- them adds — each such column is added instead by the migration that
+-- was always meant to add it, unchanged. Full audit report: see the
+-- implementation notes for this correction (git log message on this
+-- file's amending commit) for the complete list of what was removed and
+-- which migration now correctly owns each one.
 --
---   - No UNIQUE constraint on builds.slug. The real gap this created
---     (uniqueness enforced only by publish_draft()'s check-then-insert
---     loop, racy under concurrency) is exactly what
---     0015_index_hardening.sql's own preflight-checked unique index
---     fixes, later in the real sequence. Adding it here too would just
---     make 0015 redundant instead of restoring the actual history.
---   - No CHECK constraint on builds.status or build_revisions.update_type.
---     Confirmed by direct audit (0013_activity_feed.sql's own header,
---     docs/milestones/MILESTONE_8_AUDIT.md) that no such constraint has
---     ever existed — status has only ever been written as 'planning',
---     update_type only as 'documentation' (after 0004's fix), but the
---     UI (BlueprintCard.js, renderTimeline.js) already anticipates a
---     wider set of values for future use. Baking in a restrictive CHECK
---     here would be a new constraint this schema never actually had, not
---     a faithful reconstruction of it.
+-- Evidence standard: a column is included below only if either (a) a
+-- migration's own header comment explicitly confirms it already existed
+-- before that migration ran (builds.likes_count per 0008, builds.views
+-- per 0010, builds.metadata per 0004 — all three state this directly,
+-- quoted inline below), or (b) application code reads/writes it and no
+-- tracked migration (0001-0023) ever adds it via ALTER TABLE — the only
+-- remaining explanation being that it predates tracking entirely, same
+-- as the table itself. No index or constraint is included unless it
+-- meets the same standard — an earlier draft invented two indexes
+-- (`builds_user_id_idx`, `build_revisions_build_id_idx`) that no
+-- migration or comment ever evidenced; both are removed here rather than
+-- left as unverified guesses about what "should" exist.
 --
--- Supersedes supabase/dev-bootstrap/bootstrap_profiles_for_fresh_project.sql
--- (a same-purpose, untracked, testing-only script written before this
--- baseline existed) — that file should be deleted once this migration is
--- reviewed; keeping both would let someone apply both and hit a duplicate
--- "relation already exists" error on profiles.
+-- Deliberately NOT included despite being real production behavior, for
+-- the same "restore the actual history, don't paper over it" reason:
+--
+--   - No UNIQUE constraint on builds.slug — 0015_index_hardening.sql's
+--     own preflight-checked unique index is what fixes this gap; adding
+--     it here would make 0015 redundant instead of restoring history.
+--   - No CHECK constraint on builds.status or build_revisions.update_type
+--     — confirmed by direct audit (0013's own header,
+--     docs/milestones/MILESTONE_8_AUDIT.md) that neither ever had one.
 --
 -- Touches: none (three new tables only: profiles, builds, build_revisions).
 -- Every later migration's ALTER TABLE / FK / RLS-policy-rewrite statement
@@ -73,10 +70,13 @@ begin;
 create extension if not exists pgcrypto;
 
 -- 1. profiles --------------------------------------------------------------
--- Column set reconstructed from js/repositories/profileRepository.js's
--- PUBLIC_PROFILE_COLUMNS, js/pages/settings/app.js's read/write fields,
--- and the two known migrations that ALTER this table without ever
--- creating it (0003_profile_avatar_path.sql, 0012_follows.sql).
+-- Column set: js/repositories/profileRepository.js's PUBLIC_PROFILE_COLUMNS
+-- and js/pages/settings/app.js's read/write fields, MINUS every column a
+-- tracked migration adds (avatar_path — 0003_profile_avatar_path.sql;
+-- followers_count, following_count — 0012_follows.sql). Nothing else
+-- ALTERs this table anywhere in 0001-0023 (verified by grep across every
+-- file), so display_name/bio/location/website/github/youtube/avatar_url
+-- are the remaining pre-existing set by elimination.
 create table public.profiles (
     id uuid primary key references auth.users(id) on delete cascade,
     username text not null unique,
@@ -87,9 +87,6 @@ create table public.profiles (
     github text,
     youtube text,
     avatar_url text,
-    avatar_path text,
-    followers_count integer not null default 0,
-    following_count integer not null default 0,
     created_at timestamptz not null default now()
 );
 
@@ -99,7 +96,9 @@ alter table public.profiles enable row level security;
 -- (docs/AUTH_ARCHITECTURE.md §1: a live check found zero INSERT policies
 -- on profiles, for any role) — public read, self-only update, no INSERT
 -- policy for any client role at all. The only way a row is ever created
--- is the trigger below.
+-- is the trigger below. No tracked migration touches profiles' RLS at
+-- any point, so this is the complete, permanent policy set, not just a
+-- baseline that a later file replaces.
 create policy "Profiles are readable by everyone" on public.profiles
     for select using (true);
 
@@ -136,15 +135,27 @@ create trigger on_auth_user_created
     execute function public.handle_new_user();
 
 -- 2. builds ------------------------------------------------------------
--- Column set reconstructed from every ALTER TABLE public.builds
--- statement in later migrations (visibility, 0002), every column in
--- publish_draft()'s INSERT/UPDATE lists (0002 through 0006), and
--- js/repositories/buildRepository.js's filter/select usage. version and
--- progress are deliberately absent — 0004_fix_publish_draft_builds_columns.sql
--- explicitly confirmed via live information_schema.columns that builds
--- has neither (only build_revisions does); anything in JS reading
--- build.progress is reading undefined off a real row, a separate,
--- pre-existing dead-code question this migration doesn't attempt to fix.
+-- Column set: every column any tracked migration ALTERs builds to add is
+-- EXCLUDED here — the only one found across all of 0001-0023 is
+-- visibility (0002_publish_draft_and_visibility.sql). The remaining
+-- columns are confirmed pre-existing three different ways:
+--   - likes_count: 0008_project_likes.sql's own header says outright,
+--     "builds.likes_count already existed as a column, just never
+--     maintained."
+--   - views: 0010_build_view_tracking.sql's own header says outright,
+--     "builds.views already existed as a column (unpopulated)."
+--   - metadata: 0004_fix_publish_draft_builds_columns.sql's header
+--     confirms it "exist[s]" via a live information_schema.columns
+--     check, and no migration ever adds it.
+--   - featured, featured_order: read by js/repositories/buildRepository.js
+--     (`.eq("featured", true)`, `.order("featured_order")`); no migration
+--     ever adds either. Weaker evidence than the three above (no migration
+--     comment confirms it directly), but the same elimination logic
+--     applies — nothing else could have created these columns.
+-- version and progress are confirmed ABSENT from builds — see
+-- 0004_fix_publish_draft_builds_columns.sql's header (live-schema-verified
+-- negative: "builds has no version/progress at all (only build_revisions
+-- does)").
 create table public.builds (
     id uuid primary key default gen_random_uuid(),
     user_id uuid not null references auth.users(id) on delete cascade,
@@ -155,24 +166,14 @@ create table public.builds (
     status text not null default 'planning',
     image_url text,
     specifications jsonb not null default '{}'::jsonb,
-    visibility text not null default 'public'
-        check (visibility in ('public', 'private')),
     likes_count integer not null default 0,
     views integer not null default 0,
     featured boolean not null default false,
     featured_order integer,
-    -- Asserted to exist in the real (untracked) database by
-    -- 0004_fix_publish_draft_builds_columns.sql's own header comment
-    -- ("builds.specifications and builds.metadata exist"), but no tracked
-    -- migration or application code anywhere reads or writes it. Included
-    -- for fidelity with the real schema, not because anything here
-    -- depends on it.
     metadata jsonb not null default '{}'::jsonb,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
-
-create index builds_user_id_idx on public.builds (user_id);
 
 -- No RLS policy of any kind here, deliberately — 0002_publish_draft_and_visibility.sql
 -- immediately enables RLS and adds the real SELECT policy itself (its own
@@ -180,16 +181,21 @@ create index builds_user_id_idx on public.builds (user_id);
 -- because it can't assume what, if anything, already exists on this
 -- table). Enabling RLS here with zero policies means direct client access
 -- is fully denied in the brief window between this migration and 0002,
--- which is the safe default, not a gap.
+-- which is the safe default, not a gap. No index here either, for the
+-- same reason 0015_index_hardening.sql exists — none was ever evidenced
+-- as pre-existing, and inventing one would misrepresent this file as a
+-- more authoritative reconstruction than it actually is.
 alter table public.builds enable row level security;
 
 -- 3. build_revisions -----------------------------------------------------
--- Column set reconstructed from publish_draft()'s INSERT column list
+-- Column set: every column 0005_revision_history_and_restore.sql's own
+-- ALTER TABLE adds — snapshot_title, snapshot_description, category,
+-- specifications, resources — is EXCLUDED here. The remaining columns
+-- come from publish_draft()'s INSERT column list as it stood in 0002
 -- (build_id, user_id, title, description, version, progress, image_url,
--- update_type, hours_worked, milestone, attachments — stable from
--- 0006_unpublish.sql onward) plus 0005_revision_history_and_restore.sql's
--- own ALTER TABLE (snapshot_title, snapshot_description, category,
--- specifications, resources). No updated_at — confirmed absent
+-- update_type, hours_worked, milestone, attachments) — confirmed by
+-- reading 0002's own function body directly, not the later 0006 version
+-- that also writes the 0005 columns. No updated_at — confirmed absent
 -- everywhere, consistent with 0002's design note that revisions are
 -- "effectively immutable."
 create table public.build_revisions (
@@ -203,27 +209,21 @@ create table public.build_revisions (
     image_url text,
     update_type text not null,
     -- Always inserted as a literal null by every version of
-    -- publish_draft() ever written (0002 through 0023) — no code anywhere
-    -- reads it or reveals its real type. numeric is this migration's own
-    -- judgment call (a fractional "hours worked" value is the more
-    -- natural reading of the column name), not evidence-backed like the
-    -- rest of this table — flagged here so a future correction has
-    -- somewhere to start from if the real type ever turns out to differ.
+    -- publish_draft() ever written — no code anywhere reads it or
+    -- reveals its real type. numeric is this migration's own judgment
+    -- call (a fractional "hours worked" value is the more natural
+    -- reading of the column name), not evidence-backed like the rest of
+    -- this table — flagged here so a future correction has somewhere to
+    -- start from if the real type ever turns out to differ.
     hours_worked numeric,
     milestone boolean not null default false,
     attachments jsonb not null default '[]'::jsonb,
-    snapshot_title text not null default '',
-    snapshot_description text not null default '',
-    category text,
-    specifications jsonb not null default '{}'::jsonb,
-    resources jsonb not null default '[]'::jsonb,
     created_at timestamptz not null default now()
 );
 
-create index build_revisions_build_id_idx on public.build_revisions (build_id);
-
 -- Same reasoning as builds above — 0002 enables RLS and adds the real
--- SELECT policy itself.
+-- SELECT policy itself; no index here either, for the same "not
+-- evidenced, don't invent it" reasoning as builds.
 alter table public.build_revisions enable row level security;
 
 commit;
