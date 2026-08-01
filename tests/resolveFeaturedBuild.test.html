@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 20 — resolveFeaturedBuild</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 20 — resolveFeaturedBuild</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        import { resolveFeaturedBuild } from "../js/pages/profile/resolveFeaturedBuild.js";
+
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function build(overrides) {
+            return {
+                id: "b1",
+                status: "planning",
+                visibility: "public",
+                updated_at: "2026-01-01T00:00:00Z",
+                created_at: "2026-01-01T00:00:00Z",
+                ...overrides
+            };
+        }
+
+        // --- Case 1: pinned build exists and is public -----------------
+        {
+            const profile = { featured_build_id: "b2" };
+            const builds = [
+                build({ id: "b1", status: "completed", updated_at: "2026-03-01T00:00:00Z" }),
+                build({ id: "b2", updated_at: "2026-01-01T00:00:00Z" })
+            ];
+
+            const result = resolveFeaturedBuild(profile, builds);
+            test("a valid pin wins over a more-recent completed build", result?.id === "b2", `got ${result?.id}`);
+        }
+
+        // --- Case 2: pin points at a build not in the public list (stale/private) ---
+        {
+            const profile = { featured_build_id: "missing" };
+            const builds = [
+                build({ id: "b1", status: "completed", updated_at: "2026-02-01T00:00:00Z" }),
+                build({ id: "b2", status: "planning", updated_at: "2026-05-01T00:00:00Z" })
+            ];
+
+            const result = resolveFeaturedBuild(profile, builds);
+            test("a stale/private pin falls through to the completed tier, not null", result?.id === "b1", `got ${result?.id}`);
+        }
+
+        // --- Case 3: no pin, multiple completed builds -> most recently updated wins ---
+        {
+            const profile = { featured_build_id: null };
+            const builds = [
+                build({ id: "old-completed", status: "completed", updated_at: "2026-01-01T00:00:00Z" }),
+                build({ id: "new-completed", status: "completed", updated_at: "2026-06-01T00:00:00Z" }),
+                build({ id: "planning-only", status: "planning", updated_at: "2026-12-01T00:00:00Z" })
+            ];
+
+            const result = resolveFeaturedBuild(profile, builds);
+            test("with no pin, the most recently updated COMPLETED build wins over a newer non-completed one", result?.id === "new-completed", `got ${result?.id}`);
+        }
+
+        // --- Case 4: no pin, no completed builds -> most recently updated public build ---
+        {
+            const profile = { featured_build_id: null };
+            const builds = [
+                build({ id: "older", status: "planning", updated_at: "2026-01-01T00:00:00Z" }),
+                build({ id: "newer", status: "in_progress", updated_at: "2026-07-01T00:00:00Z" })
+            ];
+
+            const result = resolveFeaturedBuild(profile, builds);
+            test("with no pin and no completed build, the most recently updated public build wins", result?.id === "newer", `got ${result?.id}`);
+        }
+
+        // --- Case 5: no builds at all -> null (caller omits the section) ---
+        {
+            const result = resolveFeaturedBuild({ featured_build_id: null }, []);
+            test("zero public builds resolves to null", result === null);
+        }
+
+        // --- Case 6: pinned build id matches but its visibility isn't public ---
+        {
+            // Defensive case: resolveFeaturedBuild's own visibility check
+            // catches this even if a caller ever passed an unfiltered list.
+            const profile = { featured_build_id: "b1" };
+            const builds = [
+                build({ id: "b1", visibility: "private", status: "completed", updated_at: "2026-05-01T00:00:00Z" }),
+                build({ id: "b2", visibility: "public", status: "completed", updated_at: "2026-01-01T00:00:00Z" })
+            ];
+
+            const result = resolveFeaturedBuild(profile, builds);
+            test("a pin pointing at a non-public row in the array is rejected, falls back to the eligible completed build", result?.id === "b2", `got ${result?.id}`);
+        }
+
+        // --- Case 7: featured_build_id undefined (never set) behaves like null ---
+        {
+            const profile = {};
+            const builds = [build({ id: "only-one" })];
+
+            const result = resolveFeaturedBuild(profile, builds);
+            test("an unset featured_build_id (undefined, not null) still resolves via the fallback chain", result?.id === "only-one", `got ${result?.id}`);
+        }
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`resolveFeaturedBuild.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

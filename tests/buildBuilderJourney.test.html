@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 20 — buildBuilderJourney</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 20 — buildBuilderJourney</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        import { buildBuilderJourney } from "../js/pages/profile/buildBuilderJourney.js";
+
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function build(overrides) {
+            return {
+                id: "b1",
+                title: "Untitled",
+                category: "pc_build",
+                status: "planning",
+                created_at: "2026-01-01T00:00:00Z",
+                updated_at: "2026-01-01T00:00:00Z",
+                ...overrides
+            };
+        }
+
+        function revision(overrides) {
+            return {
+                id: "r1",
+                build_id: "b1",
+                title: "Update",
+                snapshot_title: null,
+                version: null,
+                milestone: false,
+                created_at: "2026-01-01T00:00:00Z",
+                builds: { title: "Untitled", slug: "untitled", category: "pc_build" },
+                ...overrides
+            };
+        }
+
+        // --- Case 1: every public build gets a "published" event -----------
+        {
+            const builds = [
+                build({ id: "b1", created_at: "2026-01-01T00:00:00Z" }),
+                build({ id: "b2", category: "arduino", created_at: "2026-02-01T00:00:00Z" })
+            ];
+
+            const events = buildBuilderJourney(builds, []);
+            const published = events.filter(e => e.type === "published");
+            test("one 'published' event per build", published.length === 2, `got ${published.length}`);
+        }
+
+        // --- Case 2: only "completed" builds get a "completed" event -------
+        {
+            const builds = [
+                build({ id: "b1", status: "completed", updated_at: "2026-03-01T00:00:00Z" }),
+                build({ id: "b2", status: "planning", updated_at: "2026-04-01T00:00:00Z" })
+            ];
+
+            const events = buildBuilderJourney(builds, []);
+            const completed = events.filter(e => e.type === "completed");
+            test("only status='completed' builds produce a 'completed' event", completed.length === 1 && completed[0].build.id === "b1", `got ${completed.length}`);
+        }
+
+        // --- Case 3: milestone revision -> milestone event, snapshot_title preferred ---
+        {
+            const builds = [build({ id: "b1", created_at: "2020-01-01T00:00:00Z" })];
+            const revisions = [
+                revision({ id: "r1", milestone: true, snapshot_title: "Cooling loop redone", title: "fallback title", created_at: "2026-05-01T00:00:00Z" })
+            ];
+
+            const events = buildBuilderJourney(builds, revisions);
+            const milestoneEvent = events.find(e => e.type === "milestone");
+            test("a milestone=true revision produces a 'milestone' event", Boolean(milestoneEvent));
+            test("milestone event label prefers snapshot_title over title", milestoneEvent?.label === "Cooling loop redone", `got ${milestoneEvent?.label}`);
+        }
+
+        // --- Case 4a: major-version pattern ACCEPTS clean whole-number versions ---
+        {
+            const builds = [build({ id: "b1", created_at: "2020-01-01T00:00:00Z" })];
+            const revisions = [
+                revision({ id: "r1", version: "v1.0", created_at: "2026-05-01T00:00:00Z" }),
+                revision({ id: "r2", version: "2.0", created_at: "2026-06-01T00:00:00Z" })
+            ];
+
+            const events = buildBuilderJourney(builds, revisions);
+            const majorVersions = events.filter(e => e.type === "major-version");
+            test("'v1.0' and '2.0' are both accepted as major-version events", majorVersions.length === 2, `got ${majorVersions.length}`);
+        }
+
+        // --- Case 4b: major-version pattern REJECTS ambiguous freeform text ---
+        {
+            const builds = [build({ id: "b1", created_at: "2020-01-01T00:00:00Z" })];
+            const revisions = [
+                revision({ id: "r1", version: "1.0.1", created_at: "2026-05-01T00:00:00Z" }),
+                revision({ id: "r2", version: "v1", created_at: "2026-06-01T00:00:00Z" }),
+                revision({ id: "r3", version: "Update 2", created_at: "2026-07-01T00:00:00Z" }),
+                revision({ id: "r4", version: null, created_at: "2026-08-01T00:00:00Z" })
+            ];
+
+            const events = buildBuilderJourney(builds, revisions);
+            const majorVersions = events.filter(e => e.type === "major-version");
+            test("ambiguous freeform versions ('1.0.1', 'v1', 'Update 2', null) are all skipped, not guessed at", majorVersions.length === 0, `got ${majorVersions.length}`);
+        }
+
+        // --- Case 5: first-in-category — only the earliest build per category qualifies ---
+        {
+            const builds = [
+                build({ id: "b1", category: "pc_build", created_at: "2026-01-01T00:00:00Z" }),
+                build({ id: "b2", category: "pc_build", created_at: "2026-06-01T00:00:00Z" }),
+                build({ id: "b3", category: "arduino", created_at: "2026-03-01T00:00:00Z" })
+            ];
+
+            const events = buildBuilderJourney(builds, []);
+            const firstInCategory = events.filter(e => e.type === "first-in-category");
+            test("exactly one 'first-in-category' event per distinct category", firstInCategory.length === 2, `got ${firstInCategory.length}`);
+            test("the EARLIEST pc_build (b1), not the later one (b2), is the first-in-category pick", firstInCategory.some(e => e.build.id === "b1") && !firstInCategory.some(e => e.build.id === "b2"));
+        }
+
+        // --- Case 6: sorted most-recent-first and capped at `limit` ---------
+        {
+            const builds = Array.from({ length: 15 }, (_, i) => build({
+                id: `b${i}`,
+                category: `cat${i}`, // distinct categories so every build also fires a first-in-category event, guaranteeing > limit events
+                created_at: new Date(2026, 0, i + 1).toISOString()
+            }));
+
+            const events = buildBuilderJourney(builds, [], { limit: 10 });
+            test("result never exceeds the requested limit", events.length === 10, `got ${events.length}`);
+
+            const dates = events.map(e => new Date(e.date).getTime());
+            const isSortedDesc = dates.every((d, i) => i === 0 || dates[i - 1] >= d);
+            test("events are sorted most-recent-first", isSortedDesc);
+        }
+
+        // --- Case 7: no de-duplication — one build can contribute multiple events ---
+        {
+            const builds = [build({ id: "b1", status: "completed", category: "pc_build", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-02-01T00:00:00Z" })];
+
+            const events = buildBuilderJourney(builds, []);
+            const forB1 = events.filter(e => e.build.id === "b1");
+            test("a single build can legitimately produce multiple events (published + completed + first-in-category)", forB1.length === 3, `got ${forB1.length}`);
+        }
+
+        // --- Case 8: zero builds and zero revisions -> zero events (section omitted by caller) ---
+        {
+            const events = buildBuilderJourney([], []);
+            test("no builds and no revisions produces zero events", events.length === 0);
+        }
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`buildBuilderJourney.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>
