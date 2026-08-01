@@ -37,11 +37,18 @@ export function renderProjectGallery(builds, pathPrefix = "../") {
 
     const state = { category: "all", sort: "newest", visibleCount: PAGE_SIZE };
 
+    // Declared before the first rerenderGrid() call below — rerenderGrid
+    // is a hoisted function declaration, but it still can't reference
+    // these `const` bindings before this line actually runs (temporal
+    // dead zone), so the lookups must happen first, not after.
+    const filtersEl = document.getElementById("profileGalleryFilters");
+    const sortEl = document.getElementById("profileGallerySort");
+    const loadMoreEl = document.getElementById("profileGalleryLoadMore");
+
     renderFilters(categories, state);
     renderSort(state);
     rerenderGrid();
 
-    const filtersEl = document.getElementById("profileGalleryFilters");
     if (filtersEl) {
         filtersEl.addEventListener("click", event => {
             const pill = event.target.closest(".gallery-filter-pill");
@@ -54,7 +61,6 @@ export function renderProjectGallery(builds, pathPrefix = "../") {
         });
     }
 
-    const sortEl = document.getElementById("profileGallerySort");
     if (sortEl) {
         sortEl.addEventListener("change", () => {
             state.sort = sortEl.value;
@@ -63,7 +69,6 @@ export function renderProjectGallery(builds, pathPrefix = "../") {
         });
     }
 
-    const loadMoreEl = document.getElementById("profileGalleryLoadMore");
     if (loadMoreEl) {
         loadMoreEl.addEventListener("click", () => {
             state.visibleCount += PAGE_SIZE;

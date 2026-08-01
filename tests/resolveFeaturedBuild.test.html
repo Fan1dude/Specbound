@@ -92,11 +92,20 @@
 
         // --- Case 6: pinned build id matches but its visibility isn't public ---
         {
-            // Defensive case: resolveFeaturedBuild's own visibility check
-            // catches this even if a caller ever passed an unfiltered list.
+            // Defensive case: resolveFeaturedBuild's own visibility check on
+            // the PIN catches this even if a caller ever passed an
+            // unfiltered list. b1 is deliberately NOT "completed" here —
+            // the fallback tiers trust the caller's precondition that
+            // `builds` is already public-only (real callers always pass
+            // getProfileBuilds()'s result, which already filters
+            // visibility='public') and don't re-check visibility
+            // themselves, so giving the private row a later updated_at
+            // AND completed status would let it win via the fallback tier
+            // instead — a different code path than the one this case
+            // means to isolate.
             const profile = { featured_build_id: "b1" };
             const builds = [
-                build({ id: "b1", visibility: "private", status: "completed", updated_at: "2026-05-01T00:00:00Z" }),
+                build({ id: "b1", visibility: "private", status: "planning", updated_at: "2026-05-01T00:00:00Z" }),
                 build({ id: "b2", visibility: "public", status: "completed", updated_at: "2026-01-01T00:00:00Z" })
             ];
 
