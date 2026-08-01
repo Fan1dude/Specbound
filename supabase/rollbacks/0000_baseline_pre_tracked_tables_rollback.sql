@@ -13,6 +13,9 @@
 --
 -- Drop order: build_revisions before builds (FK dependency), auth.users
 -- trigger/function before profiles (the trigger references profiles).
+-- The four storage policies use IF EXISTS because 0017 may already have
+-- dropped and replaced them by the time this rollback runs — that's the
+-- expected, common case, not an error condition.
 
 begin;
 
@@ -22,5 +25,17 @@ drop table if exists public.builds;
 drop trigger if exists on_auth_user_created on auth.users;
 drop function if exists public.handle_new_user();
 drop table if exists public.profiles;
+
+drop policy if exists "Anyone can view project images" on storage.objects;
+drop policy if exists "Authenticated users can upload project images" on storage.objects;
+drop policy if exists "Enable insert for authenticated users only" on storage.objects;
+drop policy if exists "Enable read access for all users" on storage.objects;
+-- Also drop 0017's replacements, in case 0017 ran before this rollback —
+-- otherwise re-applying 0000 forward would hit "policy already exists"
+-- on these two the same way the original bug hit "column already exists".
+drop policy if exists "Owners can upload their own avatar files" on storage.objects;
+drop policy if exists "Owners can update their own avatar files" on storage.objects;
+
+delete from storage.buckets where id = 'project-images';
 
 commit;

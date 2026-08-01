@@ -46,6 +46,16 @@ Every other migration still only ever moves forward from `0001`.
   `ALTER TABLE` — full removal list, and which migration correctly owns
   each one, in the file's own header comment and the audit that produced
   it (see the commit that made this correction).
+- **Corrected again 2026-08-01** (third dry run, reached `0017`): also
+  adds the `project-images` Storage bucket and four `storage.objects`
+  policies that predate migration tracking — `0017_storage_rls_hardening.sql`
+  itself `DROP POLICY`s all four, and its own header states outright they
+  match "Supabase's own dashboard-generated default-policy template
+  names/shapes." Recreated verbatim from
+  `0017`'s own rollback file (a direct `pg_policies` capture, not a
+  reconstruction) rather than inferred. Cross-checked every `DROP POLICY`/
+  `DROP FUNCTION`/`DROP TRIGGER` across all 24 migrations afterward — no
+  other target is missing a tracked creator.
 - **Touches no existing table** (there is no earlier tracked state to
   touch).
 - **Known limitation**: this is a reconstruction sufficient to bootstrap a

@@ -1,13 +1,20 @@
 -- Migration: 0000_baseline_pre_tracked_tables
 -- Milestone: none — retroactive baseline, added 2026-08-01, corrected
--- 2026-08-01 after a second dry run.
+-- 2026-08-01 after a second dry run, corrected again the same day after a
+-- third dry run reached 0017 and failed on a missing storage.objects
+-- policy.
 --
--- Purpose: public.profiles, public.builds, and public.build_revisions all
--- predate this repo's migration-tracking convention — they were already
--- live in the real Supabase project before supabase/migrations/ started,
--- and no tracked migration anywhere creates any of the three. Every
--- migration from 0001 onward only ever ALTERs them or adds foreign keys
--- to them, silently assuming they already exist.
+-- Purpose: public.profiles, public.builds, public.build_revisions, the
+-- project-images Storage bucket, and four of its RLS policies all predate
+-- this repo's migration-tracking convention — they were already live in
+-- the real Supabase project before supabase/migrations/ started, and no
+-- tracked migration anywhere creates any of them. Every migration from
+-- 0001 onward only ever ALTERs the three tables or adds foreign keys to
+-- them; 0017_storage_rls_hardening.sql's own header goes further and
+-- states outright that its four DROP POLICY targets "predate migration
+-- tracking" and match "Supabase's own dashboard-generated default-policy
+-- template names/shapes" — i.e., created via the dashboard UI, never
+-- through a migration, same story as the three tables.
 --
 -- Numbered 0000, not renumbered into the existing sequence — this
 -- project's migration convention (docs/DATABASE.md) is that files are
@@ -54,10 +61,24 @@
 --     — confirmed by direct audit (0013's own header,
 --     docs/milestones/MILESTONE_8_AUDIT.md) that neither ever had one.
 --
--- Touches: none (three new tables only: profiles, builds, build_revisions).
--- Every later migration's ALTER TABLE / FK / RLS-policy-rewrite statement
--- against these three tables is unchanged — this file only supplies what
--- they were always silently assuming already existed.
+-- Storage evidence: 0017_storage_rls_hardening.sql's own ROLLBACK file
+-- (supabase/rollbacks/0017_storage_rls_hardening_rollback.sql) recreates
+-- all four policies with an explicit comment that they were "captured
+-- directly from a pg_policies dump before this migration was applied" —
+-- the exact role/qual/with_check below is copied verbatim from that
+-- file, not inferred. The project-images bucket itself is the same
+-- category of gap (no migration anywhere does `insert into
+-- storage.buckets`) — created public (`public = true`), matching
+-- 0002's and 0017's own header comments, both of which describe
+-- "flipping the project-images bucket to private" as a deliberate,
+-- never-yet-taken manual action outside the migration framework, not
+-- something any tracked migration does.
+--
+-- Touches: none (three new tables, one new bucket, four pre-existing
+-- storage policies). Every later migration's ALTER TABLE / FK /
+-- RLS-policy-rewrite statement against these objects is unchanged — this
+-- file only supplies what they were always silently assuming already
+-- existed.
 --
 -- Rollback: see 0000_baseline_pre_tracked_tables_rollback.sql in
 -- supabase/rollbacks/. Rolling this back also invalidates every later
@@ -68,6 +89,43 @@
 begin;
 
 create extension if not exists pgcrypto;
+
+-- 0. Storage: project-images bucket + four pre-existing policies ----------
+-- No dependency on anything else in this file (all four policies below
+-- are either fully unscoped or bucket_id-scoped only — none reference
+-- public.project_drafts or any other table), so this can safely run
+-- before the tables below. Public, matching the documented historical
+-- starting state (see this file's header) — no tracked migration ever
+-- flips it.
+insert into storage.buckets (id, name, public)
+values ('project-images', 'project-images', true)
+on conflict (id) do nothing;
+
+-- Verbatim from supabase/rollbacks/0017_storage_rls_hardening_rollback.sql
+-- (itself a direct pg_policies capture, not a reconstruction). 0017 drops
+-- all four of these and adds two owner-scoped avatar policies in their
+-- place — this is deliberately the vulnerable pre-0017 state, not a
+-- "fixed" version of it, so that applying 0017 afterward is a faithful
+-- replay of the real fix rather than a no-op.
+create policy "Anyone can view project images" on storage.objects
+    for select
+    to public
+    using (bucket_id = 'project-images');
+
+create policy "Authenticated users can upload project images" on storage.objects
+    for insert
+    to authenticated
+    with check (bucket_id = 'project-images');
+
+create policy "Enable insert for authenticated users only" on storage.objects
+    for insert
+    to anon
+    with check (true);
+
+create policy "Enable read access for all users" on storage.objects
+    for select
+    to public
+    using (true);
 
 -- 1. profiles --------------------------------------------------------------
 -- Column set: js/repositories/profileRepository.js's PUBLIC_PROFILE_COLUMNS
