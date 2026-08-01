@@ -280,6 +280,27 @@ async function initEditor(id) {
     const specifications = renderSpecificationsSection(draft, autosave);
     const resources = renderResourcesSection(draft, autosave);
 
+    // renderReadinessChecklist() ran its own one-time initial update()
+    // before any of the three lines above — at that point fieldTitle/
+    // fieldDescription/fieldCategory were still empty (renderOverviewSection
+    // hadn't populated them from `draft` yet), so the checklist's very
+    // first render always showed everything incomplete regardless of what
+    // the loaded draft actually contains. Nothing before this line
+    // re-checks it: applyFields() (called by renderOverviewSection above)
+    // only sets DOM values, it doesn't call readiness.update() itself. In
+    // practice this was masked by Gallery's own initial media-count
+    // callback also calling readiness.update() once its async fetch
+    // resolves — but that's incidental (a different section's unrelated
+    // callback happening to also fix this one), not a real correctness
+    // guarantee, and shows a real "everything incomplete" flash on load
+    // for a fully-ready draft (or a genuinely stuck stale state, on a slow
+    // connection or if Gallery is ever refactored) until it fires. Calling
+    // it explicitly here makes the checklist correct immediately, the
+    // moment Overview/Specifications/Resources have applied the loaded
+    // draft's real values — Gallery's own call after this remains needed
+    // for hasCoverImage specifically, which nothing above can report.
+    readiness.update();
+
     renderGallerySection(draft, count => {
         mediaCount = count;
         readiness.update();
@@ -291,11 +312,17 @@ async function initEditor(id) {
     // comment). Every section's applyFields is a no-op for keys it doesn't
     // own, so calling all three with the same full buffer is safe and
     // correctly restores whichever fields were actually pending, instead of
-    // only ever restoring Overview's three fields.
+    // only ever restoring Overview's three fields. Same reload-timing gap
+    // as above applies here too — applyFields() alone doesn't re-check
+    // readiness, so a restored buffer that happens to complete the
+    // checklist (e.g. the recovered text pushes description over the
+    // minimum) wouldn't reflect that until something else incidentally
+    // re-triggered it.
     function applyRestoredFields(fields) {
         overview.applyFields(fields);
         specifications.applyFields(fields);
         resources.applyFields(fields);
+        readiness.update();
     }
 
     maybeShowRecoveryBanner(draft, autosave, applyRestoredFields);

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Editor readiness checklist — Description item</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Editor readiness checklist — Description item</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <!-- Real edit.html field ids, driven by the real, unmocked
+         renderOverviewSection.js + renderReadinessChecklist.js +
+         draftAutosave.js — none of these touch Supabase, so no blob-URL
+         mocking is needed; this is a true integration test of the actual
+         DOM-to-checklist wiring, not just draftValidation.js's pure
+         functions (already covered by draftValidation.test.html). -->
+    <span id="editorSaveStatus"></span>
+    <h1 id="editorTitle"></h1>
+    <input id="fieldTitle" type="text">
+    <textarea id="fieldDescription" rows="6"></textarea>
+    <select id="fieldCategory">
+        <option value="">Choose...</option>
+        <option value="pc_build">PC Builds</option>
+    </select>
+    <div id="editorReadiness"></div>
+
+    <script type="module">
+        import { renderReadinessChecklist } from "../js/pages/editor/renderReadinessChecklist.js";
+        import { renderOverviewSection } from "../js/pages/editor/renderOverviewSection.js";
+        import { createAutosaveController } from "../js/services/draftAutosave.js";
+
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function fireInput(el, value) {
+            el.value = value;
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+
+        function fireChange(el, value) {
+            el.value = value;
+            el.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+
+        function isDescriptionComplete() {
+            const el = [...document.querySelectorAll(".readiness-check")]
+                .find(node => node.textContent.includes("Description"));
+            return el?.classList.contains("is-complete") ?? null;
+        }
+
+        function isEveryCheckComplete() {
+            return [...document.querySelectorAll(".readiness-check")]
+                .every(node => node.classList.contains("is-complete"));
+        }
+
+        const titleField = document.getElementById("fieldTitle");
+        const descriptionField = document.getElementById("fieldDescription");
+        const categoryField = document.getElementById("fieldCategory");
+
+        let mediaCount = 0;
+        let lastReady = null;
+
+        const draft = { id: "draft-1", title: "", description: "", category: "" };
+
+        const readiness = renderReadinessChecklist(() => mediaCount, ready => {
+            lastReady = ready;
+        });
+
+        const autosave = createAutosaveController({
+            draftId: draft.id,
+            save: async () => ({ updated_at: new Date().toISOString() }),
+            onStatusChange: () => readiness.update()
+        });
+
+        renderOverviewSection(draft, autosave);
+        readiness.update();
+
+        // --- Case 1: empty description -> incomplete ------------------------
+        test("empty description: checklist item is incomplete", isDescriptionComplete() === false);
+
+        // --- Case 2: whitespace-only description -> incomplete --------------
+        fireInput(descriptionField, "                    "); // 20 raw chars, all whitespace
+        test("whitespace-only description (even at raw length 20): checklist item is incomplete", isDescriptionComplete() === false);
+
+        // --- Case 3: valid description -> complete ---------------------------
+        fireInput(descriptionField, "A fully custom robot arm build with six degrees of freedom.");
+        test("valid description (well over the minimum): checklist item is complete", isDescriptionComplete() === true);
+
+        // --- Case 4: clearing the description -> incomplete again -----------
+        fireInput(descriptionField, "");
+        test("clearing the description: checklist item goes back to incomplete", isDescriptionComplete() === false);
+
+        // --- Case 5: exact reported bug scenario — a real, short (<20 char)
+        // description must correctly read as incomplete, not silently pass,
+        // while confirming the OTHER fields are unaffected by whatever
+        // description currently holds. ---
+        fireInput(titleField, "My Cool Robot Arm");
+        fireInput(descriptionField, "Robot arm build"); // 15 chars — real text, under the minimum
+        fireChange(categoryField, "pc_build");
+        mediaCount = 1;
+        readiness.update();
+
+        test("bug repro: Title reads complete", [...document.querySelectorAll(".readiness-check")].find(n => n.textContent.includes("Title"))?.classList.contains("is-complete") === true);
+        test("bug repro: Technology reads complete", [...document.querySelectorAll(".readiness-check")].find(n => n.textContent.includes("Technology"))?.classList.contains("is-complete") === true);
+        test("bug repro: Cover image reads complete", [...document.querySelectorAll(".readiness-check")].find(n => n.textContent.includes("Cover image"))?.classList.contains("is-complete") === true);
+        test("bug repro: Description correctly reads incomplete for real text under the minimum (not a bug — the requirement just wasn't visible before this fix)", isDescriptionComplete() === false);
+        test("bug repro: the checklist label now states the requirement", [...document.querySelectorAll(".readiness-check")].some(n => /Description.*20/.test(n.textContent)));
+        test("bug repro: Publish is correctly NOT enabled with only Description failing", lastReady === false);
+
+        // --- Case 6: valid description enables Publish once every other
+        // requirement is already complete (title/category/cover already set
+        // from Case 5 above — only description needs to cross the line). ---
+        fireInput(descriptionField, "A fully custom robot arm build with six degrees of freedom.");
+        test("valid description (with title/technology/cover already complete): every checklist item now complete", isEveryCheckComplete());
+        test("valid description: onReadyChange fires true (drives Publish's disabled state)", lastReady === true);
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`editorReadinessDescription.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>
