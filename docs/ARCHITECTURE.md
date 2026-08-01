@@ -57,3 +57,4 @@ RLS on every table, a real Content-Security-Policy with no `unsafe-inline` (see 
 - `STORAGE_ARCHITECTURE.md` — Storage bucket policy design in full detail
 - `DATABASE.md` — schema conventions (UUIDs, timestamps, migrations, RLS-by-default)
 - `DEPLOYMENT.md` / `OPERATIONS.md` — how this actually ships and runs
+- `milestones/MILESTONE_19_PARTS_CATALOG_ARCHITECTURE.md` — structured parts catalog, moderated submissions, import, and affiliate-link schema

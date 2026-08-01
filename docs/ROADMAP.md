@@ -19,6 +19,7 @@ This is a live pointer to the approved milestone plan, not a third copy of it. D
 | 16 | Documentation and changelog completion — backfill Milestones 5–10 | Complete |
 | 17 | Minimal CI and automated test execution | Complete |
 | 18 | Formal WCAG 2.1 AA accessibility audit | Complete |
+| 19 | Structured parts catalog, moderated submissions, paste-list import, and affiliate-link schema | Architecture and application code approved; schema audit complete (`docs/milestones/MILESTONE_19_SQL_SECURITY_AUDIT.md`); migrations not yet applied, nothing committed |
 
 ---
 
@@ -27,6 +28,7 @@ This is a live pointer to the approved milestone plan, not a third copy of it. D
 | Item | Objective | Status |
 |---|---|---|
 | Formalize existing profiles trigger | Capture the live `profiles`/`auth.users` trigger and function definitions verbatim into a tracked migration — see `docs/DATABASE.md`'s Known Gap section and the Milestone 13 implementation report (2026-07-28) for the exact read-only introspection query needed. | Pending — blocked on that query being run manually against the live database; picked up whenever that output is available, no deadline. |
+| Component-submission anti-spam beyond the per-account cap | Migration `0022_component_submissions.sql` caps pending submissions at 20 per account — a real but minimal safeguard. It does nothing against multi-account abuse (one bad actor spreading submissions across several accounts to stay under the cap on each), slow-drip low-quality submissions that never breach the cap, or any CAPTCHA/rate-limit at the HTTP layer. **Tracked launch blocker for public beta** — revisit before opening catalog submissions to the general public, not just signed-in testers. See `docs/milestones/MILESTONE_19_SQL_SECURITY_AUDIT.md` §5. | Not started — no deadline, but flagged as blocking public (as opposed to invite/testing-scope) beta specifically. |
 
 ---
 

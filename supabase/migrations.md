@@ -625,3 +625,84 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Context**: Milestone 11B (Confirmed Database Bug), found during the
   2026-07-28 implementation review. Does not edit 0010 in place, per
   this project's migration convention.
+
+## 0020_components_catalog
+
+- **Status**: Proposed — not yet applied. Depends on 0001-0019.
+- **File**: `migrations/0020_components_catalog.sql`
+- **Rollback**: `migrations/0020_components_catalog_rollback.sql`
+- **Adds**: `catalog_moderators` (the app's first admin-role concept,
+  scoped to this one subsystem) and `is_catalog_moderator(uid)` (a
+  `SECURITY DEFINER` helper other tables' RLS policies reference), then
+  `components` — the canonical parts catalog, with a generated
+  `normalized_name` column (punctuation/spacing-insensitive) backing the
+  uniqueness constraint. Only a `catalog_moderators`-flagged user may
+  insert directly; ordinary users contribute via `component_submissions`
+  (0022) instead.
+- **Touches no existing table.**
+- **Context**: Milestone 19 (Structured Parts Catalog). See
+  `docs/milestones/MILESTONE_19_PARTS_CATALOG_ARCHITECTURE.md` for the
+  full design and `docs/milestones/MILESTONE_19_SQL_SECURITY_AUDIT.md`
+  for a follow-up audit pass (non-empty checks, explicit execute grants)
+  applied to this file before it was considered ready.
+
+## 0021_component_aliases
+
+- **Status**: Proposed — not yet applied. Depends on 0020.
+- **File**: `migrations/0021_component_aliases.sql`
+- **Rollback**: `migrations/0021_component_aliases_rollback.sql`
+- **Adds**: `component_aliases` — shorthand/misspelling mappings onto an
+  existing `components` row (e.g. "4080" → "NVIDIA GeForce RTX 4080"),
+  moderator-curated, no client-facing write path. `technology_id`/
+  `field_key` are denormalized onto this table by a trigger, purely so a
+  unique index can enforce "one alias string resolves to exactly one
+  component per technology/field slot."
+- **Touches no existing table.**
+- **Context**: Milestone 19. Ships ahead of `0022` even though aliases
+  are conceptually a moderation *output* — `0022`'s approval RPC needs
+  this table to already exist. See
+  `docs/milestones/MILESTONE_19_SQL_SECURITY_AUDIT.md` for the audit
+  pass applied (non-empty checks, defensive execute revoke on the
+  trigger function).
+
+## 0022_component_submissions
+
+- **Status**: Proposed — not yet applied. Depends on 0020, 0021.
+- **File**: `migrations/0022_component_submissions.sql`
+- **Rollback**: `migrations/0022_component_submissions_rollback.sql`
+- **Adds**: `component_submissions` — the only path an ordinary user has
+  toward ever creating a canonical catalog entry, since `0020` locks
+  direct inserts to moderators. `approve_component_submission(id,
+  alias_of_component_id)` and `reject_component_submission(id, note)`,
+  both `SECURITY DEFINER`, both internally checking
+  `is_catalog_moderator(auth.uid())`, are the only way a submission's
+  status ever changes. Also adds
+  `enforce_component_submission_pending_cap()`, a minimal anti-spam
+  trigger capping pending submissions at 20 per account.
+- **Touches no existing table.**
+- **Context**: Milestone 19. The SQL/security audit pass
+  (`docs/milestones/MILESTONE_19_SQL_SECURITY_AUDIT.md`) found and fixed
+  a real race condition in `approve_component_submission()` (missing row
+  lock — two concurrent approvals of the same submission could both
+  proceed and orphan one insert) and added two symmetric cross-table
+  collision guards, a status-consistency check constraint, and explicit
+  execute grants, all before this file was applied.
+
+## 0023_retailers_and_retail_variants
+
+- **Status**: Proposed — not yet applied. Depends on 0020.
+- **File**: `migrations/0023_retailers_and_retail_variants.sql`
+- **Rollback**: `migrations/0023_retailers_and_retail_variants_rollback.sql`
+- **Adds**: `retailers`, `component_retail_variants` (a specific buyable
+  SKU under a generic `components` row — "ASUS TUF RTX 4080 OC" under
+  "RTX 4080"), and `component_retailer_links` (attaches to a variant, not
+  a component directly, since one generic part is sold as many different
+  variants across many retailers). Schema-only — no real affiliate
+  provider integration, no write policy on any of the three tables for
+  anyone yet.
+- **Touches no existing table.**
+- **Context**: Milestone 19. The SQL/security audit pass added non-empty/
+  nonnegative checks and two uniqueness constraints
+  (`(component_id, variant_name)`, `(variant_id, url)`) this file's first
+  draft was missing entirely — see
+  `docs/milestones/MILESTONE_19_SQL_SECURITY_AUDIT.md`.
