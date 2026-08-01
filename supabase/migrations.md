@@ -772,3 +772,28 @@ Every other migration still only ever moves forward from `0001`.
   (`(component_id, variant_name)`, `(variant_id, url)`) this file's first
   draft was missing entirely — see
   `docs/milestones/MILESTONE_19_SQL_SECURITY_AUDIT.md`.
+
+## 0024_profile_headline_and_featured_build
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0023.
+- **File**: `migrations/0024_profile_headline_and_featured_build.sql`
+- **Rollback**: `rollbacks/0024_profile_headline_and_featured_build_rollback.sql`
+- **Adds**: two nullable columns on `profiles` — `headline` (short hero
+  tagline, `<=120` chars via a CHECK constraint, distinct from the
+  existing longer `bio`) and `featured_build_id` (a builder-controlled
+  pin, FK to `builds(id) on delete set null`, never selected
+  automatically by likes or any other engagement metric). A new trigger,
+  `validate_featured_build_before_write` /
+  `public.validate_featured_build()`, enforces that `featured_build_id`
+  — when set — always references a build owned by the same profile; RLS's
+  existing whole-row "Users can update their own profile" policy can't
+  express that cross-row ownership check on its own. The trigger checks
+  ownership only, not visibility — a builder may pin a build that isn't
+  currently public; the read path falls back to the documented selection
+  chain (completed → published → hidden) whenever the pin is unset or no
+  longer eligible.
+- **Touches no other table.**
+- **Context**: Milestone 20 (Builder Portfolio). See
+  `docs/milestones/MILESTONE_20_BUILDER_PORTFOLIO_SPECIFICATION.md` §16
+  for the full design and rationale, including why visibility is
+  deliberately not enforced at write time.
