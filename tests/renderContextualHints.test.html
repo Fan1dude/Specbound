@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 21 — contextual editor hints</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 21 — contextual editor hints</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <p class="field-hint" id="hintTitle" hidden></p>
+    <p class="field-hint" id="hintGallery" hidden></p>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function clearNamespace(storage) {
+            for (let i = storage.length - 1; i >= 0; i--) {
+                const key = storage.key(i);
+                if (key?.startsWith("specbound:onboarding:v1")) storage.removeItem(key);
+            }
+        }
+        clearNamespace(localStorage);
+
+        let mockCount = 0;
+        let shouldFail = false;
+        globalThis.__mock = { get count() { return mockCount; }, get shouldFail() { return shouldFail; } };
+
+        const dashboardRepoSrc = `
+            export async function getMyPublishedBuildCount() {
+                if (globalThis.__mock.shouldFail) throw new Error("count query failed");
+                return globalThis.__mock.count;
+            }
+        `;
+
+        const editorOrigin = new URL("../js/pages/editor/", location.href).href;
+        const realSrc = await (await fetch("../js/pages/editor/renderContextualHints.js")).text();
+        // Blob-imported modules have no directory of their own to resolve
+        // relative imports against, so every relative specifier in the
+        // real source — not just the one being mocked — has to be
+        // rewritten to either a mock or a real absolute URL.
+        const rewritten = realSrc
+            .replaceAll('"../../repositories/dashboardRepository.js"', `"${blobUrl(dashboardRepoSrc)}"`)
+            .replaceAll('"../../utils/onboardingLocalState.js"', `"${new URL("onboardingLocalState.js", new URL("../../utils/", editorOrigin)).href}"`)
+            .replaceAll('"../../utils/icons.js"', `"${new URL("icons.js", new URL("../../utils/", editorOrigin)).href}"`);
+        const { renderContextualHints } = await import(blobUrl(rewritten));
+
+        const hintTitle = document.getElementById("hintTitle");
+        const hintGallery = document.getElementById("hintGallery");
+
+        // --- Never published (count 0) — both hints visible ------------------
+        mockCount = 0;
+        await renderContextualHints("user-1");
+
+        test("count 0 (never published): title hint is visible", hintTitle.hidden === false);
+        test("count 0 (never published): gallery hint is visible", hintGallery.hidden === false);
+        test("hints render real, non-empty copy", hintTitle.textContent.trim().length > 0 && hintGallery.textContent.trim().length > 0);
+        test("each hint has a dismiss control", hintTitle.querySelector(".field-hint-dismiss") !== null && hintGallery.querySelector(".field-hint-dismiss") !== null);
+
+        // --- Has published before (count 1) — no hints, permanently for
+        // this account (nothing to dismiss, nothing shown at all) -----------
+        hintTitle.hidden = true;
+        hintGallery.hidden = true;
+        mockCount = 1;
+        await renderContextualHints("user-1");
+
+        test("count >=1 (has published): title hint stays hidden", hintTitle.hidden === true);
+        test("count >=1 (has published): gallery hint stays hidden", hintGallery.hidden === true);
+
+        // --- Dismissing one hint independently doesn't affect the other -----
+        clearNamespace(localStorage);
+        mockCount = 0;
+        await renderContextualHints("user-2");
+
+        hintTitle.querySelector(".field-hint-dismiss").click();
+        test("dismissing the title hint hides it", hintTitle.hidden === true);
+        test("dismissing the title hint does NOT hide the gallery hint (independent dismissal)", hintGallery.hidden === false);
+
+        // A later render for the same account respects the dismissal — a
+        // dismissed hint is simply skipped (never re-populated or
+        // re-shown), which is correct because a real page load always
+        // starts from the DOM's own `hidden` attribute already present in
+        // the HTML, not from whatever a previous SPA-style render left
+        // behind.
+        await renderContextualHints("user-2");
+        test("a later render respects the earlier dismissal for that hint (still hidden, not re-shown)", hintTitle.hidden === true);
+        test("the undismissed hint still renders on the later call", hintGallery.hidden === false);
+
+        // --- Fails closed: if the publish-count check itself fails, no
+        // hints render (never guesses that this is a first-timer) -----------
+        clearNamespace(localStorage);
+        hintTitle.hidden = true;
+        hintGallery.hidden = true;
+        shouldFail = true;
+        mockCount = 0;
+
+        let threw = false;
+        try {
+            await renderContextualHints("user-3");
+        } catch {
+            threw = true;
+        }
+
+        test("a failed publish-count check never throws out to the caller", threw === false);
+        test("a failed publish-count check fails closed: no hints shown", hintTitle.hidden === true && hintGallery.hidden === true);
+
+        shouldFail = false;
+        clearNamespace(localStorage);
+
+        // --- Never a publish gate: hints contain no form controls that
+        // could block or alter publish eligibility --------------------------
+        mockCount = 0;
+        await renderContextualHints("user-4");
+        test("hints contain no input/select/textarea (informational only, never a gate)", document.querySelectorAll(".field-hint input, .field-hint select, .field-hint textarea").length === 0);
+
+        clearNamespace(localStorage);
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`renderContextualHints.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

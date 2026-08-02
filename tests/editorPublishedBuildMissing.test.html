@@ -75,6 +75,13 @@
         const tabsSrc = `export function setupEditorTabs() {}`;
         const statusSrc = `export function setEditorStatus() {}`;
         const recoverySrc = `export function maybeShowRecoveryBanner() {}`;
+        // Milestone 21 additions to app.js — mocked so this pre-existing
+        // test's module graph doesn't attempt a real Supabase call
+        // (dashboardRepository.js) or pull in unrelated dialog/hint
+        // components; neither is relevant to what this test checks.
+        const dashboardRepoSrc = `export async function getMyPublishedBuildCount() { return 1; }`;
+        const contextualHintsSrc = `export async function renderContextualHints() {}`;
+        const firstPublishDialogSrc = `export function showFirstPublishDialog() {}`;
 
         const editorOrigin = new URL("../js/pages/editor/", location.href).href;
 
@@ -97,7 +104,10 @@
             // Real file, absolute URL — modal.js only imports escapeHtml.js
             // itself (resolves fine on its own since this is a real file,
             // not a blob), no reason to mock a plain confirm dialog.
-            '"../../utils/modal.js"': new URL("../js/utils/modal.js", location.href).href
+            '"../../utils/modal.js"': new URL("../js/utils/modal.js", location.href).href,
+            '"../../repositories/dashboardRepository.js"': blobUrl(dashboardRepoSrc),
+            '"./renderContextualHints.js"': blobUrl(contextualHintsSrc),
+            '"../../components/FirstPublishDialog.js"': blobUrl(firstPublishDialogSrc)
         };
 
         history.replaceState(null, "", location.pathname + "?draft=draft-1");
