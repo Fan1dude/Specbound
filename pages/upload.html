@@ -10,7 +10,7 @@
     <meta name="theme-color" content="#B79AE6">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Create Project | Specbound</title>
-    <link rel="canonical" href="https://specbound.app/pages/upload.html">
+    <link rel="canonical" href="https://specboundapp.com/pages/upload.html">
 
     <meta
         name="description"
@@ -21,12 +21,12 @@
     <meta property="og:site_name" content="Specbound">
     <meta property="og:title" content="Create Project | Specbound">
     <meta property="og:description" content="Start documenting a new technology build on Specbound.">
-    <meta property="og:url" content="https://specbound.app/pages/upload.html">
-    <meta property="og:image" content="https://specbound.app/assets/brand/og/og-image.png">
+    <meta property="og:url" content="https://specboundapp.com/pages/upload.html">
+    <meta property="og:image" content="https://specboundapp.com/assets/brand/og/og-image.png">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Create Project | Specbound">
     <meta name="twitter:description" content="Start documenting a new technology build on Specbound.">
-    <meta name="twitter:image" content="https://specbound.app/assets/brand/og/og-image.png">
+    <meta name="twitter:image" content="https://specboundapp.com/assets/brand/og/og-image.png">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -59,16 +59,10 @@
                     <label for="title">Project Title</label>
                     <input id="title" type="text" placeholder="Project title" required>
 
-                    <label for="category">Technology</label>
-                    <select id="category" required>
-                        <option value="">Choose Technology</option>
-                        <option value="pc_build">PC Builds</option>
-                        <option value="setup">Desk Setups</option>
-                        <option value="arduino">Arduino</option>
-                        <option value="robotics">Robotics</option>
-                        <option value="3d_printer">3D Printing</option>
-                        <option value="homelab">Home Labs</option>
-                    </select>
+                    <fieldset class="upload-technology-fieldset">
+                        <legend>Technology</legend>
+                        <div class="technology-picker-grid" id="technologyPickerGrid"></div>
+                    </fieldset>
                 </div>
 
                 <button class="btn btn-primary btn-large" type="submit" id="createDraftSubmit">
