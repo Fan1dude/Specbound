@@ -797,3 +797,23 @@ Every other migration still only ever moves forward from `0001`.
   `docs/milestones/MILESTONE_20_BUILDER_PORTFOLIO_SPECIFICATION.md` §16
   for the full design and rationale, including why visibility is
   deliberately not enforced at write time.
+
+## 0025_profile_onboarding_welcomed
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0024.
+- **File**: `migrations/0025_profile_onboarding_welcomed.sql`
+- **Rollback**: `rollbacks/0025_profile_onboarding_welcomed_rollback.sql`
+- **Adds**: one nullable column on `profiles` — `onboarding_welcomed_at`,
+  set the first time a builder exits the first-sign-in Welcome dialog
+  (Continue, close, Escape, or backdrop click all count as "exited").
+  `null` means eligible to see the Welcome screen on the next
+  authenticated page load; any non-null value means never show it again.
+  Backfills every pre-existing row to its own `created_at`, so only
+  accounts created after this migration is applied are eligible to see
+  onboarding — existing builders are never shown it.
+- **Touches no other table.**
+- **Context**: Milestone 21 (First-Time Builder Experience). See
+  `docs/milestones/MILESTONE_21_FIRST_TIME_BUILDER_EXPERIENCE_SPECIFICATION.md`
+  §4 for the full design, including why this is the only Milestone 21
+  state that needed a schema change — everything else is either computed
+  live or kept in namespaced `localStorage`.
