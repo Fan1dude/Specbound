@@ -1,6 +1,7 @@
 import { supabase } from "./supabase.js";
 import { getCurrentUser, clearCurrentUserCache } from "./auth.js";
 import { initNotificationBell } from "./notificationBell.js";
+import { maybeShowWelcome } from "./onboarding.js";
 import { escapeHtml } from "../utils/escapeHtml.js";
 import { icon } from "../utils/icons.js";
 
@@ -16,13 +17,23 @@ export async function loadNavbar(pathPrefix = "") {
     let authLinks = "";
 
     if (user) {
+        // onboarding_welcomed_at added for Milestone 21 — this is the one
+        // place in the app that already runs on every authenticated page
+        // load and already resolves the profile, so it's also the global
+        // trigger point for the first-sign-in Welcome dialog (see
+        // core/onboarding.js). Eligibility is only known once this
+        // query resolves; maybeShowWelcome() is never called before then.
         const { data: profile } = await supabase
             .from("profiles")
-            .select("username")
+            .select("username, onboarding_welcomed_at")
             .eq("id", user.id)
             .single();
 
         const username = profile?.username || "Builder";
+
+        if (profile && !profile.onboarding_welcomed_at) {
+            maybeShowWelcome(user, profile, pathPrefix);
+        }
 
         authLinks = `
             <div class="builder-menu">

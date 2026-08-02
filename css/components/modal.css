@@ -5,7 +5,20 @@
    docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md §7. Built on the native
    <dialog> element for free accessible focus-trapping and Esc handling —
    js/utils/modal.js drives the open/close mechanics. */
+/* Centering is explicit (top/left/transform), not left to the UA
+   stylesheet's default `dialog:modal { margin: auto }` — this repo's own
+   global `* { margin: 0; }` reset (base/reset.css) silently defeats that
+   default, since any normal author rule overrides a UA-stylesheet default
+   for the same property regardless of selector specificity. Without this,
+   showModal() still opens the dialog, but it renders flush to the
+   top-left corner instead of centered — confirmed live via Milestone 21's
+   screenshot verification pass, the first time this component's actual
+   rendered position had been checked against a real reset.css. */
 .modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+
     padding: 0;
     max-width: min(420px, 90vw);
     background: var(--color-surface);
@@ -17,7 +30,7 @@
     color: var(--color-text);
 
     opacity: 0;
-    transform: scale(0.96);
+    transform: translate(-50%, -50%) scale(0.96);
     transition:
         opacity var(--duration-normal) var(--ease-precise),
         transform var(--duration-normal) var(--ease-precise),
@@ -27,7 +40,7 @@
 
 .modal.is-open {
     opacity: 1;
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
 }
 
 .modal::backdrop {
@@ -71,6 +84,8 @@
    left to dim. */
 @media (max-width: 700px) {
     .modal {
+        top: 0;
+        left: 0;
         width: 100%;
         height: 100%;
         max-width: 100%;
@@ -78,6 +93,11 @@
         margin: 0;
         border: none;
         border-radius: 0;
+        transform: none;
+    }
+
+    .modal.is-open {
+        transform: none;
     }
 
     .modal::backdrop {

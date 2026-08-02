@@ -132,6 +132,21 @@ export async function ensureProfile({ id }) {
     return existing;
 }
 
+// Marks the first-sign-in Welcome dialog as seen (Milestone 21). Called
+// fire-and-forget from WelcomeDialog.js's exit handler — the dialog
+// closes immediately regardless of whether this write succeeds; a
+// failure only means it may show again on a later session (see
+// core/onboarding.js's sessionStorage guard for the current-session
+// case), never a blocking condition.
+export async function markOnboardingWelcomed(id) {
+    const { error } = await supabase
+        .from("profiles")
+        .update({ onboarding_welcomed_at: new Date().toISOString() })
+        .eq("id", id);
+
+    if (error) throw error;
+}
+
 export async function updateAvatarPath(id, avatarPath) {
     const { error } = await supabase
         .from("profiles")

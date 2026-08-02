@@ -5,11 +5,19 @@ import { showToast } from "../../core/toast.js";
 import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
 import { hydrateProgressBars } from "../../utils/progressBar.js";
 import { icon } from "../../utils/icons.js";
+import { renderProfileChecklist } from "./renderProfileChecklist.js";
 
 export function renderWorkshop({ user, profile, builds, revisionCount, drafts, latestBuild, latestRevision, savedBuilds }) {
     const username = profile?.username || "Builder";
 
     document.getElementById("workshopGreeting").textContent = `Welcome back, ${username}.`;
+
+    // Milestone 21: quietly reflects Settings' existing fields back at
+    // the builder — not rendered at all if the profile failed to load
+    // (profile is null on that path, per loadWorkshop.js), same
+    // "secondary fetch failure can't take down the page" posture as
+    // every other non-primary section here.
+    if (profile) renderProfileChecklist(profile);
 
     // Built once from the drafts already fetched by loadWorkshop.js — not
     // an extra query per project. continue.html's direct-write flow is
