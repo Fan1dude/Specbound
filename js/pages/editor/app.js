@@ -4,6 +4,7 @@ import { showToast } from "../../core/toast.js";
 import { getDraft, updateDraft } from "../../repositories/draftRepository.js";
 import { publishDraft, setBuildVisibility } from "../../repositories/publishRepository.js";
 import { getBuildById } from "../../repositories/buildRepository.js";
+import { getMyPublishedBuildCount } from "../../repositories/dashboardRepository.js";
 import { createAutosaveController } from "../../services/draftAutosave.js";
 import { renderOverviewSection } from "./renderOverviewSection.js";
 import { renderSpecificationsSection } from "./renderSpecificationsSection.js";
@@ -15,6 +16,7 @@ import { setupEditorTabs } from "./editorTabs.js";
 import { setEditorStatus } from "./editorStatus.js";
 import { maybeShowRecoveryBanner } from "./draftRecoveryBanner.js";
 import { confirmDialog } from "../../utils/modal.js";
+import { showFirstPublishDialog } from "../../components/FirstPublishDialog.js";
 
 loadNavbar("../../");
 loadFooter("../../");
@@ -199,6 +201,17 @@ async function initEditor(id) {
         isPublishing = true;
         updatePublishBtn();
 
+        // Milestone 21: must be read BEFORE publishDraft() below, never
+        // after — counting published builds once the new one already
+        // exists would always return >=1, making "was this the first
+        // publish?" permanently unanswerable that way. `null` (query
+        // failed) is kept distinct from `0` so a failure fails closed
+        // (no celebration) rather than guessing.
+        const publishedCountBeforePublish = await getMyPublishedBuildCount(user.id).catch(error => {
+            console.error("Could not check prior publish count:", error);
+            return null;
+        });
+
         try {
             // Publish reads project_drafts server-side, so anything still
             // only in the local autosave buffer or debounce window has to
@@ -210,6 +223,18 @@ async function initEditor(id) {
 
             showPublished(build);
             showToast("Project published.", "success");
+
+            // Strictly === 0, not falsy — a failed pre-count (null) must
+            // never celebrate. Two tabs publishing near-simultaneously
+            // could both read 0 and both celebrate once each; accepted as
+            // rare, low-stakes, cosmetic duplication, not a defect worth a
+            // DB lock or a persisted "celebrated" flag over.
+            if (publishedCountBeforePublish === 0) {
+                showFirstPublishDialog({
+                    buildUrl: `../build/build.html?slug=${encodeURIComponent(build.slug)}`,
+                    pathPrefix: "../../"
+                });
+            }
         } catch (error) {
             // Log the full error object, not just .message — Postgrest
             // errors carry .details/.hint/.code too, and a thrown
