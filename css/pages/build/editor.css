@@ -99,6 +99,40 @@
     color: var(--success);
 }
 
+/* Milestone 21: contextual editor hints (renderContextualHints.js) — plain
+   adjacent text, not a tooltip/popover, so no focus-management or
+   ARIA-describedby wiring is needed; matches the small-text treatment
+   already established by .readiness-check's own label text above. */
+.field-hint {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-1);
+
+    margin-top: 4px;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+}
+
+.field-hint[hidden] {
+    display: none;
+}
+
+.field-hint-dismiss {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+
+    color: var(--color-text-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+
+.field-hint-dismiss:hover {
+    color: var(--color-text);
+}
+
 .editor-recovery-banner {
     display: flex;
     align-items: center;

@@ -10,6 +10,7 @@ import { renderSpecificationsSection } from "./renderSpecificationsSection.js";
 import { renderResourcesSection } from "./renderResourcesSection.js";
 import { renderGallerySection } from "./renderGallerySection.js";
 import { renderReadinessChecklist } from "./renderReadinessChecklist.js";
+import { renderContextualHints } from "./renderContextualHints.js";
 import { setupEditorTabs } from "./editorTabs.js";
 import { setEditorStatus } from "./editorStatus.js";
 import { maybeShowRecoveryBanner } from "./draftRecoveryBanner.js";
@@ -300,6 +301,12 @@ async function initEditor(id) {
     // draft's real values — Gallery's own call after this remains needed
     // for hasCoverImage specifically, which nothing above can report.
     readiness.update();
+
+    // Milestone 21: purely informational, never a publish gate — not
+    // awaited, since nothing else on the page depends on it and a slow
+    // or failed check (fails closed internally, see its own comment)
+    // must never delay the rest of the editor loading.
+    renderContextualHints(user.id);
 
     renderGallerySection(draft, count => {
         mediaCount = count;
