@@ -145,7 +145,10 @@
             '"../../utils/modal.js"': blobUrl(modalSrc),
             '"../../repositories/dashboardRepository.js"': blobUrl(dashboardRepoSrc),
             '"./renderContextualHints.js"': blobUrl(contextualHintsSrc),
-            '"../../components/FirstPublishDialog.js"': blobUrl(firstPublishDialogSrc)
+            '"../../components/FirstPublishDialog.js"': blobUrl(firstPublishDialogSrc),
+            '"../../components/GuidelinesGate.js"': blobUrl(`
+                export async function requireGuidelinesAcceptance() { return true; }
+            `)
             // "./renderReadinessChecklist.js" deliberately left real — the
             // readiness-gating logic (isReady) is exactly what this test
             // needs to exercise for real.

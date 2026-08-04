@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 22 — RoleBadge rendering</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 22 — RoleBadge rendering</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="rolesContainer" hidden></div>
+
+    <script type="module">
+        import { RoleBadge, renderRoleBadges } from "../js/components/RoleBadge.js";
+
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        // --- Single badge markup ---------------------------------------
+        const badgeHtml = RoleBadge("moderator");
+        test("a known role renders a .badge.role-badge span", /class="badge role-badge"/.test(badgeHtml));
+        test("the badge shows the human-readable label, not the raw key", badgeHtml.includes("Moderator") && !badgeHtml.includes("moderator<"));
+
+        // --- Unknown role fails safe, not throwing -----------------------
+        let threwOnUnknown = false;
+        let unknownResult;
+        try {
+            unknownResult = RoleBadge("not_a_real_role");
+        } catch {
+            threwOnUnknown = true;
+        }
+        test("an unknown role key never throws", threwOnUnknown === false);
+        test("an unknown role key renders nothing (empty string)", unknownResult === "");
+
+        // --- renderRoleBadges: container visibility ----------------------
+        const container = document.getElementById("rolesContainer");
+
+        renderRoleBadges(container, ["new_builder"]);
+        test("one role: container is unhidden", container.hidden === false);
+        test("one role: exactly one badge rendered", container.querySelectorAll(".role-badge").length === 1);
+
+        renderRoleBadges(container, []);
+        test("zero roles: container hides itself (omit, don't show empty)", container.hidden === true);
+        test("zero roles: no badge markup left behind", container.innerHTML === "");
+
+        renderRoleBadges(container, [null, undefined, "moderator"]);
+        test("falsy entries in the roles array are filtered out safely", container.querySelectorAll(".role-badge").length === 1);
+
+        // --- Multiple roles at once (a builder can hold several) --------
+        renderRoleBadges(container, ["long_term_builder", "community_builder", "moderator"]);
+        test("a profile can show multiple role badges at once", container.querySelectorAll(".role-badge").length === 3);
+        test("badges render in the order given (automatic role first, by convention)", container.querySelectorAll(".role-badge")[0].textContent.trim() === "Long-Term Builder");
+
+        // --- Calling with a null container never throws (mirrors every
+        // other render*() helper's defensive "if (!container) return;"
+        // convention in this codebase) --------------------------------------
+        let threwOnNullContainer = false;
+        try {
+            renderRoleBadges(null, ["moderator"]);
+        } catch {
+            threwOnNullContainer = true;
+        }
+        test("a null container never throws", threwOnNullContainer === false);
+
+        // --- No visual ranking: every badge uses the exact same class,
+        // no role-specific "tier" class exists (spec §5.4 — recognition,
+        // not competition) ----------------------------------------------------
+        renderRoleBadges(container, ["new_builder", "staff"]);
+        const badgeClassLists = [...container.querySelectorAll(".role-badge")].map(el => el.className);
+        test("New Builder and Staff badges share the exact same CSS classes (no tier styling)", badgeClassLists[0] === badgeClassLists[1], JSON.stringify(badgeClassLists));
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`roleBadge.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

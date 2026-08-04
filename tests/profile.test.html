@@ -100,6 +100,14 @@
 
         const renderFollowMockUrl = blobUrl(`export async function renderFollow() {}`);
 
+        // ManageRolesControl.js is Milestone 22's moderator/staff-only
+        // grant/revoke UI — never exercised by this test (which covers
+        // section visibility, not moderator actions), so it's mocked as
+        // a no-op the same way renderFollow.js is above, rather than
+        // pulling in its own real network-touching import
+        // (communityRepository.js).
+        const manageRolesControlMockUrl = blobUrl(`export function renderManageRoles() {}`);
+
         // renderProfileHero.js has its own transitive import of
         // mediaRepository.js (a real Supabase call) — patched the same way
         // as the top-level orchestrator below, one level deeper.
@@ -108,7 +116,11 @@
             "../../utils/escapeHtml.js": absUrl("../js/utils/escapeHtml.js"),
             "../../utils/avatarInitial.js": absUrl("../js/utils/avatarInitial.js"),
             "../../utils/icons.js": absUrl("../js/utils/icons.js"),
-            "./formatJoinDate.js": absUrl("../js/pages/profile/formatJoinDate.js")
+            "./formatJoinDate.js": absUrl("../js/pages/profile/formatJoinDate.js"),
+            // Milestone 22 — RoleBadge.js (and its own transitive import,
+            // communityRecognition.js) are pure/DOM-only, same reasoning
+            // as every other section component below.
+            "../../components/RoleBadge.js": absUrl("../js/components/RoleBadge.js")
         });
 
         // Every other section component has no network-touching imports
@@ -126,7 +138,8 @@
             "./renderBuilderJourney.js": absUrl("../js/pages/profile/renderBuilderJourney.js"),
             "./renderAboutBuilder.js": absUrl("../js/pages/profile/renderAboutBuilder.js"),
             "./resolveFeaturedBuild.js": absUrl("../js/pages/profile/resolveFeaturedBuild.js"),
-            "../../utils/icons.js": absUrl("../js/utils/icons.js")
+            "../../utils/icons.js": absUrl("../js/utils/icons.js"),
+            "../../components/ManageRolesControl.js": manageRolesControlMockUrl
         });
 
         const { renderProfile, renderProfileError } = await import(renderProfileUrl);

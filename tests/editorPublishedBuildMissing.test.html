@@ -107,7 +107,10 @@
             '"../../utils/modal.js"': new URL("../js/utils/modal.js", location.href).href,
             '"../../repositories/dashboardRepository.js"': blobUrl(dashboardRepoSrc),
             '"./renderContextualHints.js"': blobUrl(contextualHintsSrc),
-            '"../../components/FirstPublishDialog.js"': blobUrl(firstPublishDialogSrc)
+            '"../../components/FirstPublishDialog.js"': blobUrl(firstPublishDialogSrc),
+            '"../../components/GuidelinesGate.js"': blobUrl(`
+                export async function requireGuidelinesAcceptance() { return true; }
+            `)
         };
 
         history.replaceState(null, "", location.pathname + "?draft=draft-1");

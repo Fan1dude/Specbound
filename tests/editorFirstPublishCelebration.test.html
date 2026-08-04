@@ -152,7 +152,13 @@
             '"./draftRecoveryBanner.js"': blobUrl(recoverySrc),
             '"../../utils/modal.js"': blobUrl(modalSrc),
             '"./renderContextualHints.js"': blobUrl(contextualHintsSrc),
-            '"../../components/FirstPublishDialog.js"': blobUrl(firstPublishDialogSrc)
+            '"../../components/FirstPublishDialog.js"': blobUrl(firstPublishDialogSrc),
+            // Milestone 22 — always resolves accepted; this file's cases
+            // are about first-publish detection/celebration, not the
+            // guidelines gate.
+            '"../../components/GuidelinesGate.js"': blobUrl(`
+                export async function requireGuidelinesAcceptance() { return true; }
+            `)
         };
 
         history.replaceState(null, "", location.pathname + "?draft=draft-1");

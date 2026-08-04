@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 22 — automatic community role computation</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 22 — automatic community role computation</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        import { getAutomaticRole, ROLE_LABELS } from "../js/services/communityRecognition.js";
+
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function daysAgo(n) {
+            return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+        }
+
+        // --- Brand-new account, no builds at all --------------------------
+        test(
+            "brand-new account, zero builds: New Builder",
+            getAutomaticRole({ created_at: daysAgo(1) }, []) === "new_builder"
+        );
+
+        // --- New-ish account with recent activity — still New Builder,
+        // not Active, since account age hasn't crossed the long-term
+        // threshold and "new" only requires recency of activity to be
+        // false, per the function's own precedence (long-term checked
+        // before active). A young account with recent activity should
+        // read Active, not New — confirms New is truly the fallback. ---
+        test(
+            "young account, recent build activity: Active Builder (not New)",
+            getAutomaticRole({ created_at: daysAgo(10) }, [{ updated_at: daysAgo(5) }]) === "active_builder"
+        );
+
+        // --- Young account, no recent activity: New Builder ------------
+        test(
+            "young account, stale build (40 days): New Builder",
+            getAutomaticRole({ created_at: daysAgo(10) }, [{ updated_at: daysAgo(40) }]) === "new_builder"
+        );
+
+        // --- Long-tenured account, recent activity: Long-Term Builder ---
+        test(
+            "account older than 182 days with recent activity: Long-Term Builder",
+            getAutomaticRole({ created_at: daysAgo(200) }, [{ updated_at: daysAgo(2) }]) === "long_term_builder"
+        );
+
+        // --- Long-tenured account, NO recent activity: falls back to
+        // Active/New based on activity, never "long-term but dormant" —
+        // long-term status requires BOTH tenure and recent activity. ---
+        test(
+            "long-tenured account with no recent activity: not Long-Term Builder",
+            getAutomaticRole({ created_at: daysAgo(400) }, [{ updated_at: daysAgo(90) }]) === "new_builder"
+        );
+
+        // --- Boundary: exactly at the 30-day activity window -----------
+        test(
+            "activity exactly 30 days old: outside the active window (strictly < 30)",
+            getAutomaticRole({ created_at: daysAgo(1) }, [{ updated_at: daysAgo(30) }]) === "new_builder"
+        );
+        test(
+            "activity 29 days old: inside the active window",
+            getAutomaticRole({ created_at: daysAgo(1) }, [{ updated_at: daysAgo(29) }]) === "active_builder"
+        );
+
+        // --- Multiple builds — only the most recent matters -------------
+        test(
+            "one recent build among several stale ones still counts as active",
+            getAutomaticRole(
+                { created_at: daysAgo(1) },
+                [{ updated_at: daysAgo(100) }, { updated_at: daysAgo(5) }, { updated_at: daysAgo(200) }]
+            ) === "active_builder"
+        );
+
+        // --- Missing/malformed data never throws ------------------------
+        let threw = false;
+        try {
+            getAutomaticRole({}, []);
+            getAutomaticRole(null, undefined);
+            getAutomaticRole({ created_at: null }, [{ updated_at: null }]);
+        } catch {
+            threw = true;
+        }
+        test("missing/null profile or build dates never throws", threw === false);
+
+        // --- A builder has exactly one automatic role — always a
+        // single string, never an array/list -----------------------------
+        const role = getAutomaticRole({ created_at: daysAgo(1) }, []);
+        test("getAutomaticRole always returns a single string, not a collection", typeof role === "string");
+
+        // --- ROLE_LABELS covers every role this milestone defines, both
+        // automatic and manual — the single source RoleBadge.js renders
+        // from ------------------------------------------------------------
+        const expectedRoles = [
+            "new_builder", "active_builder", "long_term_builder",
+            "community_builder", "project_mentor", "moderator", "staff"
+        ];
+        test(
+            "ROLE_LABELS has a human-readable label for every defined role",
+            expectedRoles.every(r => typeof ROLE_LABELS[r] === "string" && ROLE_LABELS[r].length > 0),
+            JSON.stringify(ROLE_LABELS)
+        );
+        test("ROLE_LABELS defines exactly the seven roles this milestone specifies, no more", Object.keys(ROLE_LABELS).length === 7);
+
+        // --- No gamification: no score/level/points anywhere in the
+        // labels or the exported surface -----------------------------------
+        test(
+            "no label mentions XP, level, or points (anti-gamification check)",
+            Object.values(ROLE_LABELS).every(label => !/xp|level|point/i.test(label))
+        );
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`communityRecognition.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

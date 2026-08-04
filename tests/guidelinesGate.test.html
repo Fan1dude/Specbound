@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 22 — Community Guidelines acceptance gate</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 22 — Community Guidelines acceptance gate</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function waitFor(predicate, timeoutMs = 2000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                const check = () => {
+                    if (predicate()) return resolve();
+                    if (Date.now() - start > timeoutMs) return reject(new Error("timed out: " + predicate.toString()));
+                    setTimeout(check, 10);
+                };
+                check();
+            });
+        }
+
+        function findDialog() {
+            return document.querySelector(".modal");
+        }
+
+        async function freshGate({ alreadyAccepted = false, checkThrows = false, acceptThrows = false } = {}) {
+            const calls = [];
+            const mockKey = `__mock_${Math.random().toString(36).slice(2)}`;
+            globalThis[mockKey] = { calls, alreadyAccepted, checkThrows, acceptThrows };
+
+            const repoSrc = `
+                export async function hasAcceptedGuidelines() {
+                    const m = globalThis["${mockKey}"];
+                    if (m.checkThrows) throw new Error("check failed");
+                    return m.alreadyAccepted;
+                }
+                export async function acceptGuidelines(userId) {
+                    const m = globalThis["${mockKey}"];
+                    if (m.acceptThrows) throw new Error("accept failed");
+                    m.calls.push(["acceptGuidelines", userId]);
+                }
+            `;
+
+            const realSrc = await (await fetch("../js/components/GuidelinesGate.js")).text();
+            const rewritten = realSrc
+                .replace('"../repositories/communityRepository.js"', `"${blobUrl(repoSrc)}"`)
+                .replace('"../core/toast.js"', `"${new URL("../js/core/toast.js", location.href).href}"`);
+
+            const mod = await import(blobUrl(rewritten));
+            return { ...mod, calls };
+        }
+
+        // --- Already accepted: resolves true immediately, no dialog -----
+        {
+            const { requireGuidelinesAcceptance } = await freshGate({ alreadyAccepted: true });
+            const result = await requireGuidelinesAcceptance("user-1", "../");
+
+            test("already accepted: resolves true", result === true);
+            test("already accepted: no dialog is shown", findDialog() === null);
+        }
+
+        // --- Check itself fails: fails OPEN (true), never blocks a real
+        // action just because the check couldn't run -----------------------
+        {
+            const { requireGuidelinesAcceptance } = await freshGate({ checkThrows: true });
+            const result = await requireGuidelinesAcceptance("user-2", "../");
+
+            test("acceptance check fails: fails open (resolves true), never blocks the action", result === true);
+            test("acceptance check fails: no dialog is shown", findDialog() === null);
+        }
+
+        // --- Not yet accepted: dialog appears, Continue starts disabled,
+        // checking the box enables it, accepting resolves true and calls
+        // acceptGuidelines exactly once -------------------------------------
+        {
+            const { requireGuidelinesAcceptance, calls } = await freshGate({ alreadyAccepted: false });
+            const resultPromise = requireGuidelinesAcceptance("user-3", "../");
+
+            await waitFor(() => findDialog() !== null);
+
+            const dialog = findDialog();
+            const checkbox = dialog.querySelector("#guidelinesAcceptCheckbox");
+            const acceptBtn = dialog.querySelector('[data-action="accept"]');
+            const link = dialog.querySelector('a[href*="community-guidelines.html"]');
+
+            test("not yet accepted: dialog appears", dialog !== null);
+            test("dialog links to the real Community Guidelines page", link !== null, dialog.innerHTML);
+            test("Continue starts disabled (checkbox unchecked)", acceptBtn.disabled === true);
+
+            checkbox.checked = true;
+            checkbox.dispatchEvent(new Event("change"));
+
+            test("checking the box enables Continue", acceptBtn.disabled === false);
+
+            acceptBtn.click();
+
+            const result = await resultPromise;
+
+            test("accepting resolves true", result === true);
+            test("accepting calls acceptGuidelines with the correct user id", calls.some(c => c[0] === "acceptGuidelines" && c[1] === "user-3"), JSON.stringify(calls));
+            await waitFor(() => findDialog() === null);
+            test("the dialog closes after accepting", findDialog() === null);
+        }
+
+        // --- Cancel resolves false, does NOT call acceptGuidelines -------
+        {
+            const { requireGuidelinesAcceptance, calls } = await freshGate({ alreadyAccepted: false });
+            const resultPromise = requireGuidelinesAcceptance("user-4", "../");
+
+            await waitFor(() => findDialog() !== null);
+            findDialog().querySelector('[data-action="cancel"]').click();
+
+            const result = await resultPromise;
+
+            test("cancel resolves false", result === false);
+            test("cancel never calls acceptGuidelines", !calls.some(c => c[0] === "acceptGuidelines"));
+            await waitFor(() => findDialog() === null);
+        }
+
+        // --- A real Escape (the browser's native "cancel" event) also
+        // resolves false — never traps the user ----------------------------
+        {
+            const { requireGuidelinesAcceptance } = await freshGate({ alreadyAccepted: false });
+            const resultPromise = requireGuidelinesAcceptance("user-5", "../");
+
+            await waitFor(() => findDialog() !== null);
+            findDialog().dispatchEvent(new Event("cancel", { cancelable: true }));
+
+            const result = await resultPromise;
+            test("a cancel event (Escape) resolves false, same as clicking Cancel", result === false);
+            await waitFor(() => findDialog() === null);
+        }
+
+        // --- Backdrop click also resolves false ---------------------------
+        {
+            const { requireGuidelinesAcceptance } = await freshGate({ alreadyAccepted: false });
+            const resultPromise = requireGuidelinesAcceptance("user-6", "../");
+
+            await waitFor(() => findDialog() !== null);
+            findDialog().click();
+
+            const result = await resultPromise;
+            test("a backdrop click resolves false", result === false);
+            await waitFor(() => findDialog() === null);
+        }
+
+        // --- Accept RPC failure: dialog stays open, re-enables Continue,
+        // never silently resolves true ---------------------------------------
+        {
+            const { requireGuidelinesAcceptance } = await freshGate({ alreadyAccepted: false, acceptThrows: true });
+            const resultPromise = requireGuidelinesAcceptance("user-7", "../");
+
+            await waitFor(() => findDialog() !== null);
+            const dialog = findDialog();
+            const checkbox = dialog.querySelector("#guidelinesAcceptCheckbox");
+            const acceptBtn = dialog.querySelector('[data-action="accept"]');
+
+            checkbox.checked = true;
+            checkbox.dispatchEvent(new Event("change"));
+            acceptBtn.click();
+
+            await waitFor(() => acceptBtn.disabled === false);
+
+            test("a failed accept call re-enables Continue instead of silently succeeding", acceptBtn.disabled === false);
+            test("a failed accept call keeps the dialog open (never resolves the promise)", findDialog() !== null);
+
+            // Clean up: cancel so the promise resolves and doesn't leak
+            // into later test files sharing this browser context.
+            dialog.querySelector('[data-action="cancel"]').click();
+            await resultPromise;
+            await waitFor(() => findDialog() === null);
+        }
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`guidelinesGate.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>
