@@ -8,6 +8,14 @@ import { uploadAvatar } from "../../services/imageService.js";
 import { renderErrorState } from "../../utils/listState.js";
 import { escapeAttribute, escapeHtml } from "../../utils/escapeHtml.js";
 import { avatarInitial } from "../../utils/avatarInitial.js";
+import {
+    getMyDiscordConnection,
+    linkDiscord,
+    disconnectDiscord,
+    setDiscordVisibility,
+    reconcileDiscordConnection
+} from "../../repositories/discordRepository.js";
+import { confirmDialog } from "../../utils/modal.js";
 
 loadNavbar("../");
 loadFooter("../");
@@ -17,6 +25,7 @@ const user = await requireAuth("login.html");
 if (user) {
     await loadSettings(user);
     initPasswordForm(user);
+    initDiscordConnection(user);
 }
 
 async function loadSettings(user) {
@@ -255,6 +264,115 @@ function initPasswordForm(user) {
         } finally {
             submitButton.disabled = false;
             submitButton.textContent = "Update Password";
+        }
+    });
+}
+
+// Milestone 22 §4. reconcileDiscordConnection() is called unconditionally
+// on every load (not just right after an OAuth redirect) — cheap, and it
+// self-heals a linked-but-unsynced or disconnected-but-stale state
+// either way (see the repository's own comment).
+async function initDiscordConnection(user) {
+    const emptyState = document.getElementById("discordConnectEmpty");
+    const activeState = document.getElementById("discordConnectActive");
+    const usernameEl = document.getElementById("discordUsername");
+    const visibilityToggle = document.getElementById("discordVisibilityToggle");
+    const connectBtn = document.getElementById("connectDiscordBtn");
+    const refreshBtn = document.getElementById("refreshDiscordBtn");
+    const disconnectBtn = document.getElementById("disconnectDiscordBtn");
+
+    if (!emptyState || !activeState) return;
+
+    function render(connection) {
+        if (connection) {
+            emptyState.hidden = true;
+            activeState.hidden = false;
+            usernameEl.textContent = connection.provider_username;
+            visibilityToggle.checked = connection.is_public;
+        } else {
+            emptyState.hidden = false;
+            activeState.hidden = true;
+        }
+    }
+
+    try {
+        render(await reconcileDiscordConnection(user.id));
+    } catch (error) {
+        console.error("Discord connection load error:", error);
+        // Fails soft: the "Connect Discord" empty state is already the
+        // page's default, so a failed check just means the connect
+        // button is offered even if a connection secretly already
+        // exists — the next successful load corrects it, never a broken
+        // page.
+    }
+
+    connectBtn?.addEventListener("click", async () => {
+        connectBtn.disabled = true;
+
+        try {
+            await linkDiscord(window.location.href);
+            // linkIdentity() redirects the browser away immediately on
+            // success — nothing after this line runs in practice. The
+            // disabled state and catch below only matter for the
+            // network-error-before-redirect case.
+        } catch (error) {
+            console.error("Discord link error:", error);
+            showToast(error.message || "Could not connect Discord.", "error");
+            connectBtn.disabled = false;
+        }
+    });
+
+    refreshBtn?.addEventListener("click", async () => {
+        refreshBtn.disabled = true;
+
+        try {
+            render(await reconcileDiscordConnection(user.id));
+            showToast("Discord connection refreshed.", "success");
+        } catch (error) {
+            console.error("Discord refresh error:", error);
+            showToast(error.message || "Could not refresh Discord connection.", "error");
+        } finally {
+            refreshBtn.disabled = false;
+        }
+    });
+
+    visibilityToggle?.addEventListener("change", async () => {
+        const isPublic = visibilityToggle.checked;
+        visibilityToggle.disabled = true;
+
+        try {
+            await setDiscordVisibility(isPublic);
+            showToast(isPublic ? "Discord is now shown on your public profile." : "Discord is now hidden from your public profile.", "success");
+        } catch (error) {
+            console.error("Discord visibility update error:", error);
+            showToast(error.message || "Could not update visibility.", "error");
+            visibilityToggle.checked = !isPublic;
+        } finally {
+            visibilityToggle.disabled = false;
+        }
+    });
+
+    disconnectBtn?.addEventListener("click", async () => {
+        const confirmed = await confirmDialog({
+            title: "Disconnect Discord?",
+            body: "Your Discord connection and any public display of it will be removed.",
+            confirmLabel: "Disconnect",
+            danger: true
+        });
+
+        if (!confirmed) return;
+
+        disconnectBtn.disabled = true;
+
+        try {
+            await disconnectDiscord();
+            render(null);
+            showToast("Discord disconnected.", "success");
+        } catch (error) {
+            console.error("Discord disconnect error:", error);
+            showToast(error.message || "Could not disconnect Discord.", "error");
+        } finally {
+            disconnectBtn.disabled = false;
         }
     });
 }

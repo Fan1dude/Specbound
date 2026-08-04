@@ -3,6 +3,7 @@ import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
 import { avatarInitial } from "../../utils/avatarInitial.js";
 import { icon } from "../../utils/icons.js";
 import { formatJoinDate } from "./formatJoinDate.js";
+import { renderRoleBadges } from "../../components/RoleBadge.js";
 
 // Identity block — Milestone 20 Builder Portfolio. Left-aligned (avatar +
 // text side by side), not centered — a centered identity block reads as a
@@ -15,15 +16,16 @@ const LINK_FIELDS = [
     { key: "youtube", label: "YouTube", icon: "link", format: value => `https://youtube.com/${value.replace(/^@/, "")}` }
 ];
 
-export async function renderProfileHero(profile) {
+export async function renderProfileHero(profile, discordConnection = null, roles = []) {
     const username = profile?.username || "Creator";
 
     document.getElementById("profileUsername").textContent = username;
 
+    renderRoleBadges(document.getElementById("profileRoles"), roles);
     renderDisplayName(profile);
     renderHeadline(profile);
     renderMeta(profile);
-    renderLinks(profile);
+    renderLinks(profile, discordConnection);
     await renderAvatar(profile, username);
 }
 
@@ -79,7 +81,7 @@ function renderMeta(profile) {
     el.innerHTML = items.join("");
 }
 
-function renderLinks(profile) {
+function renderLinks(profile, discordConnection) {
     const el = document.getElementById("profileLinks");
 
     if (!el) return;
@@ -105,6 +107,22 @@ function renderLinks(profile) {
             `;
         })
         .filter(Boolean);
+
+    // Milestone 22 §4.8 — an additive list item, not a new section: same
+    // .profile-link visual treatment as website/github/youtube above,
+    // but a <span>, not an <a> — unlike those, there's no meaningful
+    // Discord profile URL to link to, only a verified username to show.
+    // Independently owner-controlled (discordConnection is only ever
+    // non-null here when is_public = true; see loadProfile.js/
+    // discordRepository.js's getPublicDiscordConnection()), so
+    // connecting Discord never implies this renders.
+    if (discordConnection?.provider_username) {
+        links.push(`
+            <span class="profile-link" title="Connected Discord account">
+                ${icon("discord", 16)} ${escapeHtml(discordConnection.provider_username)}
+            </span>
+        `);
+    }
 
     el.innerHTML = links.join("");
 }

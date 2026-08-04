@@ -1,5 +1,8 @@
 import { getBuilderPortfolioProfile, getProfileBuilds } from "../../repositories/profileRepository.js";
 import { getCommentCountForBuilds } from "../../repositories/commentRepository.js";
+import { getPublicDiscordConnection } from "../../repositories/discordRepository.js";
+import { getProfileRoles } from "../../repositories/communityRepository.js";
+import { getAutomaticRole } from "../../services/communityRecognition.js";
 import { getRecentBuilderRevisions } from "../../repositories/revisionRepository.js";
 import { resolveBuildImageUrls } from "../../repositories/mediaRepository.js";
 import { getCurrentUser } from "../../core/auth.js";
@@ -59,6 +62,47 @@ export async function loadProfile() {
         console.error("Current user load error:", error);
     }
 
+    // Milestone 22 §4.8 — omitted (not an empty error state) if the
+    // builder hasn't connected Discord, or has but not made it public;
+    // both look identical to a visitor (null), same as any other
+    // optional profile field.
+    let discordConnection = null;
+
+    try {
+        discordConnection = await getPublicDiscordConnection(userId);
+    } catch (error) {
+        console.error("Discord connection load error:", error);
+    }
+
+    // Milestone 22 §5 — the automatic role is always computable (pure
+    // function over data already in hand, no fetch); manually-granted
+    // roles need their own small, non-blocking read. A failure here just
+    // means the manual-role badges are momentarily missing, never a
+    // broken page — the automatic role still renders regardless.
+    const roles = [getAutomaticRole(profile, builds)];
+
+    try {
+        roles.push(...await getProfileRoles(userId));
+    } catch (error) {
+        console.error("Profile roles load error:", error);
+    }
+
+    // The viewer's own roles — only ever used to decide whether to show
+    // the moderator/staff role-management control (§13 phase 5), never
+    // the actual security boundary (grant_profile_role()/
+    // revoke_profile_role() re-check this server-side regardless). Only
+    // fetched for a signed-in viewer who isn't looking at their own
+    // profile — a moderator managing their own roles isn't a real flow.
+    let viewerRoles = [];
+
+    if (currentUser && currentUser.id !== userId) {
+        try {
+            viewerRoles = await getProfileRoles(currentUser.id);
+        } catch (error) {
+            console.error("Viewer roles load error:", error);
+        }
+    }
+
     // Builder Journey (spec §17.3/§17.4) — a capped recent-revisions
     // fetch, synthesized into a curated top-10 timeline. Only worth
     // fetching when there's at least one public build; a failure here
@@ -74,7 +118,7 @@ export async function loadProfile() {
         }
     }
 
-    await renderProfile({ profile, builds, commentCount, currentUser, journeyEvents });
+    await renderProfile({ profile, builds, commentCount, currentUser, journeyEvents, discordConnection, roles, viewerRoles });
 }
 
 // Both sections start `hidden` in the static HTML (spec §7 — a

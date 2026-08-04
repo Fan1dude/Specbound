@@ -8,6 +8,7 @@ import { renderBuilderJourney } from "./renderBuilderJourney.js";
 import { renderAboutBuilder } from "./renderAboutBuilder.js";
 import { resolveFeaturedBuild } from "./resolveFeaturedBuild.js";
 import { icon } from "../../utils/icons.js";
+import { renderManageRoles } from "../../components/ManageRolesControl.js";
 
 const CONDITIONAL_SECTION_IDS = [
     "profileEmptyState",
@@ -24,12 +25,33 @@ const CONDITIONAL_SECTION_IDS = [
 // more than one section's data: whether the visitor is the profile
 // owner (gates the zero-project CTA and the empty-bio prompt) and which
 // build is Featured (so Project Gallery can exclude it, spec §4.1).
-export async function renderProfile({ profile, builds, commentCount, currentUser = null, journeyEvents = [] }) {
+const AUTOMATIC_ROLES = ["new_builder", "active_builder", "long_term_builder"];
+
+export async function renderProfile({ profile, builds, commentCount, currentUser = null, journeyEvents = [], discordConnection = null, roles = [], viewerRoles = [] }) {
     const isOwner = Boolean(currentUser) && currentUser?.id === profile?.id;
 
-    await renderProfileHero(profile);
+    await renderProfileHero(profile, discordConnection, roles);
     await renderFollow(profile, currentUser);
     renderBuilderOverview(profile, builds, commentCount);
+
+    // §13 phase 5 — a minimal grant/revoke control, only ever rendered
+    // for a signed-in moderator/staff viewer looking at someone else's
+    // profile. Re-renders itself after a successful grant/revoke so the
+    // current-roles list and grantable-options list both stay accurate
+    // without a full page reload.
+    const viewerIsModerator = viewerRoles.includes("moderator") || viewerRoles.includes("staff");
+
+    if (!isOwner && viewerIsModerator) {
+        renderManageRoles(document.getElementById("manageRolesControl"), {
+            targetUserId: profile.id,
+            currentManualRoles: roles.filter(role => !AUTOMATIC_ROLES.includes(role)),
+            viewerIsStaff: viewerRoles.includes("staff"),
+            onChange: () => window.location.reload()
+        });
+
+        const manageRolesEl = document.getElementById("manageRolesControl");
+        if (manageRolesEl) manageRolesEl.hidden = false;
+    }
 
     const emptyStateEl = document.getElementById("profileEmptyState");
     if (emptyStateEl) {

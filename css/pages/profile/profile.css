@@ -79,6 +79,77 @@
     margin: 0;
 }
 
+/* Milestone 22 §5 — the one additive item this milestone adds to the
+   Builder Portfolio hero: a small, text-first badge row (the automatic
+   role plus any manually-granted roles), not a new section. Badges reuse
+   the existing .badge class verbatim; .role-badge only exists in case a
+   future pass needs to target these specifically without touching every
+   other .badge in the app. */
+.profile-roles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-0);
+    margin-top: var(--space-1);
+}
+
+.profile-roles[hidden] {
+    display: none;
+}
+
+/* Only ever rendered for a signed-in moderator/staff viewer (§13 phase
+   5) — visually subordinate (small text, muted) since almost every
+   visitor never sees it at all. */
+.manage-roles-control {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-0);
+    margin-top: var(--space-2);
+    padding: var(--space-2);
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+}
+
+.manage-roles-control[hidden] {
+    display: none;
+}
+
+.manage-roles-label {
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.manage-roles-current {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-0);
+}
+
+.manage-roles-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.manage-roles-revoke {
+    display: inline-flex;
+    color: inherit;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0;
+}
+
+.manage-roles-grant {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
 .profile-display-name {
     font-size: 1.05rem;
     font-weight: 700;

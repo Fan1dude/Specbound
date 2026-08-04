@@ -144,6 +144,39 @@
 
         <section class="settings-card">
 
+            <h2>Connected Accounts</h2>
+
+            <div class="connected-account-row" id="discordConnectEmpty">
+                <p class="text-muted">Connect your Discord account to display it on your profile.</p>
+                <button type="button" class="btn btn-secondary" id="connectDiscordBtn">
+                    Connect Discord
+                </button>
+            </div>
+
+            <div class="connected-account-row" id="discordConnectActive" hidden>
+                <div class="connected-account-identity">
+                    <span class="connected-account-name" id="discordUsername"></span>
+                </div>
+
+                <label class="connected-account-visibility">
+                    <input type="checkbox" id="discordVisibilityToggle">
+                    Show on my public profile
+                </label>
+
+                <div class="connected-account-actions">
+                    <button type="button" class="btn btn-secondary btn-small" id="refreshDiscordBtn">
+                        Refresh
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-small" id="disconnectDiscordBtn">
+                        Disconnect
+                    </button>
+                </div>
+            </div>
+
+        </section>
+
+        <section class="settings-card">
+
             <h2>Password</h2>
 
             <form id="passwordForm" class="settings-grid">
