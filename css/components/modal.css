@@ -77,6 +77,52 @@
     margin-top: var(--space-3);
 }
 
+/* Milestone 22 §9 — FeedbackModal.js's category picker. Plain radio
+   inputs (not the custom card-style picker from Milestone 21's
+   TechnologyRadioCard.js) — four short text labels in a compact dialog
+   call for a simple list, not a visual card grid. */
+.feedback-category-fieldset {
+    margin: var(--space-2) 0;
+    padding: 0;
+    border: none;
+}
+
+.feedback-category-fieldset legend {
+    padding: 0;
+    margin-bottom: var(--space-1);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.feedback-category-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.feedback-category-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: normal;
+    font-size: var(--font-size-sm);
+}
+
+/* Milestone 22 §7 — GuidelinesGate.js's acceptance checkbox. */
+.guidelines-accept-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-1);
+    margin: var(--space-2) 0;
+    font-weight: normal;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+.guidelines-accept-checkbox input {
+    margin-top: 3px;
+}
+
 /* Mobile: full-screen edge-to-edge instead of a smaller centered box,
    which reads cramped on a small viewport — a standard mobile dialog
    pattern (docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md's Responsive

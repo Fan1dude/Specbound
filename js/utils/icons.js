@@ -37,7 +37,14 @@ const PATHS = {
     "location-pin": '<path d="M12 21s7-7.58 7-12a7 7 0 0 0-14 0c0 4.42 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/>',
     calendar: '<rect x="4" y="5" width="16" height="16" rx="2"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/>',
     milestone: '<line x1="6" y1="21" x2="6" y2="4"/><path d="M6 5h11l-3 4 3 4H6"/>',
-    "arrow-up-right": '<line x1="7" y1="17" x2="17" y2="7"/><polyline points="9 7 17 7 17 15"/>'
+    "arrow-up-right": '<line x1="7" y1="17" x2="17" y2="7"/><polyline points="9 7 17 7 17 15"/>',
+
+    // Milestone 22 (Community Foundation) addition — see
+    // docs/milestones/MILESTONE_22_COMMUNITY_FOUNDATION_SPECIFICATION.md.
+    // A generic speech-bubble mark for "connected chat community," not
+    // Discord's logo — same "geometric, stroke-based, no borrowed brand
+    // marks" rule "github" above already follows.
+    discord: '<path d="M5 6h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-9l-4 4v-4H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z"/>'
 };
 
 // Returns an inline <svg> string built to the shared standard. `size` must
