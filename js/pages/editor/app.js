@@ -17,6 +17,7 @@ import { setEditorStatus } from "./editorStatus.js";
 import { maybeShowRecoveryBanner } from "./draftRecoveryBanner.js";
 import { confirmDialog } from "../../utils/modal.js";
 import { showFirstPublishDialog } from "../../components/FirstPublishDialog.js";
+import { requireGuidelinesAcceptance } from "../../components/GuidelinesGate.js";
 
 loadNavbar("../../");
 loadFooter("../../");
@@ -197,6 +198,13 @@ async function initEditor(id) {
             showToast("Complete the readiness checklist before publishing.", "warning");
             return;
         }
+
+        // Milestone 22 §7 — the first of two possible first-time gates
+        // (publishing or commenting, whichever a builder does first);
+        // resolves immediately (true) for every account that's already
+        // accepted, so this is a no-op read on every publish after the
+        // first.
+        if (!(await requireGuidelinesAcceptance(user.id, "../../"))) return;
 
         isPublishing = true;
         updatePublishBtn();

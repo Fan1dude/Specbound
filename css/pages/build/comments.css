@@ -103,3 +103,14 @@
 .comment-delete-btn {
     flex-shrink: 0;
 }
+
+/* Milestone 22 §8.3 — wraps the (existing) delete button and the new
+   Report button together so both stay a single flex-shrink:0 unit at
+   the end of the comment row, same layout role .comment-delete-btn
+   already had alone. */
+.comment-item-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-0);
+    flex-shrink: 0;
+}
