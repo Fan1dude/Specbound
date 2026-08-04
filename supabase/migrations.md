@@ -817,3 +817,103 @@ Every other migration still only ever moves forward from `0001`.
   §4 for the full design, including why this is the only Milestone 21
   state that needed a schema change — everything else is either computed
   live or kept in namespaced `localStorage`.
+
+## 0026_social_connections
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0025.
+- **File**: `migrations/0026_social_connections.sql`
+- **Rollback**: `rollbacks/0026_social_connections_rollback.sql`
+- **Adds**: `social_connections` — a mirror of a builder's connected
+  Discord identity (provider-discriminated, shaped for a future second
+  OAuth provider without a rename), and `sync_discord_identity()`, the
+  only way a row is created. OAuth itself is handled entirely by
+  Supabase Auth's native `linkIdentity()` — this table never stores a
+  token, only public identity claims. `is_public` (default false)
+  independently controls whether a connection is ever shown on a public
+  profile; connecting never implies displaying.
+- **Touches no other table.**
+- **Context**: Milestone 22 (Community Foundation). See
+  `docs/milestones/MILESTONE_22_COMMUNITY_FOUNDATION_SPECIFICATION.md`
+  §4 and §0.1 for the full design, including why this shape was
+  generalized beyond a Discord-only table during the final design
+  review.
+
+## 0027_profile_roles
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0026.
+- **File**: `migrations/0027_profile_roles.sql`
+- **Rollback**: `rollbacks/0027_profile_roles_rollback.sql`
+- **Adds**: `profile_roles` (manually-awarded and permission-bearing
+  community roles — `community_builder`, `project_mentor`, `moderator`,
+  `staff`; automatic roles are never stored, see `communityRecognition.js`),
+  `is_platform_moderator()`, `is_platform_staff()`. Read-only in this
+  file — the write RPCs (`grant_profile_role()`/`revoke_profile_role()`)
+  are in `0028_moderation.sql`, since they need to log into
+  `moderation_actions`, which doesn't exist until that file.
+- **Touches no other table.**
+- **Context**: Milestone 22 (Community Foundation). See
+  `docs/milestones/MILESTONE_22_COMMUNITY_FOUNDATION_SPECIFICATION.md`
+  §5, §8.1.
+
+## 0028_moderation
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0027.
+- **File**: `migrations/0028_moderation.sql`
+- **Rollback**: `rollbacks/0028_moderation_rollback.sql`
+- **Adds**: `content_reports`, `moderation_actions`,
+  `report_content()`, `resolve_report()`, `grant_profile_role()`,
+  `revoke_profile_role()`. Deliberately two tables, not one — see the
+  file's own header and spec §0.2 for the concrete reasons a merge would
+  make the design worse, not just look bigger on paper.
+- **Touches no other table** (this migration and `0031` must be applied
+  together — `resolve_report()`/`grant_profile_role()` call
+  `create_notification()` with no `build_id`, which is only valid once
+  `0031` widens that function's signature).
+- **Context**: Milestone 22 (Community Foundation). See
+  `docs/milestones/MILESTONE_22_COMMUNITY_FOUNDATION_SPECIFICATION.md`
+  §8.
+
+## 0029_feedback_submissions
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0028.
+- **File**: `migrations/0029_feedback_submissions.sql`
+- **Rollback**: `rollbacks/0029_feedback_submissions_rollback.sql`
+- **Adds**: `feedback_submissions`, `submit_feedback()`. `user_id` is
+  nullable with `on delete set null` (not `cascade`) — feedback is
+  product signal that should outlive the account that submitted it.
+- **Touches no other table.**
+- **Context**: Milestone 22 (Community Foundation). See
+  `docs/milestones/MILESTONE_22_COMMUNITY_FOUNDATION_SPECIFICATION.md`
+  §9.
+
+## 0030_beta_invites
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0029.
+- **File**: `migrations/0030_beta_invites.sql`
+- **Rollback**: `rollbacks/0030_beta_invites_rollback.sql`
+- **Adds**: `beta_invites`, `redeem_beta_invite()`. Narrowed scope per
+  the final design review (spec §0.2) — only for shareable, redeem-
+  anywhere codes; direct email invitations use Supabase Auth's native
+  admin invite feature and need no schema at all.
+- **Touches no other table.**
+- **Context**: Milestone 22 (Community Foundation). See
+  `docs/milestones/MILESTONE_22_COMMUNITY_FOUNDATION_SPECIFICATION.md`
+  §10.
+
+## 0031_guidelines_and_notification_types
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0030 (and must
+  be applied together with `0028`, see that entry above).
+- **File**: `migrations/0031_guidelines_and_notification_types.sql`
+- **Rollback**: `rollbacks/0031_guidelines_and_notification_types_rollback.sql`
+- **Adds**: `profiles.guidelines_accepted_at` (one nullable timestamp).
+  **Modifies**: `notifications.type` CHECK widened to add
+  `role_awarded`/`report_resolved`; `notifications.build_id` relaxed to
+  nullable (a role grant or report resolution isn't necessarily about a
+  build); `create_notification()` replaced to give `p_build_id` a
+  default of `null`, matching this project's existing convention of
+  modifying already-applied functions via `CREATE OR REPLACE` rather
+  than editing the migration that first defined them.
+- **Context**: Milestone 22 (Community Foundation). See
+  `docs/milestones/MILESTONE_22_COMMUNITY_FOUNDATION_SPECIFICATION.md`
+  §7, §11.
