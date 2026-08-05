@@ -25,15 +25,21 @@ export async function acceptGuidelines(userId) {
     if (error) throw error;
 }
 
-// profile_roles is publicly readable by design (spec §5) — a role badge
-// needs to render on any visitor's view of a public profile, not just
-// the owner's own view, same "functional, not private" posture as
-// follows.
+// A role badge needs to render on any visitor's view of a public
+// profile, not just the owner's own view (spec §5) — but profile_roles
+// itself is no longer publicly readable as of migration 0032 (its raw
+// `note`/`granted_by` columns were retrievable by any direct API caller
+// under the original `using (true)` policy, not just the `role` column
+// this function ever asked for). get_public_profile_roles() is the
+// replacement public read path: a SECURITY DEFINER function that only
+// ever returns `role`, so there's no way to request the columns that
+// prompted this change in the first place. Signature/return shape here
+// is unchanged, so every existing caller (this profile's own role
+// badges, and a signed-in viewer's own roles used to decide whether to
+// show ManageRolesControl) keeps working with no call-site changes.
 export async function getProfileRoles(userId) {
     const { data, error } = await supabase
-        .from("profile_roles")
-        .select("role")
-        .eq("user_id", userId);
+        .rpc("get_public_profile_roles", { p_user_id: userId });
 
     if (error) throw error;
     return (data || []).map(row => row.role);

@@ -917,3 +917,30 @@ Every other migration still only ever moves forward from `0001`.
 - **Context**: Milestone 22 (Community Foundation). See
   `docs/milestones/MILESTONE_22_COMMUNITY_FOUNDATION_SPECIFICATION.md`
   §7, §11.
+
+## 0032_restrict_profile_roles_visibility
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0031.
+- **File**: `migrations/0032_restrict_profile_roles_visibility.sql`
+- **Rollback**: `rollbacks/0032_restrict_profile_roles_visibility_rollback.sql`
+- **Fixes**: a data-exposure finding from the Milestone 20 Builder
+  Portfolio branch's final review — 0027's `profile_roles` SELECT
+  policy was `using (true)` with no column restriction, so `note`
+  (a moderator's internal grant comment) and `granted_by` were
+  retrievable by any direct API caller, not just the `role` column the
+  app itself ever asked for.
+- **Modifies**: `profile_roles`' SELECT policy, replaced with
+  authenticated-only access to a user's own roles or (for a
+  moderator/staff caller) everyone's. **Adds**:
+  `get_public_profile_roles(uuid)` — a SECURITY DEFINER function
+  returning only `role`, granted to `anon` and `authenticated`, the new
+  public read path for role badges. A function rather than a public
+  view on purpose — see the migration's own header for why a view here
+  would risk Supabase's "security_definer_view" footgun (silently
+  exposing every row, not just the intended columns).
+- **Touches no other table.** `communityRepository.js`'s
+  `getProfileRoles()` was updated in the same commit to call the new
+  function instead of selecting from the table directly; its exported
+  signature is unchanged.
+- **Context**: post-merge-review hardening for Milestone 22 (Community
+  Foundation).
