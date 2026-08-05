@@ -24,9 +24,18 @@
 -- observes the intermediate state first.
 --
 -- auth.users' exact required columns vary by Supabase/GoTrue version —
--- the minimal (id, email) insert below is the commonly-documented
--- pattern but may need adjusting for a given project's schema (same
--- caveat the Milestone 19 suite carries).
+-- the (id, email, raw_user_meta_data) insert below is the commonly-
+-- documented pattern but may need adjusting for a given project's
+-- schema (same caveat the Milestone 19 suite carries).
+--
+-- raw_user_meta_data must carry a unique, non-null `username` for every
+-- fixture row: public.handle_new_user() (0000_baseline_pre_tracked_
+-- tables.sql) fires AFTER INSERT on auth.users and inserts into
+-- public.profiles(id, username) using
+-- new.raw_user_meta_data->>'username' — profiles.username is `not null
+-- unique`, so a fixture insert with no raw_user_meta_data (or a
+-- colliding username) fails the whole auth.users insert before any
+-- test runs, exactly the way a real signup with no username would.
 --
 -- Each test runs inside its own SAVEPOINT and always rolls back to it
 -- afterward (pass or fail). Identity simulation follows the exact
@@ -50,10 +59,13 @@ begin;
 -- Fixtures
 -- ---------------------------------------------------------------------
 
-insert into auth.users (id, email) values
-    ('00000000-0000-0000-0000-000000000101', 'm22-alice@example.invalid'),
-    ('00000000-0000-0000-0000-000000000102', 'm22-bob@example.invalid'),
-    ('00000000-0000-0000-0000-000000000103', 'm22-mod@example.invalid')
+-- Usernames are namespaced (m22_..._test) to keep collision risk with
+-- any real data low on the disposable/staging project this is meant to
+-- run against — same spirit as the *.invalid email addresses below.
+insert into auth.users (id, email, raw_user_meta_data) values
+    ('00000000-0000-0000-0000-000000000101', 'm22-alice@example.invalid', '{"username": "m22_alice_test"}'::jsonb),
+    ('00000000-0000-0000-0000-000000000102', 'm22-bob@example.invalid', '{"username": "m22_bob_test"}'::jsonb),
+    ('00000000-0000-0000-0000-000000000103', 'm22-mod@example.invalid', '{"username": "m22_mod_test"}'::jsonb)
 on conflict (id) do nothing;
 
 -- mod is a moderator (inserted directly for fixture speed, same
