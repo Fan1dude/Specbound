@@ -1,0 +1,192 @@
+/* Community Guidelines (pages/legal/community-guidelines.html) — M22
+   polish pass. Composed entirely from existing tokens/.hero-badge/.btn
+   plus the --surface-card/--color-border/--color-text-* family already
+   established for "dark workspace" cards (home.css/spotlight.css/
+   explore.css) — no new colors. Scoped to this page only (.guidelines-*
+   classes); content.css itself is untouched so privacy.html/terms.html/
+   affiliate-disclosure.html are unaffected. */
+
+.guidelines-page {
+    /* Wider than the base .content-page column (760px) to fit the
+       desktop table-of-contents rail; the prose itself still gets its
+       own narrower max-width below so paragraphs stay a comfortable
+       reading measure rather than stretching the full column. */
+    width: min(1040px, 92%);
+}
+
+.guidelines-header h1 {
+    /* content.css's plain h1 inherits typography.css's clamp(3rem,
+       7vw, 5.5rem) marketing-hero size — restrained here on purpose;
+       this is a policy page, not a landing page. */
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    letter-spacing: -0.02em;
+    margin: var(--space-1) 0 var(--space-2);
+}
+
+.guidelines-lead {
+    max-width: 640px;
+    font-size: var(--font-size-lg);
+    color: var(--color-text-secondary);
+}
+
+/* ---------- Principles summary ---------- */
+/* A short, additive summary of the sections below — not a replacement
+   or a shortened rewrite of them. Every sentence here is drawn directly
+   from the corresponding full section's own wording; the full text is
+   unchanged and unabridged further down the page. */
+.guidelines-principles {
+    margin: var(--space-4) 0 var(--space-6);
+    padding: var(--space-3);
+    background: var(--surface-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+}
+
+.guidelines-principles-heading {
+    font-size: var(--font-size-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-muted);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-2);
+}
+
+.guidelines-principles-list {
+    display: grid;
+    gap: var(--space-1);
+    max-width: 720px;
+}
+
+.guidelines-principles-list li {
+    position: relative;
+    padding-left: var(--space-2);
+    color: var(--color-text-secondary);
+    line-height: var(--line-height-body);
+}
+
+.guidelines-principles-list li::before {
+    /* --color-primary, not --color-primary-strong — this is a
+       decorative dot, not a fill with text sitting on it, so it wants
+       the icon/border-safe derivative, not the fill-only "strong"
+       token (see tokens.css's Primary comment). */
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.65em;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-primary);
+}
+
+/* ---------- Table of contents + sections layout ---------- */
+.guidelines-layout {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    gap: var(--space-5);
+    align-items: start;
+}
+
+.guidelines-toc {
+    position: sticky;
+    top: calc(var(--navbar-height) + var(--space-3));
+}
+
+.guidelines-toc-label {
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-muted);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-1);
+}
+
+.guidelines-toc ol {
+    display: grid;
+    gap: var(--space-0);
+}
+
+.guidelines-toc a {
+    display: block;
+    padding: var(--space-0) 0 var(--space-0) var(--space-1);
+    border-left: 2px solid transparent;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: 1.4;
+    transition: color var(--duration-fast) var(--ease-standard),
+        border-color var(--duration-fast) var(--ease-standard);
+}
+
+.guidelines-toc a:hover,
+.guidelines-toc a:focus-visible {
+    color: var(--color-text);
+    border-left-color: var(--color-primary-strong);
+}
+
+.guidelines-sections {
+    max-width: 680px;
+}
+
+.guidelines-section {
+    padding: var(--space-4) 0;
+    border-bottom: 1px solid var(--color-border);
+    /* Anchor-jump target offset so a fixed navbar never covers a
+       section's heading right after following a TOC link. */
+    scroll-margin-top: calc(var(--navbar-height) + var(--space-2));
+}
+
+.guidelines-section:first-child {
+    padding-top: 0;
+}
+
+.guidelines-section:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.guidelines-section h2 {
+    /* Restrained the same way the page h1 is — typography.css's
+       default h2 clamp(2rem, 5vw, 3rem) reads as a marketing headline,
+       not a policy section title. */
+    font-size: var(--font-size-2xl);
+    margin-bottom: var(--space-2);
+}
+
+/* The "01"/"02".../"05" numeral is purely decorative — rendered via
+   generated content (attr(data-section-number) on the heading itself)
+   rather than a DOM text node, so it can never end up read aloud or
+   pasted as part of the heading's accessible name or its text content,
+   no aria-hidden reliance needed. */
+.guidelines-section h2::before {
+    content: attr(data-section-number);
+    display: inline-block;
+    margin-right: var(--space-1);
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-primary);
+    letter-spacing: 0.04em;
+    vertical-align: middle;
+}
+
+.guidelines-section p {
+    max-width: 640px;
+}
+
+.guidelines-back {
+    margin-top: var(--space-5);
+}
+
+@media (max-width: 900px) {
+    .guidelines-layout {
+        display: block;
+    }
+
+    /* The TOC is a desktop convenience, not required navigation — every
+       section is still reachable by scrolling on a page this short, so
+       it's simply omitted on mobile rather than collapsed into an
+       accordion or select. */
+    .guidelines-toc {
+        display: none;
+    }
+}

@@ -39,59 +39,102 @@
     <nav class="navbar" id="navbar"></nav>
 
     <!--
-        Milestone 22 §7 — real section structure, placeholder copy under
-        each heading. Not the final published guidelines; the "DRAFT"
-        badge and the note below are deliberate, not an oversight. This
-        is the same page GuidelinesGate.js links to before a builder's
-        first publish or first comment (see js/components/
-        GuidelinesGate.js).
+        Milestone 22 §7, redesigned in the polish pass — same section
+        structure and placeholder copy as before (still not the final
+        published guidelines; the "DRAFT" badge and closing note are
+        deliberate, not an oversight), now with a real header, a table
+        of contents, a highlighted principles summary, and numbered
+        sections. This is the same page GuidelinesGate.js links to
+        before a builder's first publish or first comment (see
+        js/components/GuidelinesGate.js).
     -->
-    <main class="content-page" id="main">
-        <p class="hero-badge">DRAFT</p>
-        <h1>Community Guidelines</h1>
+    <main class="content-page guidelines-page" id="main">
 
-        <p>
-            This page states the real structure Specbound's Community
-            Guidelines will follow. The wording below is placeholder —
-            final language has not been written or approved yet.
-        </p>
+        <div class="guidelines-header">
+            <p class="hero-badge">DRAFT</p>
+            <h1>Community Guidelines</h1>
+            <p class="guidelines-lead">
+                This page states the real structure Specbound's Community
+                Guidelines will follow. The wording below is placeholder —
+                final language has not been written or approved yet.
+            </p>
+        </div>
 
-        <h2>Why we have guidelines</h2>
-        <p>
-            Specbound exists to help builders document and learn from real
-            projects. These guidelines exist to keep that possible — not to
-            police tone or personality.
-        </p>
+        <section class="guidelines-principles" aria-labelledby="guidelinesPrinciplesHeading">
+            <h2 id="guidelinesPrinciplesHeading" class="guidelines-principles-heading">In short</h2>
+            <ul class="guidelines-principles-list">
+                <li>Specbound exists to help builders document and learn from real projects.</li>
+                <li>Document your work clearly and honestly, and give feedback that helps others improve.</li>
+                <li>Harassment, spam, plagiarism, and low-effort engagement-bait aren't tolerated.</li>
+                <li>Any builder can report content that violates these guidelines — a moderator reviews every report.</li>
+            </ul>
+        </section>
 
-        <h2>What's encouraged</h2>
-        <p>
-            Clear, honest documentation of your own work. Constructive
-            feedback that helps another builder improve. Sharing what you
-            learned, including what didn't work.
-        </p>
+        <div class="guidelines-layout">
 
-        <h2>What's not tolerated</h2>
-        <p>
-            Harassment, spam, plagiarized project content, and low-effort
-            posting aimed at engagement rather than sharing real work.
-        </p>
+            <nav class="guidelines-toc" aria-label="Guideline sections">
+                <p class="guidelines-toc-label" aria-hidden="true">On this page</p>
+                <ol>
+                    <li><a href="#why-we-have-guidelines">Why we have guidelines</a></li>
+                    <li><a href="#whats-encouraged">What's encouraged</a></li>
+                    <li><a href="#whats-not-tolerated">What's not tolerated</a></li>
+                    <li><a href="#how-reports-work">How reports work</a></li>
+                    <li><a href="#enforcement">Enforcement</a></li>
+                </ol>
+            </nav>
 
-        <h2>How reports work</h2>
-        <p>
-            Any builder can report a project, comment, or profile they
-            believe violates these guidelines. A moderator reviews every
-            report — see the Report control available on projects and
-            comments.
-        </p>
+            <div class="guidelines-sections">
 
-        <h2>Enforcement</h2>
-        <p>
-            A moderator or staff member may take action on content that
-            violates these guidelines. The exact range of actions isn't
-            finalized yet.
-        </p>
+                <section class="guidelines-section" id="why-we-have-guidelines" aria-labelledby="why-we-have-guidelines-heading">
+                    <h2 id="why-we-have-guidelines-heading" data-section-number="01">Why we have guidelines</h2>
+                    <p>
+                        Specbound exists to help builders document and learn from real
+                        projects. These guidelines exist to keep that possible — not to
+                        police tone or personality.
+                    </p>
+                </section>
 
-        <a class="btn btn-secondary" href="../../index.html">Back to Home</a>
+                <section class="guidelines-section" id="whats-encouraged" aria-labelledby="whats-encouraged-heading">
+                    <h2 id="whats-encouraged-heading" data-section-number="02">What's encouraged</h2>
+                    <p>
+                        Clear, honest documentation of your own work. Constructive
+                        feedback that helps another builder improve. Sharing what you
+                        learned, including what didn't work.
+                    </p>
+                </section>
+
+                <section class="guidelines-section" id="whats-not-tolerated" aria-labelledby="whats-not-tolerated-heading">
+                    <h2 id="whats-not-tolerated-heading" data-section-number="03">What's not tolerated</h2>
+                    <p>
+                        Harassment, spam, plagiarized project content, and low-effort
+                        posting aimed at engagement rather than sharing real work.
+                    </p>
+                </section>
+
+                <section class="guidelines-section" id="how-reports-work" aria-labelledby="how-reports-work-heading">
+                    <h2 id="how-reports-work-heading" data-section-number="04">How reports work</h2>
+                    <p>
+                        Any builder can report a project, comment, or profile they
+                        believe violates these guidelines. A moderator reviews every
+                        report — see the Report control available on projects and
+                        comments.
+                    </p>
+                </section>
+
+                <section class="guidelines-section" id="enforcement" aria-labelledby="enforcement-heading">
+                    <h2 id="enforcement-heading" data-section-number="05">Enforcement</h2>
+                    <p>
+                        A moderator or staff member may take action on content that
+                        violates these guidelines. The exact range of actions isn't
+                        finalized yet.
+                    </p>
+                </section>
+
+            </div>
+
+        </div>
+
+        <a class="btn btn-secondary guidelines-back" href="../../index.html">Back to Home</a>
     </main>
 
     <footer class="footer" id="footer"></footer>

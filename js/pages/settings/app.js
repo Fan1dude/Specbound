@@ -16,6 +16,11 @@ import {
     reconcileDiscordConnection
 } from "../../repositories/discordRepository.js";
 import { confirmDialog } from "../../utils/modal.js";
+import {
+    describeDiscordLinkError,
+    readDiscordOAuthRedirectError,
+    describeDiscordRedirectError
+} from "../../utils/discordAuthErrors.js";
 
 loadNavbar("../");
 loadFooter("../");
@@ -295,8 +300,18 @@ async function initDiscordConnection(user) {
         }
     }
 
+    // Read (and clear) any OAuth error Discord's own redirect back may
+    // carry — cancellation, an identity already linked somewhere, or a
+    // provider-side callback failure — *before* reconciling, since the
+    // reconcile result is how "already linked to you" (harmless) gets
+    // told apart from "already linked to someone else" (a real conflict)
+    // below.
+    const redirectError = readDiscordOAuthRedirectError();
+
+    let connection = null;
+
     try {
-        render(await reconcileDiscordConnection(user.id));
+        connection = await reconcileDiscordConnection(user.id);
     } catch (error) {
         console.error("Discord connection load error:", error);
         // Fails soft: the "Connect Discord" empty state is already the
@@ -306,6 +321,23 @@ async function initDiscordConnection(user) {
         // page.
     }
 
+    if (redirectError) {
+        const described = describeDiscordRedirectError(redirectError);
+
+        if (described.type === "already_exists") {
+            showToast(
+                connection
+                    ? "Discord is already connected."
+                    : "This Discord account is already linked to a different Specbound account.",
+                connection ? "info" : "error"
+            );
+        } else {
+            showToast(described.message, described.type === "cancelled" ? "info" : "error");
+        }
+    }
+
+    render(connection);
+
     connectBtn?.addEventListener("click", async () => {
         connectBtn.disabled = true;
 
@@ -314,10 +346,13 @@ async function initDiscordConnection(user) {
             // linkIdentity() redirects the browser away immediately on
             // success — nothing after this line runs in practice. The
             // disabled state and catch below only matter for the
-            // network-error-before-redirect case.
+            // network-error-before-redirect case, and for the
+            // synchronous configuration errors (manual linking off,
+            // provider not set up) that GoTrue rejects before ever
+            // redirecting to Discord.
         } catch (error) {
             console.error("Discord link error:", error);
-            showToast(error.message || "Could not connect Discord.", "error");
+            showToast(describeDiscordLinkError(error), "error");
             connectBtn.disabled = false;
         }
     });
@@ -330,7 +365,7 @@ async function initDiscordConnection(user) {
             showToast("Discord connection refreshed.", "success");
         } catch (error) {
             console.error("Discord refresh error:", error);
-            showToast(error.message || "Could not refresh Discord connection.", "error");
+            showToast("Could not refresh Discord connection.", "error");
         } finally {
             refreshBtn.disabled = false;
         }
@@ -345,7 +380,7 @@ async function initDiscordConnection(user) {
             showToast(isPublic ? "Discord is now shown on your public profile." : "Discord is now hidden from your public profile.", "success");
         } catch (error) {
             console.error("Discord visibility update error:", error);
-            showToast(error.message || "Could not update visibility.", "error");
+            showToast("Could not update visibility.", "error");
             visibilityToggle.checked = !isPublic;
         } finally {
             visibilityToggle.disabled = false;
@@ -370,7 +405,7 @@ async function initDiscordConnection(user) {
             showToast("Discord disconnected.", "success");
         } catch (error) {
             console.error("Discord disconnect error:", error);
-            showToast(error.message || "Could not disconnect Discord.", "error");
+            showToast("Could not disconnect Discord.", "error");
         } finally {
             disconnectBtn.disabled = false;
         }
