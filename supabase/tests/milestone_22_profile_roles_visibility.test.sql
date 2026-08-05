@@ -23,16 +23,26 @@
 -- but that safety net only helps if nothing outside this transaction
 -- observes the intermediate state first.
 --
+-- auth.users' exact required columns vary by Supabase/GoTrue version —
+-- the minimal (id, email) insert below is the commonly-documented
+-- pattern but may need adjusting for a given project's schema (same
+-- caveat the Milestone 19 suite carries).
+--
 -- Each test runs inside its own SAVEPOINT and always rolls back to it
--- afterward (pass or fail). Identity simulation follows the same
--- pattern as the Milestone 19 suite (supabase/tests/
+-- afterward (pass or fail). Identity simulation follows the exact
+-- pattern established by the Milestone 19 suite (supabase/tests/
 -- milestone_19_parts_catalog.test.sql): `set local role authenticated`
 -- plus `set_config('request.jwt.claim.sub', '<uuid>', true)` for
--- auth.uid(); `reset role` returns to the privileged connecting role
--- (which bypasses RLS) between tests for fixture setup. An anonymous
--- caller is simulated with `set local role anon` and no jwt claim at
--- all — auth.uid() then returns null, matching a real signed-out
--- request.
+-- auth.uid(), and `set local role anon` with no jwt claim (auth.uid()
+-- then returns null, matching a real signed-out request) for anonymous
+-- calls. Both are issued as plain top-level statements, immediately
+-- before the `do $$ ... $$` block they apply to, never from inside one
+-- — SET ROLE's behavior when issued from within PL/pgSQL is not
+-- something this unexecuted file should gamble on; top-level is
+-- unambiguous, the same reasoning the Milestone 19 suite's own header
+-- already gives for the identical choice. `reset role` returns to the
+-- original privileged connecting role (which bypasses RLS) between
+-- tests for fixture setup, also issued top-level.
 
 begin;
 
@@ -65,11 +75,11 @@ values (
 -- Test 1: an anonymous caller gets zero rows from the table directly
 -- ---------------------------------------------------------------------
 savepoint test_1;
+set local role anon;
 do $$
 declare
     v_count int;
 begin
-    set local role anon;
     select count(*) into v_count from public.profile_roles;
 
     if v_count = 0 then
@@ -85,13 +95,12 @@ rollback to savepoint test_1;
 -- Test 2: an ordinary authenticated user (bob) cannot see alice's row
 -- ---------------------------------------------------------------------
 savepoint test_2;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000102', true);
+set local role authenticated;
 do $$
 declare
     v_count int;
 begin
-    perform set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000102', true);
-    set local role authenticated;
-
     select count(*) into v_count
     from public.profile_roles
     where user_id = '00000000-0000-0000-0000-000000000101';
@@ -110,13 +119,12 @@ rollback to savepoint test_2;
 -- overly restrictive — this is a sanity check, not the security fix)
 -- ---------------------------------------------------------------------
 savepoint test_3;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000101', true);
+set local role authenticated;
 do $$
 declare
     v_count int;
 begin
-    perform set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000101', true);
-    set local role authenticated;
-
     select count(*) into v_count
     from public.profile_roles
     where user_id = '00000000-0000-0000-0000-000000000101';
@@ -135,13 +143,12 @@ rollback to savepoint test_3;
 -- ManageRolesControl.js's grant/revoke UI needs)
 -- ---------------------------------------------------------------------
 savepoint test_4;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000103', true);
+set local role authenticated;
 do $$
 declare
     v_count int;
 begin
-    perform set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000103', true);
-    set local role authenticated;
-
     select count(*) into v_count
     from public.profile_roles
     where user_id = '00000000-0000-0000-0000-000000000101';
@@ -160,13 +167,12 @@ rollback to savepoint test_4;
 -- for an ANONYMOUS caller — the actual public.profile.html use case
 -- ---------------------------------------------------------------------
 savepoint test_5;
+set local role anon;
 do $$
 declare
     v_role text;
     v_count int;
 begin
-    set local role anon;
-
     select count(*) into v_count from public.get_public_profile_roles('00000000-0000-0000-0000-000000000101');
     select role into v_role from public.get_public_profile_roles('00000000-0000-0000-0000-000000000101');
 
@@ -185,14 +191,13 @@ rollback to savepoint test_5;
 -- visitor's view of another builder's portfolio
 -- ---------------------------------------------------------------------
 savepoint test_6;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000102', true);
+set local role authenticated;
 do $$
 declare
     v_role text;
     v_count int;
 begin
-    perform set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000102', true);
-    set local role authenticated;
-
     select count(*) into v_count from public.get_public_profile_roles('00000000-0000-0000-0000-000000000101');
     select role into v_role from public.get_public_profile_roles('00000000-0000-0000-0000-000000000101');
 
@@ -211,13 +216,12 @@ rollback to savepoint test_6;
 -- (0028) wasn't broken by tightening profile_roles' SELECT policy
 -- ---------------------------------------------------------------------
 savepoint test_7;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000103', true);
+set local role authenticated;
 do $$
 declare
     v_count int;
 begin
-    perform set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000103', true);
-    set local role authenticated;
-
     perform public.grant_profile_role('00000000-0000-0000-0000-000000000102', 'project_mentor', 'test grant');
 
     select count(*) into v_count
