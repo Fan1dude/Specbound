@@ -28,6 +28,7 @@
                 <p id="profileHeadline" hidden></p>
                 <div id="profileMeta"></div>
                 <div id="profileLinks"></div>
+                <div id="profileConnectedAccounts" hidden></div>
                 <div id="profileFollowCounts"></div>
                 <button id="followBtn" hidden>Follow</button>
                 <p id="followHint" hidden></p>
@@ -153,6 +154,8 @@
             document.getElementById("profileHeadline").hidden = true;
             document.getElementById("profileMeta").innerHTML = "";
             document.getElementById("profileLinks").innerHTML = "";
+            document.getElementById("profileConnectedAccounts").innerHTML = "";
+            document.getElementById("profileConnectedAccounts").hidden = true;
             document.getElementById("profileFollowCounts").innerHTML = "";
             document.getElementById("followBtn").hidden = true;
             document.getElementById("profileStats").innerHTML = "";
@@ -228,6 +231,48 @@
         test("Project Gallery excludes the build shown as Featured", !document.getElementById("profileBuilds").textContent.includes("Robot Arm") && document.getElementById("profileBuilds").textContent.includes("Desk Setup"));
         test("Technology Breakdown is visible with 2 public builds across 2 categories", document.getElementById("profileTechBreakdown").hidden === false);
         test("About Builder shows the bio text", document.getElementById("profileAbout").textContent.includes("I build robots."));
+        test("Connected Accounts area is hidden when no discordConnection is passed", document.getElementById("profileConnectedAccounts").hidden === true);
+
+        // --- Case 1b: a public Discord connection renders as a real,
+        // separate clickable area (not folded into .profile-links) -----------
+        resetDom();
+        mockAvatarUrl = "";
+
+        await renderProfile({
+            profile: fullProfile,
+            builds: fullBuilds,
+            commentCount: 0,
+            currentUser: null,
+            journeyEvents: [],
+            discordConnection: { provider_user_id: "123456789012345678", provider_username: "alice#0001" }
+        });
+
+        const connectedAccountsEl = document.getElementById("profileConnectedAccounts");
+        const discordLink = connectedAccountsEl.querySelector("a");
+
+        test("a public Discord connection unhides the Connected Accounts area", connectedAccountsEl.hidden === false);
+        test("the Discord button is a real link, not the old non-clickable span", discordLink !== null);
+        test("it links to the real Discord profile deep link built from provider_user_id", discordLink?.getAttribute("href") === "https://discord.com/users/123456789012345678");
+        test("it opens in a new tab without leaking a window.opener reference", discordLink?.getAttribute("target") === "_blank" && discordLink?.getAttribute("rel")?.includes("noopener"));
+        test("the visible username is shown and escaped safely", connectedAccountsEl.textContent.includes("alice#0001"));
+        test("it is NOT folded into the separate free-text .profileLinks area", !document.getElementById("profileLinks").innerHTML.includes("alice#0001"));
+
+        // --- Case 1c: a connection missing provider_user_id (defensive —
+        // shouldn't happen given getPublicDiscordConnection's own select,
+        // but never render a dead/unbuildable link) stays hidden -------------
+        resetDom();
+        mockAvatarUrl = "";
+
+        await renderProfile({
+            profile: fullProfile,
+            builds: fullBuilds,
+            commentCount: 0,
+            currentUser: null,
+            journeyEvents: [],
+            discordConnection: { provider_username: "alice#0001" }
+        });
+
+        test("a connection missing provider_user_id never renders a broken link", document.getElementById("profileConnectedAccounts").hidden === true);
 
         // --- Case 2: explicit featured_build_id pin wins over the fallback chain ---
         resetDom();
@@ -298,6 +343,7 @@
         test("error state replaces the loading username with a visible message", document.getElementById("profileUsername").textContent !== "Loading..." && document.getElementById("profileUsername").textContent.length > 0);
         test("error state shows a visible explanation in the Headline slot", document.getElementById("profileHeadline").hidden === false && document.getElementById("profileHeadline").textContent.toLowerCase().includes("could not be loaded"));
         test("error state hides every conditional section", ["profileEmptyState", "profileFeatured", "profileGallery", "profileTechBreakdown", "profileJourney", "profileAbout"].every(id => document.getElementById(id).hidden === true));
+        test("error state also hides the Connected Accounts area", document.getElementById("profileConnectedAccounts").hidden === true);
 
         // --- Render + report ------------------------------------------------
         const resultsEl = document.getElementById("results");

@@ -44,7 +44,13 @@ const PATHS = {
     // A generic speech-bubble mark for "connected chat community," not
     // Discord's logo — same "geometric, stroke-based, no borrowed brand
     // marks" rule "github" above already follows.
-    discord: '<path d="M5 6h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-9l-4 4v-4H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z"/>'
+    discord: '<path d="M5 6h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-9l-4 4v-4H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z"/>',
+
+    // Connected Accounts redesign — a three-dot overflow-menu trigger.
+    // Filled dots (stroke="none"), same sub-pattern the decorative dots
+    // in "warning"/"info" above already use, since a kebab glyph reads
+    // as three solid points, not three stroked rings.
+    more: '<circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/>'
 };
 
 // Returns an inline <svg> string built to the shared standard. `size` must

@@ -142,7 +142,7 @@
 
         </section>
 
-        <section class="settings-card">
+        <section class="settings-card connected-accounts-card">
 
             <h2>Connected Accounts</h2>
 
@@ -153,23 +153,45 @@
                 </button>
             </div>
 
-            <div class="connected-account-row" id="discordConnectActive" hidden>
+            <div class="connected-account-card" id="discordConnectActive" hidden>
                 <div class="connected-account-identity">
-                    <span class="connected-account-name" id="discordUsername"></span>
+                    <span class="connected-account-icon" id="discordIcon" aria-hidden="true"></span>
+
+                    <div class="connected-account-info">
+                        <span class="connected-account-platform">Discord</span>
+                        <span class="connected-account-username" id="discordUsername"></span>
+                    </div>
                 </div>
 
-                <label class="connected-account-visibility">
-                    <input type="checkbox" id="discordVisibilityToggle">
-                    Show on my public profile
-                </label>
+                <div class="connected-account-controls">
+                    <span class="connected-account-status">
+                        <span class="connected-account-status-dot" aria-hidden="true"></span>
+                        Connected
+                    </span>
 
-                <div class="connected-account-actions">
-                    <button type="button" class="btn btn-secondary btn-small" id="refreshDiscordBtn">
-                        Refresh
-                    </button>
-                    <button type="button" class="btn btn-secondary btn-small" id="disconnectDiscordBtn">
-                        Disconnect
-                    </button>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="discordVisibilityToggle">
+                        <span class="toggle-switch-track" aria-hidden="true"></span>
+                        <span class="toggle-switch-label">Show on profile</span>
+                    </label>
+
+                    <div class="connected-account-menu">
+                        <button
+                            type="button"
+                            class="connected-account-menu-trigger"
+                            id="discordMenuTrigger"
+                            aria-haspopup="true"
+                            aria-expanded="false"
+                            aria-label="More options for Discord connection"
+                        >
+                            <span id="discordMenuIcon" aria-hidden="true"></span>
+                        </button>
+
+                        <div class="builder-dropdown connected-account-menu-dropdown" id="discordMenuDropdown">
+                            <button type="button" id="refreshDiscordBtn">Refresh</button>
+                            <button type="button" id="disconnectDiscordBtn" class="dropdown-item-danger">Disconnect</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 

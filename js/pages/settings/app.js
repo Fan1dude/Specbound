@@ -8,6 +8,7 @@ import { uploadAvatar } from "../../services/imageService.js";
 import { renderErrorState } from "../../utils/listState.js";
 import { escapeAttribute, escapeHtml } from "../../utils/escapeHtml.js";
 import { avatarInitial } from "../../utils/avatarInitial.js";
+import { icon } from "../../utils/icons.js";
 import {
     getMyDiscordConnection,
     linkDiscord,
@@ -280,13 +281,43 @@ function initPasswordForm(user) {
 async function initDiscordConnection(user) {
     const emptyState = document.getElementById("discordConnectEmpty");
     const activeState = document.getElementById("discordConnectActive");
+    const iconEl = document.getElementById("discordIcon");
     const usernameEl = document.getElementById("discordUsername");
     const visibilityToggle = document.getElementById("discordVisibilityToggle");
     const connectBtn = document.getElementById("connectDiscordBtn");
     const refreshBtn = document.getElementById("refreshDiscordBtn");
     const disconnectBtn = document.getElementById("disconnectDiscordBtn");
+    const menuTrigger = document.getElementById("discordMenuTrigger");
+    const menuIcon = document.getElementById("discordMenuIcon");
+    const menuDropdown = document.getElementById("discordMenuDropdown");
 
     if (!emptyState || !activeState) return;
+
+    if (iconEl) iconEl.innerHTML = icon("discord", 20);
+    if (menuIcon) menuIcon.innerHTML = icon("more", 16);
+
+    function closeMenu() {
+        menuDropdown?.classList.remove("show-dropdown");
+        menuTrigger?.setAttribute("aria-expanded", "false");
+    }
+
+    menuTrigger?.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const isOpen = menuDropdown.classList.toggle("show-dropdown");
+        menuTrigger.setAttribute("aria-expanded", String(isOpen));
+    });
+
+    document.addEventListener("click", (event) => {
+        if (menuTrigger?.contains(event.target) || menuDropdown?.contains(event.target)) return;
+        closeMenu();
+    });
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        if (!menuDropdown?.classList.contains("show-dropdown")) return;
+        closeMenu();
+        menuTrigger?.focus();
+    });
 
     function render(connection) {
         if (connection) {
@@ -297,6 +328,7 @@ async function initDiscordConnection(user) {
         } else {
             emptyState.hidden = false;
             activeState.hidden = true;
+            closeMenu();
         }
     }
 
@@ -358,6 +390,7 @@ async function initDiscordConnection(user) {
     });
 
     refreshBtn?.addEventListener("click", async () => {
+        closeMenu();
         refreshBtn.disabled = true;
 
         try {
@@ -376,7 +409,7 @@ async function initDiscordConnection(user) {
         visibilityToggle.disabled = true;
 
         try {
-            await setDiscordVisibility(isPublic);
+            await setDiscordVisibility(user.id, isPublic);
             showToast(isPublic ? "Discord is now shown on your public profile." : "Discord is now hidden from your public profile.", "success");
         } catch (error) {
             console.error("Discord visibility update error:", error);
@@ -388,6 +421,8 @@ async function initDiscordConnection(user) {
     });
 
     disconnectBtn?.addEventListener("click", async () => {
+        closeMenu();
+
         const confirmed = await confirmDialog({
             title: "Disconnect Discord?",
             body: "Your Discord connection and any public display of it will be removed.",

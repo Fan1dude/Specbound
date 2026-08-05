@@ -107,6 +107,12 @@ export function renderProfileError() {
     const links = document.getElementById("profileLinks");
     if (links) links.innerHTML = "";
 
+    const connectedAccounts = document.getElementById("profileConnectedAccounts");
+    if (connectedAccounts) {
+        connectedAccounts.innerHTML = "";
+        connectedAccounts.hidden = true;
+    }
+
     const stats = document.getElementById("profileStats");
     if (stats) stats.innerHTML = "";
 

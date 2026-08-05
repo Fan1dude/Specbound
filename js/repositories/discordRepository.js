@@ -15,7 +15,7 @@ import { supabase } from "../core/supabase.js";
 export async function getPublicDiscordConnection(userId) {
     const { data, error } = await supabase
         .from("social_connections")
-        .select("provider_username, provider_avatar_url")
+        .select("provider_user_id, provider_username, provider_avatar_url")
         .eq("user_id", userId)
         .eq("provider", "discord")
         .eq("is_public", true)
@@ -53,13 +53,25 @@ export async function syncDiscordIdentity() {
     return data;
 }
 
-export async function setDiscordVisibility(isPublic) {
-    const { error } = await supabase
+// user_id is filtered explicitly (not left to RLS alone) so a 0-row
+// update — the connection row not existing, or somehow not belonging to
+// this caller — surfaces as a thrown error instead of a silent no-op;
+// without .select() here, Postgres/PostgREST report success on an
+// UPDATE that matched zero rows, which would otherwise let the Settings
+// UI show "Discord is now shown on your public profile" when nothing
+// was actually saved.
+export async function setDiscordVisibility(userId, isPublic) {
+    const { data, error } = await supabase
         .from("social_connections")
         .update({ is_public: isPublic })
-        .eq("provider", "discord");
+        .eq("user_id", userId)
+        .eq("provider", "discord")
+        .select("id");
 
     if (error) throw error;
+    if (!data || data.length === 0) {
+        throw new Error("No Discord connection found to update.");
+    }
 }
 
 export async function disconnectDiscord() {

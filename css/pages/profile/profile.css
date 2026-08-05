@@ -222,6 +222,35 @@
     border-color: var(--primary);
 }
 
+/* Milestone 22 polish — Connected Accounts. A separate area from
+   .profile-links above (verified OAuth identity vs. free-text profile
+   fields, per the §0.1 design review), but the individual button
+   reuses .profile-link's exact chip styling rather than inventing a
+   second visual language — same compact, professional, non-flashy
+   treatment, just grouped under its own container so it hides
+   independently of whether website/github/youtube are present. Hidden
+   via the JS-set `hidden` attribute (there can be a real element with
+   zero visible connections mid-render), not a CSS :empty rule. */
+.profile-connected-accounts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: var(--space-1);
+}
+
+.profile-connected-accounts[hidden] {
+    display: none;
+}
+
+.connected-account-link-platform {
+    font-weight: 700;
+}
+
+.connected-account-link-username {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
 /* One cohesive follow composition (polish pass): counts and the Follow
    button sit in the same row, same visual weight, directly under
    links — not a separately-margined "4th block" the way the first draft

@@ -25,7 +25,8 @@ export async function renderProfileHero(profile, discordConnection = null, roles
     renderDisplayName(profile);
     renderHeadline(profile);
     renderMeta(profile);
-    renderLinks(profile, discordConnection);
+    renderLinks(profile);
+    renderConnectedAccounts(discordConnection);
     await renderAvatar(profile, username);
 }
 
@@ -81,7 +82,7 @@ function renderMeta(profile) {
     el.innerHTML = items.join("");
 }
 
-function renderLinks(profile, discordConnection) {
+function renderLinks(profile) {
     const el = document.getElementById("profileLinks");
 
     if (!el) return;
@@ -108,23 +109,50 @@ function renderLinks(profile, discordConnection) {
         })
         .filter(Boolean);
 
-    // Milestone 22 §4.8 — an additive list item, not a new section: same
-    // .profile-link visual treatment as website/github/youtube above,
-    // but a <span>, not an <a> — unlike those, there's no meaningful
-    // Discord profile URL to link to, only a verified username to show.
-    // Independently owner-controlled (discordConnection is only ever
-    // non-null here when is_public = true; see loadProfile.js/
-    // discordRepository.js's getPublicDiscordConnection()), so
-    // connecting Discord never implies this renders.
-    if (discordConnection?.provider_username) {
-        links.push(`
-            <span class="profile-link" title="Connected Discord account">
-                ${icon("discord", 16)} ${escapeHtml(discordConnection.provider_username)}
-            </span>
-        `);
+    el.innerHTML = links.join("");
+}
+
+// Milestone 22 §4.8, redesigned in the Connected Accounts polish pass —
+// a distinct area from the free-text links above (website/github/
+// youtube are unverified profile fields; this is OAuth-verified
+// identity, a different concept per the §0.1 design review), not an
+// extra item folded into .profile-links. Only ever populated when
+// discordConnection is non-null, which — per loadProfile.js/
+// discordRepository.js's getPublicDiscordConnection() — only happens
+// when RLS has already confirmed both is_public = true and that the
+// connection belongs to the profile being viewed; there is no
+// additional ownership/visibility check to apply here.
+// https://discord.com/users/<id> is a real, Discord-documented profile
+// deep link (opens the app or web client to that user), which is why
+// this can be a genuine <a>, unlike the old inline span that had
+// nowhere to link to.
+function renderConnectedAccounts(discordConnection) {
+    const el = document.getElementById("profileConnectedAccounts");
+
+    if (!el) return;
+
+    if (!discordConnection?.provider_username || !discordConnection?.provider_user_id) {
+        el.hidden = true;
+        el.innerHTML = "";
+        return;
     }
 
-    el.innerHTML = links.join("");
+    const href = `https://discord.com/users/${encodeURIComponent(discordConnection.provider_user_id)}`;
+
+    el.innerHTML = `
+        <a
+            class="profile-link connected-account-link"
+            href="${escapeAttribute(href)}"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Discord: ${escapeAttribute(discordConnection.provider_username)}"
+        >
+            ${icon("discord", 16)}
+            <span class="connected-account-link-platform">Discord</span>
+            <span class="connected-account-link-username">${escapeHtml(discordConnection.provider_username)}</span>
+        </a>
+    `;
+    el.hidden = false;
 }
 
 async function renderAvatar(profile, username) {
