@@ -29,8 +29,35 @@
     color: var(--text-secondary);
 }
 
+/* Milestone 22 §9 — the Feedback trigger is a <button> (it opens a
+   dialog, not a navigation), reset to look identical to the plain <a>
+   links around it rather than a default browser button. */
+.footer-inner button {
+    display: inline;
+    padding: 0;
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
 @media (max-width: 900px) {
     .footer-inner {
         grid-template-columns: 1fr;
+    }
+
+    /* Each column spans the full width once the grid collapses to one
+       column, so bare inline <a> tags (previously separated only by a
+       single whitespace character in the markup) could sit right next
+       to each other on one line with no visible gap between them.
+       Stacking them with a small gap gives each link its own row and
+       clear separation, mobile only — desktop's narrower columns
+       already keep links from running together. */
+    .footer-inner > div > a,
+    .footer-inner > div > button {
+        display: block;
+        margin-top: 10px;
     }
 }

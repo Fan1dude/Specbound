@@ -48,7 +48,7 @@
 -- Touches: storage.objects (one policy replaced by two). No table,
 -- column, or function changes.
 --
--- Rollback: see 0014_storage_visibility_fix_rollback.sql in this folder.
+-- Rollback: see 0014_storage_visibility_fix_rollback.sql in supabase/rollbacks/.
 -- Drops both replacement policies and restores the original policy
 -- exactly as it was in 0002, including its original name.
 

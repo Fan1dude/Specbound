@@ -5,7 +5,20 @@
    docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md §7. Built on the native
    <dialog> element for free accessible focus-trapping and Esc handling —
    js/utils/modal.js drives the open/close mechanics. */
+/* Centering is explicit (top/left/transform), not left to the UA
+   stylesheet's default `dialog:modal { margin: auto }` — this repo's own
+   global `* { margin: 0; }` reset (base/reset.css) silently defeats that
+   default, since any normal author rule overrides a UA-stylesheet default
+   for the same property regardless of selector specificity. Without this,
+   showModal() still opens the dialog, but it renders flush to the
+   top-left corner instead of centered — confirmed live via Milestone 21's
+   screenshot verification pass, the first time this component's actual
+   rendered position had been checked against a real reset.css. */
 .modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+
     padding: 0;
     max-width: min(420px, 90vw);
     background: var(--color-surface);
@@ -17,7 +30,7 @@
     color: var(--color-text);
 
     opacity: 0;
-    transform: scale(0.96);
+    transform: translate(-50%, -50%) scale(0.96);
     transition:
         opacity var(--duration-normal) var(--ease-precise),
         transform var(--duration-normal) var(--ease-precise),
@@ -27,7 +40,7 @@
 
 .modal.is-open {
     opacity: 1;
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
 }
 
 .modal::backdrop {
@@ -64,6 +77,52 @@
     margin-top: var(--space-3);
 }
 
+/* Milestone 22 §9 — FeedbackModal.js's category picker. Plain radio
+   inputs (not the custom card-style picker from Milestone 21's
+   TechnologyRadioCard.js) — four short text labels in a compact dialog
+   call for a simple list, not a visual card grid. */
+.feedback-category-fieldset {
+    margin: var(--space-2) 0;
+    padding: 0;
+    border: none;
+}
+
+.feedback-category-fieldset legend {
+    padding: 0;
+    margin-bottom: var(--space-1);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.feedback-category-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.feedback-category-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: normal;
+    font-size: var(--font-size-sm);
+}
+
+/* Milestone 22 §7 — GuidelinesGate.js's acceptance checkbox. */
+.guidelines-accept-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-1);
+    margin: var(--space-2) 0;
+    font-weight: normal;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+.guidelines-accept-checkbox input {
+    margin-top: 3px;
+}
+
 /* Mobile: full-screen edge-to-edge instead of a smaller centered box,
    which reads cramped on a small viewport — a standard mobile dialog
    pattern (docs/MILESTONE_10_BRAND_REFRESH_ARCHITECTURE.md's Responsive
@@ -71,6 +130,8 @@
    left to dim. */
 @media (max-width: 700px) {
     .modal {
+        top: 0;
+        left: 0;
         width: 100%;
         height: 100%;
         max-width: 100%;
@@ -78,9 +139,123 @@
         margin: 0;
         border: none;
         border-radius: 0;
+        transform: none;
+    }
+
+    .modal.is-open {
+        transform: none;
     }
 
     .modal::backdrop {
         background: transparent;
     }
+}
+
+/* Wider variant for the paste-and-review import flow — needs room for a
+   textarea and a review list, unlike the fixed-width confirm dialog this
+   component's base styles were designed around. */
+.modal-import-specifications {
+    max-width: min(560px, 92vw);
+}
+
+.modal-import-specifications textarea {
+    margin-top: var(--space-1);
+    font-size: var(--font-size-sm);
+}
+
+.import-specifications-review {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin-top: var(--space-2);
+    max-height: 40vh;
+    overflow-y: auto;
+}
+
+/* Same [hidden]-vs-class-display specificity trap as .btn[hidden] and
+   .editor-recovery-banner[hidden] elsewhere in this app — without this,
+   display: flex above beats the browser's [hidden] { display: none }. */
+.import-specifications-review[hidden] {
+    display: none;
+}
+
+.import-specifications-section + .import-specifications-section {
+    margin-top: var(--space-2);
+}
+
+.import-specifications-section-heading {
+    margin-bottom: var(--space-0-5);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.import-specifications-row {
+    display: grid;
+    grid-template-columns: minmax(0, 120px) 1fr auto;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-0-5) 0;
+}
+
+.import-specifications-row label {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+/* Confirmed/suggested share the base .badge treatment (badge.css) —
+   these only retint text/border, never the fill, so they stay outside
+   the "-strong fill must pair with inverse text" a11y check's scope. */
+.import-match-badge.is-confirmed {
+    border-color: var(--color-success-strong);
+    color: var(--color-success);
+}
+
+.import-match-badge.is-suggested {
+    border-color: var(--color-warning-strong);
+    color: var(--color-warning);
+}
+
+.import-suggestion-list {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-0-5);
+}
+
+.import-suggestion-confirm {
+    padding: var(--space-0-5) var(--space-1);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+}
+
+.import-suggestion-confirm:hover {
+    border-color: var(--color-primary-strong);
+    color: var(--color-text);
+}
+
+.import-specifications-row.is-unrecognized {
+    grid-template-columns: 1fr auto;
+}
+
+.import-unrecognized-line {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.import-unrecognized-line strong {
+    color: var(--color-text);
+}
+
+.import-assign-field {
+    width: auto;
 }

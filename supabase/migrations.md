@@ -10,13 +10,68 @@ change — `0001_description.sql`, `0002_description.sql`, etc. Never reused,
 never renumbered. A migration only gets edited in place if it's still
 `Proposed` (not yet applied); once a migration is marked `Applied` below,
 any further change to that schema is a new, higher-numbered file, even if
-it's small. Each migration gets a matching `..._rollback.sql`.
+it's small. Each migration gets a matching rollback file in
+`supabase/rollbacks/` (moved out of `supabase/migrations/` 2026-08-01 — a
+real Supabase project's tooling was treating every `.sql` file in that
+folder as a forward migration, applying rollbacks as forward changes).
+
+**The one exception to "sequential starting at 0001"**: `0000` exists
+specifically to sort *before* `0001` — added retroactively 2026-08-01 once
+a from-empty-database dry run revealed `profiles`/`builds`/`build_revisions`
+were never created by any tracked migration (see that file's own header).
+Every other migration still only ever moves forward from `0001`.
+
+## 0000_baseline_pre_tracked_tables
+
+- **Status**: Proposed — not yet applied to the real project. Depends on
+  nothing (this is the new floor of the migration sequence).
+- **File**: `migrations/0000_baseline_pre_tracked_tables.sql`
+- **Rollback**: `rollbacks/0000_baseline_pre_tracked_tables_rollback.sql`
+- **Adds**: `public.profiles`, `public.builds`, `public.build_revisions`,
+  and the `auth.users` signup trigger that populates `profiles` — none of
+  which any tracked migration ever created, despite `0001` onward freely
+  `ALTER`ing and foreign-keying against all three. Every column is
+  reconstructed from evidence (later `ALTER TABLE` statements, migration
+  function bodies, application code) — see the file's own header for the
+  full method and for what's deliberately *not* included (no `UNIQUE` on
+  `builds.slug` — that gap is `0015`'s to fix, faithfully; no `CHECK` on
+  `builds.status`/`build_revisions.update_type` — neither ever had one).
+- **Corrected 2026-08-01** (same day, second dry run): the first version
+  of this file reconstructed the *current* (post-`0023`) shape of these
+  tables instead of the state immediately before `0001` — it included
+  columns that `0002`/`0003`/`0005`/`0012` add themselves, so applying
+  `0000` then running forward hit "column already exists" at `0002`
+  (`builds.visibility`), then `0003` (`profiles.avatar_path`). Rewritten
+  to exclude every column any tracked migration (`0001`-`0023`) adds via
+  `ALTER TABLE` — full removal list, and which migration correctly owns
+  each one, in the file's own header comment and the audit that produced
+  it (see the commit that made this correction).
+- **Corrected again 2026-08-01** (third dry run, reached `0017`): also
+  adds the `project-images` Storage bucket and four `storage.objects`
+  policies that predate migration tracking — `0017_storage_rls_hardening.sql`
+  itself `DROP POLICY`s all four, and its own header states outright they
+  match "Supabase's own dashboard-generated default-policy template
+  names/shapes." Recreated verbatim from
+  `0017`'s own rollback file (a direct `pg_policies` capture, not a
+  reconstruction) rather than inferred. Cross-checked every `DROP POLICY`/
+  `DROP FUNCTION`/`DROP TRIGGER` across all 24 migrations afterward — no
+  other target is missing a tracked creator.
+- **Touches no existing table** (there is no earlier tracked state to
+  touch).
+- **Known limitation**: this is a reconstruction sufficient to bootstrap a
+  fresh project, not a captured-and-verified-identical copy of the real
+  production database's actual definitions. See `docs/DATABASE.md`'s
+  Known Gap section and the `docs/ROADMAP.md` backlog item for what
+  closing that remaining gap would require.
+- **Context**: found and fixed 2026-08-01, the first time a genuine
+  from-empty-database dry run of the full migration sequence was
+  attempted, for `docs/milestones/MILESTONE_19_DEV_APPLICATION_PROCEDURE.md`.
 
 ## 0001_project_drafts_and_media
 
 - **Status**: Applied.
 - **File**: `migrations/0001_project_drafts_and_media.sql`
-- **Rollback**: `migrations/0001_project_drafts_and_media_rollback.sql`
+- **Rollback**: `rollbacks/0001_project_drafts_and_media_rollback.sql`
 - **Adds**: `project_drafts`, `project_media` (both new, owner-only RLS), a
   `cover_media_id` FK on `project_drafts`, storage policies for the
   `projects/{draftId}/...` path prefix in the existing `project-images`
@@ -42,7 +97,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
   file's own convention (accurate history, bug included) rather than
   patched in place.
 - **File**: `migrations/0002_publish_draft_and_visibility.sql`
-- **Rollback**: `migrations/0002_publish_draft_and_visibility_rollback.sql`
+- **Rollback**: `rollbacks/0002_publish_draft_and_visibility_rollback.sql`
 - **Adds**: `project_drafts.published_build_id`, `builds.visibility`
   (`public`/`private`, defaults + backfills every existing row to
   `public`), `revision_media` (immutable gallery snapshot per revision,
@@ -80,7 +135,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 
 - **Status**: Applied.
 - **File**: `migrations/0003_profile_avatar_path.sql`
-- **Rollback**: `migrations/0003_profile_avatar_path_rollback.sql`
+- **Rollback**: `rollbacks/0003_profile_avatar_path_rollback.sql`
 - **Adds**: `profiles.avatar_path`, a new nullable column — purely
   additive, not a rename. `avatar_url` is left in place untouched, holding
   whatever ready-to-use URL it already had. Needed because avatar delivery
@@ -105,7 +160,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Applied. Confirmed by real-backend test: publish and
   republish both succeeded, project reached v1.1 as expected.
 - **File**: `migrations/0004_fix_publish_draft_builds_columns.sql`
-- **Rollback**: `migrations/0004_fix_publish_draft_builds_columns_rollback.sql`
+- **Rollback**: `rollbacks/0004_fix_publish_draft_builds_columns_rollback.sql`
 - **Fixes**: `publish_draft()`'s real-backend test failed with `column
   "version" of relation "builds" does not exist`. Confirmed against the
   actual schema via `information_schema.columns`: `builds` has no
@@ -139,7 +194,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
   timeline navigation, multi-revision publishing (v1.0 → v1.1 → v1.2),
   and historical revision routing all verified working.
 - **File**: `migrations/0005_revision_history_and_restore.sql`
-- **Rollback**: `migrations/0005_revision_history_and_restore_rollback.sql`
+- **Rollback**: `rollbacks/0005_revision_history_and_restore_rollback.sql`
 - **Preflight**: checks for builds with more than one draft linked via
   `published_build_id` before creating the unique index below, and raises
   a clear exception (naming the count) rather than letting the index
@@ -185,7 +240,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 
 - **Status**: Applied.
 - **File**: `migrations/0006_unpublish.sql`
-- **Rollback**: `migrations/0006_unpublish_rollback.sql`
+- **Rollback**: `rollbacks/0006_unpublish_rollback.sql`
 - **Adds**: `public.set_build_visibility(p_build_id, p_visibility)` —
   `SECURITY DEFINER`, the only direct way to change `builds.visibility`
   (same "no direct-client writes to builds" posture as everything else on
@@ -226,7 +281,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0006 being
   applied first.
 - **File**: `migrations/0007_comments.sql`
-- **Rollback**: `migrations/0007_comments_rollback.sql`
+- **Rollback**: `rollbacks/0007_comments_rollback.sql`
 - **Adds**: `comments` (`build_id`, not `revision_id` — comments belong
   to the build as a whole), `deleted_at` (soft delete; nothing hard-
   deletes a comment through the app), `parent_comment_id` (added now for
@@ -258,7 +313,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0007 being
   applied first.
 - **File**: `migrations/0008_project_likes.sql`
-- **Rollback**: `migrations/0008_project_likes_rollback.sql`
+- **Rollback**: `rollbacks/0008_project_likes_rollback.sql`
 - **Adds**: `likes` (`build_id`, `user_id`, `unique (build_id, user_id)` —
   the hard duplicate-prevention guarantee, independent of any application
   logic). `public.set_build_like(p_build_id, p_liked)` — `SECURITY
@@ -299,7 +354,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0008 being
   applied first.
 - **File**: `migrations/0009_saved_builds.sql`
-- **Rollback**: `migrations/0009_saved_builds_rollback.sql`
+- **Rollback**: `rollbacks/0009_saved_builds_rollback.sql`
 - **Adds**: `saved_builds` (`build_id`, `user_id`,
   `unique (build_id, user_id)`). `public.set_build_saved(p_build_id,
   p_saved)` — `SECURITY DEFINER`, same idempotent desired-state shape as
@@ -327,7 +382,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0009 being
   applied first.
 - **File**: `migrations/0010_build_view_tracking.sql`
-- **Rollback**: `migrations/0010_build_view_tracking_rollback.sql`
+- **Rollback**: `rollbacks/0010_build_view_tracking_rollback.sql`
 - **Adds**: `build_view_cooldowns` — a bounded UPSERT table (one row per
   `(build_id, viewer_key)`, not an append-only events log), RLS enabled
   with **zero policies** (no legitimate direct-client read/write case
@@ -356,7 +411,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0010 being
   applied first.
 - **File**: `migrations/0011_notifications.sql`
-- **Rollback**: `migrations/0011_notifications_rollback.sql`
+- **Rollback**: `rollbacks/0011_notifications_rollback.sql`
 - **Adds**: `notifications` (`recipient_id`, `actor_id`, `type` — CHECK
   includes `'reply'` for future schema compatibility, though nothing
   creates one yet since threaded replies aren't implemented — `build_id`,
@@ -395,7 +450,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0011 being
   applied first.
 - **File**: `migrations/0012_follows.sql`
-- **Rollback**: `migrations/0012_follows_rollback.sql`
+- **Rollback**: `rollbacks/0012_follows_rollback.sql`
 - **Adds**: `follows` (`follower_id`, `following_id`,
   `unique (follower_id, following_id)`, `check (follower_id <>
   following_id)` — duplicate- and self-follow prevention enforced at the
@@ -424,7 +479,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0012 being
   applied first.
 - **File**: `migrations/0013_activity_feed.sql`
-- **Rollback**: `migrations/0013_activity_feed_rollback.sql`
+- **Rollback**: `rollbacks/0013_activity_feed_rollback.sql`
 - **Adds**: `public.get_activity_feed(p_scope, p_before_created_at,
   p_before_id, p_limit)` only — no table, no columns. Computes the
   Following/Explore feeds live from the existing `build_revisions` log
@@ -463,7 +518,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0013 being
   applied first.
 - **File**: `migrations/0014_storage_visibility_fix.sql`
-- **Rollback**: `migrations/0014_storage_visibility_fix_rollback.sql`
+- **Rollback**: `rollbacks/0014_storage_visibility_fix_rollback.sql`
 - **Fixes**: a real privacy gap found in the Milestone 8 audit —
   `0002`'s original `"Anyone can read files referenced by a published
   revision"` storage policy never checked the parent build's
@@ -491,7 +546,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0014 being
   applied first.
 - **File**: `migrations/0015_index_hardening.sql`
-- **Rollback**: `migrations/0015_index_hardening_rollback.sql`
+- **Rollback**: `rollbacks/0015_index_hardening_rollback.sql`
 - **Adds**: a unique index on `builds.slug` (with a preflight duplicate
   check, same pattern as `0005`'s duplicate-draft check — fails clearly
   rather than opaquely, never auto-resolves duplicates) — `builds.slug`
@@ -514,7 +569,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0015 being
   applied first.
 - **File**: `migrations/0016_security_definer_hygiene.sql`
-- **Rollback**: `migrations/0016_security_definer_hygiene_rollback.sql`
+- **Rollback**: `rollbacks/0016_security_definer_hygiene_rollback.sql`
 - **Fixes**: the one gap found by a full re-audit of every custom
   function's `SECURITY DEFINER`/`INVOKER` configuration —
   `set_updated_at()` (`0001`) was the only trigger function in the schema
@@ -536,7 +591,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0016 being
   applied first.
 - **File**: `migrations/0017_storage_rls_hardening.sql`
-- **Rollback**: `migrations/0017_storage_rls_hardening_rollback.sql`
+- **Rollback**: `rollbacks/0017_storage_rls_hardening_rollback.sql`
 - **Fixes**: four `storage.objects` policies confirmed live via a direct
   `pg_policies` dump and empirical anonymous-session testing, none of
   which appear in any tracked migration — `"Anyone can view project
@@ -572,7 +627,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0017 being
   applied first.
 - **File**: `migrations/0018_legacy_media_linkage_backfill.sql`
-- **Rollback**: `migrations/0018_legacy_media_linkage_backfill_rollback.sql`
+- **Rollback**: `rollbacks/0018_legacy_media_linkage_backfill_rollback.sql`
 - **Adds**: 7 `revision_media` rows (`desk`'s 5 revisions, `trap-open`'s
   2) for legacy pre-Milestone-5A storage objects whose ownership *and*
   revision linkage are both independently provable from the objects'
@@ -586,6 +641,17 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Touches**: `revision_media` only (7 new rows). Never touches
   `image_url` on `builds`/`build_revisions`, `storage.objects`, any
   storage RLS policy, or the bucket's public/private flag.
+- **Fresh-database safety (added 2026-08-01)**: the 7 `revision_id`
+  values are specific rows from the real production database — on a
+  freshly-bootstrapped database none of them exist, and since
+  `revision_media.revision_id` is a `NOT NULL` FK to `build_revisions(id)`,
+  the `INSERT` failed outright instead of just finding nothing to guard
+  against. Added a `join public.build_revisions` so the migration is a
+  clean no-op on a fresh/dev database (0 rows match) and unchanged on the
+  real one (all 7 still match). Audited every other migration mentioning
+  "backfill" for the same hardcoded-literal-data pattern — `0018` is the
+  only one; the rest are column-default backfills (`0002`) or explicitly
+  backfill nothing (`0003`, `0005`, `0012`).
 - **Context**: Milestone 9 (Production Cleanup & Launch) — Migration C,
   approved with one adjustment (Category B explicitly excluded from this
   migration, reported instead of synthesized/force-linked). Follows
@@ -597,7 +663,7 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0018 being
   applied first.
 - **File**: `migrations/0019_fix_record_build_view_ambiguity.sql`
-- **Rollback**: `migrations/0019_fix_record_build_view_ambiguity_rollback.sql`
+- **Rollback**: `rollbacks/0019_fix_record_build_view_ambiguity_rollback.sql`
 - **Fixes**: two confirmed issues in `record_build_view()` (0010), both
   reproduced live against the real backend during the 2026-07-28
   implementation review. (1) Every call failed with Postgres 42702
@@ -625,3 +691,324 @@ it's small. Each migration gets a matching `..._rollback.sql`.
 - **Context**: Milestone 11B (Confirmed Database Bug), found during the
   2026-07-28 implementation review. Does not edit 0010 in place, per
   this project's migration convention.
+
+## 0020_components_catalog
+
+- **Status**: Proposed — not yet applied. Depends on 0001-0019.
+- **File**: `migrations/0020_components_catalog.sql`
+- **Rollback**: `rollbacks/0020_components_catalog_rollback.sql`
+- **REWRITTEN for production compatibility** (2026-08-05): a real `db
+  push` against production stopped safely at this exact migration —
+  production already has a populated, differently-shaped
+  `public.components` (9 rows; columns `id`, `technology_id`,
+  `component_type`, `canonical_name`, `manufacturer`, `metadata`,
+  `created_at`, `updated_at`, `canonical_key`; RLS; a public SELECT
+  policy; its own indexes/constraints; a live
+  `search_components(text,text,text,integer)` RPC with no migration file
+  anywhere in this repo), which the original unconditional `CREATE
+  TABLE` version of this file could never coexist with. The file is now
+  fully additive/idempotent (`CREATE TABLE IF NOT EXISTS` →
+  `ADD COLUMN IF NOT EXISTS` → null-guarded backfill → constraints added
+  only after backfill → `IF NOT EXISTS` indexes → `DROP IF
+  EXISTS`/`CREATE` trigger and policy) so it produces the identical
+  final schema on a fresh database and on production's legacy one, and
+  it **never drops or redefines** `component_type`, `canonical_key`, or
+  `search_components()`. `field_key`/`normalized_name`/`created_by` are
+  the new columns, backfilled from `component_type`/`canonical_name` and
+  kept in sync with them going forward by a new
+  `sync_component_legacy_fields` trigger — deliberately a plain column
+  kept in sync by trigger, not `GENERATED ALWAYS AS`, since Postgres
+  cannot convert `canonical_key`'s existing populated plain column into
+  a generated one. See the file's own header comment for the full
+  compatibility strategy and the paired rewritten rollback (which,
+  unlike its original version, never drops `public.components` either).
+- **Adds**: `catalog_moderators` (the app's first admin-role concept,
+  scoped to this one subsystem) and `is_catalog_moderator(uid)` (a
+  `SECURITY DEFINER` helper other tables' RLS policies reference), then
+  `components` — the canonical parts catalog. Only a
+  `catalog_moderators`-flagged user may insert directly; ordinary users
+  contribute via `component_submissions` (0022) instead.
+- **Touches no existing table** — see above for what "touches" means
+  now that a legacy install path exists (adds columns/constraints to a
+  pre-existing table, never renames or drops any of its columns).
+- **Grant parity confirmed, not assumed** (read-only production audit,
+  2026-08-06): this file adds no explicit `GRANT` statements on
+  `components`/`component_aliases`/`catalog_moderators` themselves,
+  relying instead on production's own `postgres`-owned default
+  privileges (confirmed to already grant table/sequence privileges and
+  function `EXECUTE` to `anon`/`authenticated`/`service_role` in
+  `public`) applying automatically to these new objects the same way
+  they already do to every existing table. This only works because
+  every object this migration creates is created as `postgres` — no
+  migration file in this repo ever switches role/owner — matching how
+  production's existing `components`/`component_aliases` are
+  themselves `postgres`-owned. RLS remains the actual row-level access
+  control on top of this; the default privileges only establish that
+  the tables are reachable at all. The local test harness (see
+  `supabase/tests/` and `supabase/config.toml`'s
+  `auto_expose_new_tables`) is deliberately configured to reproduce
+  this confirmed behavior rather than the local CLI's newer, stricter
+  default, so it accurately exercises what production will actually do.
+- **Context**: Milestone 19 (Structured Parts Catalog). See
+  `docs/milestones/MILESTONE_19_PARTS_CATALOG_ARCHITECTURE.md` for the
+  full design and `docs/milestones/MILESTONE_19_SQL_SECURITY_AUDIT.md`
+  for a follow-up audit pass (non-empty checks, explicit execute grants)
+  applied to this file before it was considered ready. Automated
+  fresh-install and legacy-upgrade tests for this file (through 0032)
+  live in `supabase/tests/migration_0020_0032_fresh_install.test.sql`
+  and `supabase/tests/migration_0020_0032_legacy_upgrade.test.sql`.
+
+## 0021_component_aliases
+
+- **Status**: Proposed — not yet applied. Depends on 0020.
+- **File**: `migrations/0021_component_aliases.sql`
+- **Rollback**: `rollbacks/0021_component_aliases_rollback.sql`
+- **REWRITTEN for production compatibility**, same pass and same reason
+  as 0020: production already has a populated `public.component_aliases`
+  (6 rows; columns `id`, `component_id`, `alias`, `created_at`,
+  `alias_key`). Rewritten the same way — additive/idempotent, never
+  drops or redefines `alias`/`alias_key`, backfills the new
+  `technology_id`/`field_key`/`normalized_alias` columns from the
+  parent `components` row before adding constraints, and keeps
+  `alias_key` in sync with `normalized_alias` going forward via
+  `set_component_alias_technology_and_field` (extended, not replaced).
+  Paired rollback rewritten the same way (never drops
+  `public.component_aliases`).
+- **Adds**: `component_aliases` — shorthand/misspelling mappings onto an
+  existing `components` row (e.g. "4080" → "NVIDIA GeForce RTX 4080"),
+  moderator-curated, no client-facing write path. `technology_id`/
+  `field_key` are denormalized onto this table by a trigger, purely so a
+  unique index can enforce "one alias string resolves to exactly one
+  component per technology/field slot."
+- **Touches no existing table** — see 0020's entry for what that means
+  on the legacy-upgrade path.
+- **Context**: Milestone 19. Ships ahead of `0022` even though aliases
+  are conceptually a moderation *output* — `0022`'s approval RPC needs
+  this table to already exist. See
+  `docs/milestones/MILESTONE_19_SQL_SECURITY_AUDIT.md` for the audit
+  pass applied (non-empty checks, defensive execute revoke on the
+  trigger function).
+
+## 0022_component_submissions
+
+- **Status**: Proposed — not yet applied. Depends on 0020, 0021.
+- **File**: `migrations/0022_component_submissions.sql`
+- **Rollback**: `rollbacks/0022_component_submissions_rollback.sql`
+- **Reviewed (not changed) for production compatibility**, same pass as
+  0020/0021: `component_submissions` is wholly new on every install
+  path, and `approve_component_submission()`/
+  `reject_component_submission()` need no functional changes — every
+  column they read or write is preserved unchanged by the corrected
+  0020/0021, and their INSERTs into `components`/`component_aliases`
+  transparently fire the new sync triggers, so legacy compatibility
+  fields are populated consistently without this file needing to know
+  those legacy columns exist. See the added header paragraph in the file
+  itself for the full review notes.
+- **Adds**: `component_submissions` — the only path an ordinary user has
+  toward ever creating a canonical catalog entry, since `0020` locks
+  direct inserts to moderators. `approve_component_submission(id,
+  alias_of_component_id)` and `reject_component_submission(id, note)`,
+  both `SECURITY DEFINER`, both internally checking
+  `is_catalog_moderator(auth.uid())`, are the only way a submission's
+  status ever changes. Also adds
+  `enforce_component_submission_pending_cap()`, a minimal anti-spam
+  trigger capping pending submissions at 20 per account.
+- **Touches no existing table.**
+- **Context**: Milestone 19. The SQL/security audit pass
+  (`docs/milestones/MILESTONE_19_SQL_SECURITY_AUDIT.md`) found and fixed
+  a real race condition in `approve_component_submission()` (missing row
+  lock — two concurrent approvals of the same submission could both
+  proceed and orphan one insert) and added two symmetric cross-table
+  collision guards, a status-consistency check constraint, and explicit
+  execute grants, all before this file was applied.
+
+## 0023_retailers_and_retail_variants
+
+- **Status**: Proposed — not yet applied. Depends on 0020.
+- **File**: `migrations/0023_retailers_and_retail_variants.sql`
+- **Rollback**: `rollbacks/0023_retailers_and_retail_variants_rollback.sql`
+- **Adds**: `retailers`, `component_retail_variants` (a specific buyable
+  SKU under a generic `components` row — "ASUS TUF RTX 4080 OC" under
+  "RTX 4080"), and `component_retailer_links` (attaches to a variant, not
+  a component directly, since one generic part is sold as many different
+  variants across many retailers). Schema-only — no real affiliate
+  provider integration, no write policy on any of the three tables for
+  anyone yet.
+- **Touches no existing table.**
+- **Context**: Milestone 19. The SQL/security audit pass added non-empty/
+  nonnegative checks and two uniqueness constraints
+  (`(component_id, variant_name)`, `(variant_id, url)`) this file's first
+  draft was missing entirely — see
+  `docs/milestones/MILESTONE_19_SQL_SECURITY_AUDIT.md`.
+
+## 0024_profile_headline_and_featured_build
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0023.
+- **File**: `migrations/0024_profile_headline_and_featured_build.sql`
+- **Rollback**: `rollbacks/0024_profile_headline_and_featured_build_rollback.sql`
+- **Adds**: two nullable columns on `profiles` — `headline` (short hero
+  tagline, `<=120` chars via a CHECK constraint, distinct from the
+  existing longer `bio`) and `featured_build_id` (a builder-controlled
+  pin, FK to `builds(id) on delete set null`, never selected
+  automatically by likes or any other engagement metric). A new trigger,
+  `validate_featured_build_before_write` /
+  `public.validate_featured_build()`, enforces that `featured_build_id`
+  — when set — always references a build owned by the same profile; RLS's
+  existing whole-row "Users can update their own profile" policy can't
+  express that cross-row ownership check on its own. The trigger checks
+  ownership only, not visibility — a builder may pin a build that isn't
+  currently public; the read path falls back to the documented selection
+  chain (completed → published → hidden) whenever the pin is unset or no
+  longer eligible.
+- **Touches no other table.**
+- **Context**: Milestone 20 (Builder Portfolio). See
+  `docs/milestones/MILESTONE_20_BUILDER_PORTFOLIO_SPECIFICATION.md` §16
+  for the full design and rationale, including why visibility is
+  deliberately not enforced at write time.
+
+## 0025_profile_onboarding_welcomed
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0024.
+- **File**: `migrations/0025_profile_onboarding_welcomed.sql`
+- **Rollback**: `rollbacks/0025_profile_onboarding_welcomed_rollback.sql`
+- **Adds**: one nullable column on `profiles` — `onboarding_welcomed_at`,
+  set the first time a builder exits the first-sign-in Welcome dialog
+  (Continue, close, Escape, or backdrop click all count as "exited").
+  `null` means eligible to see the Welcome screen on the next
+  authenticated page load; any non-null value means never show it again.
+  Backfills every pre-existing row to its own `created_at`, so only
+  accounts created after this migration is applied are eligible to see
+  onboarding — existing builders are never shown it.
+- **Touches no other table.**
+- **Context**: Milestone 21 (First-Time Builder Experience). See
+  `docs/milestones/MILESTONE_21_FIRST_TIME_BUILDER_EXPERIENCE_SPECIFICATION.md`
+  §4 for the full design, including why this is the only Milestone 21
+  state that needed a schema change — everything else is either computed
+  live or kept in namespaced `localStorage`.
+
+## 0026_social_connections
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0025.
+- **File**: `migrations/0026_social_connections.sql`
+- **Rollback**: `rollbacks/0026_social_connections_rollback.sql`
+- **Adds**: `social_connections` — a mirror of a builder's connected
+  Discord identity (provider-discriminated, shaped for a future second
+  OAuth provider without a rename), and `sync_discord_identity()`, the
+  only way a row is created. OAuth itself is handled entirely by
+  Supabase Auth's native `linkIdentity()` — this table never stores a
+  token, only public identity claims. `is_public` (default false)
+  independently controls whether a connection is ever shown on a public
+  profile; connecting never implies displaying.
+- **Touches no other table.**
+- **Context**: Milestone 22 (Community Foundation). See
+  `docs/milestones/MILESTONE_22_COMMUNITY_FOUNDATION_SPECIFICATION.md`
+  §4 and §0.1 for the full design, including why this shape was
+  generalized beyond a Discord-only table during the final design
+  review.
+
+## 0027_profile_roles
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0026.
+- **File**: `migrations/0027_profile_roles.sql`
+- **Rollback**: `rollbacks/0027_profile_roles_rollback.sql`
+- **Adds**: `profile_roles` (manually-awarded and permission-bearing
+  community roles — `community_builder`, `project_mentor`, `moderator`,
+  `staff`; automatic roles are never stored, see `communityRecognition.js`),
+  `is_platform_moderator()`, `is_platform_staff()`. Read-only in this
+  file — the write RPCs (`grant_profile_role()`/`revoke_profile_role()`)
+  are in `0028_moderation.sql`, since they need to log into
+  `moderation_actions`, which doesn't exist until that file.
+- **Touches no other table.**
+- **Context**: Milestone 22 (Community Foundation). See
+  `docs/milestones/MILESTONE_22_COMMUNITY_FOUNDATION_SPECIFICATION.md`
+  §5, §8.1.
+
+## 0028_moderation
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0027.
+- **File**: `migrations/0028_moderation.sql`
+- **Rollback**: `rollbacks/0028_moderation_rollback.sql`
+- **Adds**: `content_reports`, `moderation_actions`,
+  `report_content()`, `resolve_report()`, `grant_profile_role()`,
+  `revoke_profile_role()`. Deliberately two tables, not one — see the
+  file's own header and spec §0.2 for the concrete reasons a merge would
+  make the design worse, not just look bigger on paper.
+- **Touches no other table** (this migration and `0031` must be applied
+  together — `resolve_report()`/`grant_profile_role()` call
+  `create_notification()` with no `build_id`, which is only valid once
+  `0031` widens that function's signature).
+- **Context**: Milestone 22 (Community Foundation). See
+  `docs/milestones/MILESTONE_22_COMMUNITY_FOUNDATION_SPECIFICATION.md`
+  §8.
+
+## 0029_feedback_submissions
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0028.
+- **File**: `migrations/0029_feedback_submissions.sql`
+- **Rollback**: `rollbacks/0029_feedback_submissions_rollback.sql`
+- **Adds**: `feedback_submissions`, `submit_feedback()`. `user_id` is
+  nullable with `on delete set null` (not `cascade`) — feedback is
+  product signal that should outlive the account that submitted it.
+- **Touches no other table.**
+- **Context**: Milestone 22 (Community Foundation). See
+  `docs/milestones/MILESTONE_22_COMMUNITY_FOUNDATION_SPECIFICATION.md`
+  §9.
+
+## 0030_beta_invites
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0029.
+- **File**: `migrations/0030_beta_invites.sql`
+- **Rollback**: `rollbacks/0030_beta_invites_rollback.sql`
+- **Adds**: `beta_invites`, `redeem_beta_invite()`. Narrowed scope per
+  the final design review (spec §0.2) — only for shareable, redeem-
+  anywhere codes; direct email invitations use Supabase Auth's native
+  admin invite feature and need no schema at all.
+- **Touches no other table.**
+- **Context**: Milestone 22 (Community Foundation). See
+  `docs/milestones/MILESTONE_22_COMMUNITY_FOUNDATION_SPECIFICATION.md`
+  §10.
+
+## 0031_guidelines_and_notification_types
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0030 (and must
+  be applied together with `0028`, see that entry above).
+- **File**: `migrations/0031_guidelines_and_notification_types.sql`
+- **Rollback**: `rollbacks/0031_guidelines_and_notification_types_rollback.sql`
+- **Adds**: `profiles.guidelines_accepted_at` (one nullable timestamp).
+  **Modifies**: `notifications.type` CHECK widened to add
+  `role_awarded`/`report_resolved`; `notifications.build_id` relaxed to
+  nullable (a role grant or report resolution isn't necessarily about a
+  build); `create_notification()` replaced to give `p_build_id` a
+  default of `null`, matching this project's existing convention of
+  modifying already-applied functions via `CREATE OR REPLACE` rather
+  than editing the migration that first defined them.
+- **Context**: Milestone 22 (Community Foundation). See
+  `docs/milestones/MILESTONE_22_COMMUNITY_FOUNDATION_SPECIFICATION.md`
+  §7, §11.
+
+## 0032_restrict_profile_roles_visibility
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0031.
+- **File**: `migrations/0032_restrict_profile_roles_visibility.sql`
+- **Rollback**: `rollbacks/0032_restrict_profile_roles_visibility_rollback.sql`
+- **Fixes**: a data-exposure finding from the Milestone 20 Builder
+  Portfolio branch's final review — 0027's `profile_roles` SELECT
+  policy was `using (true)` with no column restriction, so `note`
+  (a moderator's internal grant comment) and `granted_by` were
+  retrievable by any direct API caller, not just the `role` column the
+  app itself ever asked for.
+- **Modifies**: `profile_roles`' SELECT policy, replaced with
+  authenticated-only access to a user's own roles or (for a
+  moderator/staff caller) everyone's. **Adds**:
+  `get_public_profile_roles(uuid)` — a SECURITY DEFINER function
+  returning only `role`, granted to `anon` and `authenticated`, the new
+  public read path for role badges. A function rather than a public
+  view on purpose — see the migration's own header for why a view here
+  would risk Supabase's "security_definer_view" footgun (silently
+  exposing every row, not just the intended columns).
+- **Touches no other table.** `communityRepository.js`'s
+  `getProfileRoles()` was updated in the same commit to call the new
+  function instead of selecting from the table directly; its exported
+  signature is unchanged.
+- **Context**: post-merge-review hardening for Milestone 22 (Community
+  Foundation).

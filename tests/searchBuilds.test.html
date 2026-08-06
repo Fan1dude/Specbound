@@ -83,8 +83,14 @@
             };
         `;
 
+        // sqlEscaping.js has no imports of its own, so the real file is
+        // used as-is (via an absolute URL) rather than mocked.
+        const sqlEscapingUrl = new URL("../js/utils/sqlEscaping.js", location.href).href;
+
         const realSrc = await (await fetch("../js/repositories/buildRepository.js")).text();
-        const rewritten = realSrc.replaceAll('"../core/supabase.js"', `"${blobUrl(supabaseSrc)}"`);
+        const rewritten = realSrc
+            .replaceAll('"../core/supabase.js"', `"${blobUrl(supabaseSrc)}"`)
+            .replaceAll('"../utils/sqlEscaping.js"', `"${sqlEscapingUrl}"`);
         const { searchBuilds } = await import(blobUrl(rewritten));
 
         // --- Case 1: plain query — no special characters ---------------------

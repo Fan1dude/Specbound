@@ -1,0 +1,69 @@
+/* Category landing pages (js/pages/categories/renderCategoryPage.js) —
+   real destination hubs, not the bare transition pages this replaces
+   (hero + one paragraph + a single "Browse All Projects" link). Composed
+   entirely from existing tokens, .hero-badge, .btn, and the
+   blueprint-feed grid — no new colors or type scale, per the frozen
+   design system. */
+.category-page {
+    width: min(960px, 92%);
+    margin: 0 auto;
+    padding: var(--space-7) 0 var(--space-9);
+}
+
+.category-hero {
+    margin-bottom: var(--space-4);
+}
+
+.category-hero h1 {
+    margin: var(--space-1) 0 var(--space-1);
+}
+
+.category-hero-subtitle {
+    color: var(--technology-accent, var(--color-primary));
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: var(--space-2);
+}
+
+.category-hero-description {
+    max-width: 640px;
+    color: var(--color-text-secondary);
+    line-height: var(--line-height-body);
+}
+
+.category-highlights {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-2);
+    margin: 0 0 var(--space-6);
+    padding: 0;
+    list-style: none;
+}
+
+.category-highlights li {
+    padding: var(--space-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-2);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-body);
+}
+
+.category-featured {
+    margin-bottom: var(--space-5);
+}
+
+.category-section-heading {
+    margin-bottom: var(--space-3);
+}
+
+.category-cta {
+    display: flex;
+    justify-content: center;
+}
+
+@media (max-width: 700px) {
+    .category-highlights {
+        grid-template-columns: 1fr;
+    }
+}

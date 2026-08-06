@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 22 — ReportButton</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 22 — ReportButton</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="fixture"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function waitFor(predicate, timeoutMs = 2000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                const check = () => {
+                    if (predicate()) return resolve();
+                    if (Date.now() - start > timeoutMs) return reject(new Error("timed out: " + predicate.toString()));
+                    setTimeout(check, 10);
+                };
+                check();
+            });
+        }
+
+        function findReportDialog() {
+            return [...document.querySelectorAll(".modal")].find(d => d.querySelector("#reportReasonInput")) ?? null;
+        }
+
+        async function freshReportButton({ reportThrows = false } = {}) {
+            const calls = [];
+            const mockKey = `__mock_${Math.random().toString(36).slice(2)}`;
+            globalThis[mockKey] = { calls, reportThrows };
+
+            const repoSrc = `
+                export async function reportContent(targetType, targetId, reason) {
+                    const m = globalThis["${mockKey}"];
+                    if (m.reportThrows) throw new Error("report failed");
+                    m.calls.push(["reportContent", targetType, targetId, reason]);
+                    return { id: "report-1" };
+                }
+            `;
+
+            const realSrc = await (await fetch("../js/components/ReportButton.js")).text();
+            const rewritten = realSrc
+                .replace('"../repositories/communityRepository.js"', `"${blobUrl(repoSrc)}"`)
+                .replace('"../utils/icons.js"', `"${new URL("../js/utils/icons.js", location.href).href}"`)
+                .replace('"../utils/escapeHtml.js"', `"${new URL("../js/utils/escapeHtml.js", location.href).href}"`)
+                .replace('"../core/toast.js"', `"${new URL("../js/core/toast.js", location.href).href}"`);
+
+            const mod = await import(blobUrl(rewritten));
+            return { ...mod, calls };
+        }
+
+        // --- Markup: matches the target passed in ------------------------
+        {
+            const { ReportButton } = await freshReportButton();
+            const html = ReportButton({ targetType: "comment", targetId: "comment-42" });
+
+            test("markup carries the target type as a data attribute", html.includes('data-target-type="comment"'));
+            test("markup carries the target id as a data attribute", html.includes('data-target-id="comment-42"'));
+            test("markup includes an accessible label naming what's being reported", /aria-label="Report this comment"/.test(html));
+        }
+
+        // --- Wiring + submit flow -----------------------------------------
+        {
+            const { ReportButton, wireReportButtons, calls } = await freshReportButton();
+            const fixture = document.getElementById("fixture");
+            fixture.innerHTML = ReportButton({ targetType: "build", targetId: "build-1" });
+            wireReportButtons(fixture);
+
+            fixture.querySelector(".report-content-btn").click();
+            await waitFor(() => findReportDialog() !== null);
+
+            const dialog = findReportDialog();
+            test("clicking Report opens a dialog with a reason field", dialog !== null);
+
+            // Empty reason is rejected — no report submitted.
+            dialog.querySelector('[data-action="submit"]').click();
+            await new Promise(r => setTimeout(r, 30));
+            test("submitting with an empty reason does not call reportContent", !calls.some(c => c[0] === "reportContent"));
+            test("the dialog stays open when the reason is empty", findReportDialog() !== null);
+
+            dialog.querySelector("#reportReasonInput").value = "This looks like spam.";
+            dialog.querySelector('[data-action="submit"]').click();
+
+            await waitFor(() => calls.some(c => c[0] === "reportContent"));
+            test(
+                "a real reason submits the report with the correct target and text",
+                JSON.stringify(calls[0]) === JSON.stringify(["reportContent", "build", "build-1", "This looks like spam."]),
+                JSON.stringify(calls)
+            );
+
+            await waitFor(() => findReportDialog() === null);
+            test("the dialog closes after a successful submit", findReportDialog() === null);
+        }
+
+        // --- Double-wiring the same container doesn't double-bind --------
+        {
+            const { ReportButton, wireReportButtons, calls } = await freshReportButton();
+            const fixture = document.getElementById("fixture");
+            fixture.innerHTML = ReportButton({ targetType: "profile", targetId: "user-9" });
+
+            wireReportButtons(fixture);
+            wireReportButtons(fixture); // called again, e.g. after a re-render
+
+            fixture.querySelector(".report-content-btn").click();
+            await waitFor(() => findReportDialog() !== null);
+
+            // Exactly one dialog should exist, not two stacked from a
+            // double-bound click handler.
+            test("wireReportButtons is idempotent — a second call doesn't double-bind the click handler", document.querySelectorAll(".modal").length === 1);
+
+            findReportDialog().querySelector('[data-action="cancel"]').click();
+            await waitFor(() => findReportDialog() === null);
+        }
+
+        // --- Cancel/backdrop never submit ----------------------------------
+        {
+            const { ReportButton, wireReportButtons, calls } = await freshReportButton();
+            const fixture = document.getElementById("fixture");
+            fixture.innerHTML = ReportButton({ targetType: "comment", targetId: "comment-5" });
+            wireReportButtons(fixture);
+
+            fixture.querySelector(".report-content-btn").click();
+            await waitFor(() => findReportDialog() !== null);
+            findReportDialog().click(); // backdrop
+
+            await waitFor(() => findReportDialog() === null);
+            test("a backdrop click closes without submitting a report", !calls.some(c => c[0] === "reportContent"));
+        }
+
+        // --- Server-side failure keeps the dialog open, doesn't lose the
+        // user's typed reason ------------------------------------------------
+        {
+            const { ReportButton, wireReportButtons } = await freshReportButton({ reportThrows: true });
+            const fixture = document.getElementById("fixture");
+            fixture.innerHTML = ReportButton({ targetType: "build", targetId: "build-2" });
+            wireReportButtons(fixture);
+
+            fixture.querySelector(".report-content-btn").click();
+            await waitFor(() => findReportDialog() !== null);
+
+            const dialog = findReportDialog();
+            dialog.querySelector("#reportReasonInput").value = "Something's wrong here.";
+            const submitBtn = dialog.querySelector('[data-action="submit"]');
+            submitBtn.click();
+
+            await waitFor(() => submitBtn.disabled === false);
+            test("a failed submission re-enables the Submit button", submitBtn.disabled === false);
+            test("a failed submission keeps the dialog open", findReportDialog() !== null);
+            test("a failed submission does not clear what the user typed", dialog.querySelector("#reportReasonInput").value === "Something's wrong here.");
+
+            dialog.querySelector('[data-action="cancel"]').click();
+            await waitFor(() => findReportDialog() === null);
+        }
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`reportButton.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

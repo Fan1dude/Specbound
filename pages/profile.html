@@ -25,11 +25,11 @@
     <meta property="og:site_name" content="Specbound">
     <meta property="og:title" content="Creator Profile | Specbound">
     <meta property="og:description" content="View this builder's profile, published projects, and activity on Specbound.">
-    <meta property="og:image" content="https://specbound.app/assets/brand/og/og-image.png">
+    <meta property="og:image" content="https://specboundapp.com/assets/brand/og/og-image.png">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Creator Profile | Specbound">
     <meta name="twitter:description" content="View this builder's profile, published projects, and activity on Specbound.">
-    <meta name="twitter:image" content="https://specbound.app/assets/brand/og/og-image.png">
+    <meta name="twitter:image" content="https://specboundapp.com/assets/brand/og/og-image.png">
 
     <link rel="stylesheet" href="../css/styles.css">
 </head>
@@ -37,54 +37,90 @@
     <nav class="navbar" id="navbar"></nav>
 
     <main class="profile-page" id="main">
-        <section class="profile-hero">
+        <!-- 1. Hero -->
+        <section class="profile-hero" id="profileHero">
             <div class="profile-avatar" id="profileAvatar">?</div>
 
             <div class="profile-hero-info">
-                <p class="hero-badge">Creator</p>
                 <h1 id="profileUsername">Loading...</h1>
 
+                <div id="profileRoles" class="profile-roles" hidden></div>
+                <div id="manageRolesControl" class="manage-roles-control" hidden></div>
+
                 <p id="profileDisplayName" class="profile-display-name" hidden></p>
-                <p id="profileBio">Hardware Creator</p>
+                <p id="profileHeadline" class="profile-headline" hidden></p>
 
                 <div id="profileMeta" class="profile-meta"></div>
                 <div id="profileLinks" class="profile-links"></div>
+                <div id="profileConnectedAccounts" class="profile-connected-accounts" hidden></div>
 
                 <div class="profile-follow-row">
                     <div id="profileFollowCounts" class="profile-follow-counts"></div>
 
-                    <div class="follow-action">
-                        <button
-                            type="button"
-                            id="followBtn"
-                            class="follow-btn"
-                            aria-pressed="false"
-                            aria-describedby="followHint"
-                            hidden
-                        >
-                            Follow
-                        </button>
-
-                        <p id="followHint" class="follow-hint" role="status" aria-live="polite" hidden></p>
-                    </div>
+                    <button
+                        type="button"
+                        id="followBtn"
+                        class="follow-btn"
+                        aria-pressed="false"
+                        hidden
+                    >
+                        Follow
+                    </button>
                 </div>
             </div>
         </section>
 
-        <section class="profile-stats" id="profileStats">
-            <p class="text-secondary">Loading stats...</p>
+        <!-- 2. Builder Overview -->
+        <section class="profile-overview" id="profileOverview">
+            <div class="overview-metrics" id="profileStats">
+                <span class="text-secondary">Loading stats...</span>
+            </div>
+
+            <div class="tech-focus" id="profileTechFocus" hidden></div>
         </section>
 
-        <section class="profile-section">
+        <!-- Zero-project empty state (owner view only) -->
+        <section class="profile-empty-state" id="profileEmptyState" hidden>
+            <p>Your published projects will show up here.</p>
+            <a href="upload.html" class="btn btn-primary">Publish Your First Build</a>
+        </section>
+
+        <!-- 3. Featured Project -->
+        <section class="profile-featured" id="profileFeatured" hidden></section>
+
+        <!-- 4. Project Gallery -->
+        <section class="profile-gallery" id="profileGallery" hidden>
             <div class="section-heading">
                 <p class="hero-badge">Projects</p>
-                <h2>Published Projects</h2>
+                <h2>Project Gallery</h2>
+            </div>
+
+            <div class="gallery-toolbar">
+                <div class="gallery-filters" id="profileGalleryFilters"></div>
+
+                <div class="gallery-sort">
+                    <label for="profileGallerySort">Sort</label>
+                    <select id="profileGallerySort"></select>
+                </div>
             </div>
 
             <div id="profileBuilds" class="project-grid">
                 <p class="text-secondary">Loading projects...</p>
             </div>
+
+            <button type="button" id="profileGalleryLoadMore" class="btn btn-secondary gallery-load-more" hidden>
+                Load more
+            </button>
         </section>
+
+        <!-- 5. Technology Breakdown -->
+        <section class="profile-tech-breakdown" id="profileTechBreakdown" hidden></section>
+
+        <!-- 6. Builder Journey -->
+        <section class="profile-journey" id="profileJourney" hidden></section>
+
+        <!-- 7. About Builder -->
+        <section class="profile-about" id="profileAbout" hidden></section>
     </main>
 
     <footer class="footer" id="footer"></footer>

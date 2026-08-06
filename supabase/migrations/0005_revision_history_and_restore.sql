@@ -55,8 +55,8 @@
 -- Touches: build_revisions (5 new columns), project_drafts (new unique
 -- index), publish_draft() (replaced), adds restore_revision_to_draft().
 --
--- Rollback: see 0005_revision_history_and_restore_rollback.sql in this
--- folder.
+-- Rollback: see 0005_revision_history_and_restore_rollback.sql in
+-- supabase/rollbacks/.
 
 begin;
 

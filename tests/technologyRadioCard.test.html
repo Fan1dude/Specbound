@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 21 — technology radio card (upload.html's picker)</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 21 — technology radio card (upload.html's picker)</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <!-- Mirrors upload.html's real structure: a form with a title input
+         and the fieldset/legend + card grid this milestone replaced the
+         old <select required> with. -->
+    <form id="createDraftForm">
+        <input id="title" type="text" required>
+        <fieldset class="upload-technology-fieldset">
+            <legend>Technology</legend>
+            <div class="technology-picker-grid" id="technologyPickerGrid"></div>
+        </fieldset>
+        <button type="submit" id="submitBtn">Continue to Editor</button>
+    </form>
+
+    <script type="module">
+        import { TECHNOLOGIES } from "../js/config/technologies/index.js";
+        import { TechnologyRadioCard } from "../js/components/TechnologyRadioCard.js";
+        import { hydrateTechnologyPickerCards } from "../js/components/technologyPickerShared.js";
+
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        const form = document.getElementById("createDraftForm");
+        const titleInput = document.getElementById("title");
+        titleInput.value = "My Project";
+
+        const grid = document.getElementById("technologyPickerGrid");
+        grid.innerHTML = TECHNOLOGIES.map(t => TechnologyRadioCard(t, { pathPrefix: "../" })).join("");
+        hydrateTechnologyPickerCards(grid);
+
+        const inputs = [...grid.querySelectorAll('input[name="category"]')];
+
+        // --- Stored-value contract: values are byte-identical to
+        // TECHNOLOGIES[].id, same strings the old hardcoded <option> list
+        // used — nothing about what gets persisted changed. ------------------
+        test("renders exactly one radio per technology", inputs.length === TECHNOLOGIES.length, `${inputs.length} vs ${TECHNOLOGIES.length}`);
+        test(
+            "each radio's value is exactly TECHNOLOGIES[].id, same order",
+            inputs.every((input, i) => input.value === TECHNOLOGIES[i].id),
+            JSON.stringify(inputs.map(i => i.value))
+        );
+        test("every radio shares name=\"category\" (one radiogroup)", inputs.every(i => i.name === "category"));
+        test("every radio is required (native validation, matching the old <select required>)", inputs.every(i => i.required === true));
+        test("none is pre-checked by default", inputs.every(i => i.checked === false));
+
+        // --- Accessibility: hidden visually, not removed from the a11y
+        // tree or from keyboard focus (display:none would do both) ----------
+        const firstInputStyle = getComputedStyle(inputs[0]);
+        test("radio inputs are NOT display:none (stay in the a11y tree and focusable)", firstInputStyle.display !== "none", firstInputStyle.display);
+        test("radio inputs use the .sr-only clip technique (still visually hidden)", inputs[0].classList.contains("sr-only"));
+
+        // Each <label> both wraps its <input> AND has a matching for=id —
+        // belt-and-braces association, and the association is what makes
+        // the whole card (not just the tiny native radio) the click/tap
+        // target.
+        const firstCard = grid.querySelector(".technology-picker-card");
+        test("each card is a <label> (or wraps one) associated with its radio via for=id", firstCard.tagName === "LABEL" && firstCard.getAttribute("for") === inputs[0].id);
+
+        // --- Validation contract: native required blocks submission with
+        // none selected, exactly like the old <select required> did --------
+        test("form is invalid with no technology selected", form.checkValidity() === false);
+
+        inputs[2].checked = true; // select the 3rd technology directly (native click semantics covered separately below)
+        test("form becomes valid once one radio is checked", form.checkValidity() === true);
+
+        // --- Read-path contract: matches the exact selector upload/app.js
+        // now uses in place of the old getElementById("category").value ----
+        const checkedValue = document.querySelector('input[name="category"]:checked')?.value || "";
+        test("the checked-selector read path returns the selected technology's id", checkedValue === TECHNOLOGIES[2].id, checkedValue);
+
+        inputs[2].checked = false;
+
+        // --- Clicking the visible card (not the hidden input directly)
+        // selects it — this is what makes the WHOLE card clickable, not
+        // just a tiny hidden native radio dot. -------------------------------
+        const fourthCard = grid.querySelectorAll(".technology-picker-card")[3];
+        fourthCard.click();
+        test("clicking the visible card (a real user's click target) selects its radio", inputs[3].checked === true);
+        test("clicking one card leaves the others unselected (real radiogroup exclusivity)", inputs.filter(i => i.checked).length === 1);
+
+        const noneSelectedValue = document.querySelector('input[name="category"]:checked')?.value || "";
+        test("upload/app.js's read path reflects a card click, not just direct DOM assignment", noneSelectedValue === TECHNOLOGIES[3].id, noneSelectedValue);
+
+        // Reset for a clean "no technology selected" submit-blocking check.
+        inputs[3].checked = false;
+
+        let submitFired = false;
+        form.addEventListener("submit", e => { e.preventDefault(); submitFired = true; });
+        document.getElementById("submitBtn").click();
+
+        test("submit is blocked by the browser when no technology is selected (native required)", submitFired === false, "submitFired=" + submitFired);
+
+        inputs[0].checked = true;
+        submitFired = false;
+        document.getElementById("submitBtn").click();
+        test("submit proceeds once a technology is selected", submitFired === true);
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`technologyRadioCard.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

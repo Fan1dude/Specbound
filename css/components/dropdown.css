@@ -54,19 +54,49 @@
         visibility 0s linear 0s;
 }
 
-.builder-dropdown a {
+/* `button` alongside `a` — Connected Accounts' three-dot menu (Refresh/
+   Disconnect) is the first consumer whose items are actions, not links,
+   so this generalizes the existing item styling to both rather than
+   duplicating it in a parallel ruleset. Purely additive: navbar's
+   .builder-dropdown and the notification bell's dropdown only ever put
+   `a` tags in theirs, so this changes nothing for them. */
+.builder-dropdown a,
+.builder-dropdown button {
     display: block;
+    width: 100%;
     padding: var(--space-0-5);
     border-radius: var(--radius-sm);
+    background: none;
+    border: none;
     color: var(--text-secondary);
     font-weight: 600;
+    font-size: var(--font-size-sm);
+    text-align: left;
+    cursor: pointer;
 
     transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
 }
 
-.builder-dropdown a:hover {
+.builder-dropdown a:hover,
+.builder-dropdown button:hover {
     background: var(--surface-3);
     color: var(--text);
+}
+
+/* Destructive menu item (e.g. Disconnect) — subtle, not alarm-red: the
+   danger text color only, background hover stays the same neutral
+   --surface-3 every other item uses, consistent with this app's
+   restrained "fill + inverse text" rule being reserved for solid
+   buttons, not menu rows (see tokens.css's Primary/danger comments).
+   Selector matches `.builder-dropdown button` in specificity (one
+   class + one element each) plus its own class, so it naturally wins
+   by source order without needing !important. */
+.builder-dropdown button.dropdown-item-danger {
+    color: var(--color-danger-strong);
+}
+
+.builder-dropdown button.dropdown-item-danger:hover {
+    color: var(--color-danger-strong-hover);
 }
 
 .builder-dropdown hr {

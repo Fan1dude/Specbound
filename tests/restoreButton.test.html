@@ -78,7 +78,7 @@
         const noopSrc = `export const noop = true;`;
         const buildRepoSrc = `export async function getBuildBySlug() { throw new Error("not used"); }`;
         const revisionRepoSrc = `export async function getBuildRevisions() { throw new Error("not used"); } export async function getRevisionById() { throw new Error("not used"); }`;
-        const profileRepoSrc = `export async function getProfile() { throw new Error("not used"); }`;
+        const profileRepoSrc = `export async function getPublicProfile() { throw new Error("not used"); }`;
         const mediaRepoSrc = `export async function getRevisionMedia() { throw new Error("not used"); }`;
         const viewRepoSrc = `export async function recordBuildView() { throw new Error("not used"); }`;
         const authSrc = `export async function getCurrentUser() { return null; }`;
@@ -117,7 +117,27 @@
             // loading/empty/error-state render helpers). It has no
             // imports of its own, so — same reasoning as the render
             // files above — the real file is used as-is.
-            '"../../utils/listState.js"': new URL("../../utils/listState.js", origin).href
+            '"../../utils/listState.js"': new URL("../../utils/listState.js", origin).href,
+            // Real confirmDialog() opens an actual <dialog> that needs a
+            // real button click to resolve — window.confirm() (which this
+            // test uses below to control confirm/cancel and to inspect the
+            // shown message) has no effect on it. Mocked to concatenate
+            // title+body and pass that through to window.confirm(), so
+            // the existing "confirmMessageSeen.includes(...)" assertion
+            // still sees the real body text.
+            '"../../utils/modal.js"': blobUrl(`
+                export function confirmDialog({ title, body }) {
+                    return Promise.resolve(window.confirm(title + "\\n\\n" + body));
+                }
+            `),
+            '"../../utils/skeletons.js"': new URL("../../utils/skeletons.js", origin).href,
+            // Milestone 22 — loadBuild.js's own direct import, mocked as
+            // a no-op the same way renderLike.js/renderSave.js above are
+            // real-but-inert; this test never exercises reporting.
+            '"../../components/ReportButton.js"': blobUrl(`
+                export function ReportButton() { return ""; }
+                export function wireReportButtons() {}
+            `)
         };
 
         const realSrc = await (await fetch("../js/pages/build/loadBuild.js")).text();

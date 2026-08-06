@@ -1,0 +1,110 @@
+/* Milestone 21: First-Time Builder Experience. Workshop profile-completion
+   checklist card, and the Welcome/first-publish dialogs' shared step
+   layout (built on modal.css's .modal/.modal-body base — these classes
+   only add what's new: a close/skip affordance in the corner, and
+   step-swap-friendly spacing). No new colors — composed entirely from
+   existing tokens, matching the settled-palette constraint. */
+
+.profile-checklist-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+
+    margin-bottom: var(--space-5);
+    padding: var(--space-3);
+
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+}
+
+.profile-checklist-card[hidden] {
+    display: none;
+}
+
+.profile-checklist-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+.profile-checklist-header h2 {
+    font-size: var(--font-size-md);
+    margin-bottom: 2px;
+}
+
+.profile-checklist-header p {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.profile-checklist-dismiss {
+    flex-shrink: 0;
+    padding: var(--space-0);
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+
+.profile-checklist-dismiss:hover {
+    color: var(--text);
+}
+
+.profile-checklist-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+}
+
+/* Reuses .readiness-check's exact look (editor.css) — same component,
+   different container, so the "checkmark = done" language stays
+   consistent sitewide rather than inventing a second visual dialect for
+   the same concept. */
+.profile-checklist-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.profile-checklist-item.is-complete {
+    color: var(--success);
+}
+
+.profile-checklist-item a {
+    color: inherit;
+}
+
+.modal-onboarding {
+    max-width: min(480px, 92vw);
+}
+
+.modal-onboarding-close {
+    position: absolute;
+    top: var(--space-2);
+    right: var(--space-2);
+
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+
+    color: var(--color-text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+}
+
+.modal-onboarding-close:hover {
+    color: var(--color-text);
+    background: color-mix(in srgb, var(--color-text) 8%, transparent);
+}
+
+.modal-onboarding .modal-body {
+    padding-top: var(--space-4);
+}

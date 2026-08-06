@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 21 — first-publish detection and celebration</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 21 — first-publish detection and celebration</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <h1 id="editorTitle"></h1>
+    <span id="editorSaveStatus"></span>
+    <span id="editorPublishBadge" class="badge">Draft</span>
+    <button id="editorUnpublishBtn" class="btn" hidden>Unpublish</button>
+    <button id="editorPublishBtn" class="btn" disabled>Publish</button>
+    <p id="editorPublishHint" hidden>Complete the readiness checklist below before publishing.</p>
+    <a id="editorViewLiveLink" href="#" hidden>View live project →</a>
+    <div id="editorReadiness"></div>
+    <input id="fieldTitle" value="A Valid Project Title">
+    <textarea id="fieldDescription">This description is long enough to pass validation.</textarea>
+    <select id="fieldCategory"><option value="pc_build" selected>PC Build</option></select>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function waitFor(predicate, timeoutMs = 2000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                const check = () => {
+                    if (predicate()) return resolve();
+                    if (Date.now() - start > timeoutMs) return reject(new Error("timed out: " + predicate.toString()));
+                    setTimeout(check, 10);
+                };
+                check();
+            });
+        }
+
+        // --- Mock state, reset between cases ---------------------------------
+        const calls = [];
+        let publishedCountBeforePublish = 0;
+        let countQueryShouldFail = false;
+        let publishDelayMs = 0;
+
+        globalThis.__mock = {
+            calls,
+            get publishedCountBeforePublish() { return publishedCountBeforePublish; },
+            get countQueryShouldFail() { return countQueryShouldFail; },
+            get publishDelayMs() { return publishDelayMs; }
+        };
+
+        const layoutSrc = `export function loadNavbar() {} export function loadFooter() {}`;
+        const authSrc = `export async function requireAuth() { return { id: "user-1" }; }`;
+        const toastSrc = `export function showToast() {}`;
+        const draftRepoSrc = `
+            export async function getDraft() {
+                return {
+                    id: "draft-1",
+                    title: "A Valid Project Title",
+                    description: "This description is long enough to pass validation.",
+                    category: "pc_build",
+                    updated_at: "2026-01-01T00:00:00Z",
+                    published_build_id: null
+                };
+            }
+            export async function updateDraft(id, fields) { return { id, ...fields }; }
+        `;
+        // Deliberately slow when publishDelayMs > 0 — this is what proves
+        // the count is captured BEFORE this resolves, not derived from
+        // racing it: if the implementation read the count after awaiting
+        // publishDraft (the exact anti-pattern the spec calls out), a
+        // slow publish would still record ["getMyPublishedBuildCount",
+        // "publishDraft"] in this order only by accident of timing, and
+        // Case 4 below asserts that ordering explicitly under an
+        // artificial delay to rule that out.
+        const publishRepoSrc = `
+            export async function publishDraft(draftId) {
+                globalThis.__mock.calls.push(["publishDraft", draftId]);
+                if (globalThis.__mock.publishDelayMs) {
+                    await new Promise(r => setTimeout(r, globalThis.__mock.publishDelayMs));
+                }
+                return { id: "build-1", slug: "my-project", visibility: "public" };
+            }
+            export async function setBuildVisibility() { return {}; }
+        `;
+        const buildRepoSrc = `export async function getBuildById() { return null; }`;
+        const dashboardRepoSrc = `
+            export async function getMyPublishedBuildCount() {
+                globalThis.__mock.calls.push(["getMyPublishedBuildCount"]);
+                if (globalThis.__mock.countQueryShouldFail) throw new Error("count query failed");
+                return globalThis.__mock.publishedCountBeforePublish;
+            }
+        `;
+        const autosaveSrc = `
+            export function createAutosaveController() {
+                return { scheduleSave() {}, flushNow: async () => {}, hasPendingChanges: () => false };
+            }
+        `;
+        const overviewSrc = `export function renderOverviewSection() { return { applyFields() {} }; }`;
+        const specSrc = `export function renderSpecificationsSection() { return { applyFields() {} }; }`;
+        const resourcesSrc = `export function renderResourcesSection() { return { applyFields() {} }; }`;
+        const gallerySrc = `
+            export async function renderGallerySection(draft, onMediaChange) {
+                globalThis.__mock.triggerMediaChange = onMediaChange;
+                onMediaChange(1);
+            }
+        `;
+        const tabsSrc = `export function setupEditorTabs() {}`;
+        const statusSrc = `export function setEditorStatus() {}`;
+        const recoverySrc = `export function maybeShowRecoveryBanner() {}`;
+        const modalSrc = `export function confirmDialog() { return Promise.resolve(true); }`;
+        const contextualHintsSrc = `export async function renderContextualHints() {}`;
+        const firstPublishDialogSrc = `
+            export function showFirstPublishDialog(opts) {
+                globalThis.__mock.calls.push(["showFirstPublishDialog", opts.buildUrl]);
+            }
+        `;
+
+        const editorOrigin = new URL("../js/pages/editor/", location.href).href;
+
+        const rewrites = {
+            '"./renderReadinessChecklist.js"': new URL("renderReadinessChecklist.js", editorOrigin).href,
+            '"../../core/layout.js"': blobUrl(layoutSrc),
+            '"../../core/auth.js"': blobUrl(authSrc),
+            '"../../core/toast.js"': blobUrl(toastSrc),
+            '"../../repositories/draftRepository.js"': blobUrl(draftRepoSrc),
+            '"../../repositories/publishRepository.js"': blobUrl(publishRepoSrc),
+            '"../../repositories/buildRepository.js"': blobUrl(buildRepoSrc),
+            '"../../repositories/dashboardRepository.js"': blobUrl(dashboardRepoSrc),
+            '"../../services/draftAutosave.js"': blobUrl(autosaveSrc),
+            '"./renderOverviewSection.js"': blobUrl(overviewSrc),
+            '"./renderSpecificationsSection.js"': blobUrl(specSrc),
+            '"./renderResourcesSection.js"': blobUrl(resourcesSrc),
+            '"./renderGallerySection.js"': blobUrl(gallerySrc),
+            '"./editorTabs.js"': blobUrl(tabsSrc),
+            '"./editorStatus.js"': blobUrl(statusSrc),
+            '"./draftRecoveryBanner.js"': blobUrl(recoverySrc),
+            '"../../utils/modal.js"': blobUrl(modalSrc),
+            '"./renderContextualHints.js"': blobUrl(contextualHintsSrc),
+            '"../../components/FirstPublishDialog.js"': blobUrl(firstPublishDialogSrc),
+            // Milestone 22 — always resolves accepted; this file's cases
+            // are about first-publish detection/celebration, not the
+            // guidelines gate.
+            '"../../components/GuidelinesGate.js"': blobUrl(`
+                export async function requireGuidelinesAcceptance() { return true; }
+            `)
+        };
+
+        history.replaceState(null, "", location.pathname + "?draft=draft-1");
+
+        const realSrc = await (await fetch("../js/pages/editor/app.js")).text();
+        let rewritten = realSrc;
+        for (const [from, to] of Object.entries(rewrites)) {
+            rewritten = rewritten.replaceAll(from, `"${to}"`);
+        }
+
+        await import(blobUrl(rewritten));
+
+        const publishBtn = document.getElementById("editorPublishBtn");
+
+        await waitFor(() => !publishBtn.disabled);
+
+        // --- Case 1: first publish (count 0) — celebration shown, and the
+        // count query happened before publishDraft ---------------------------
+        publishedCountBeforePublish = 0;
+        calls.length = 0;
+        publishBtn.click();
+        await waitFor(() => calls.some(c => c[0] === "showFirstPublishDialog") || calls.filter(c => c[0] === "publishDraft").length > 0 && calls.length >= 2);
+        await waitFor(() => calls.some(c => c[0] === "publishDraft"));
+
+        const countIndex = calls.findIndex(c => c[0] === "getMyPublishedBuildCount");
+        const publishIndex = calls.findIndex(c => c[0] === "publishDraft");
+
+        test("count 0: getMyPublishedBuildCount is called", countIndex !== -1, JSON.stringify(calls));
+        test("count 0: getMyPublishedBuildCount is called BEFORE publishDraft, not after", countIndex < publishIndex, JSON.stringify(calls));
+        test("count 0: the celebration dialog is shown", calls.some(c => c[0] === "showFirstPublishDialog"), JSON.stringify(calls));
+        test("count 0: the celebration receives the just-published build's URL", calls.find(c => c[0] === "showFirstPublishDialog")?.[1]?.includes("my-project"), JSON.stringify(calls));
+
+        // --- Case 2: not a first publish (count 2) — no celebration ---------
+        publishedCountBeforePublish = 2;
+        calls.length = 0;
+        publishBtn.click();
+        await waitFor(() => calls.some(c => c[0] === "publishDraft"));
+        await new Promise(r => setTimeout(r, 50)); // let any (incorrect) async celebration call settle
+
+        test("count 2 (already published before): no celebration dialog", !calls.some(c => c[0] === "showFirstPublishDialog"), JSON.stringify(calls));
+
+        // --- Case 3: count query fails — fails closed, publish still
+        // succeeds, no celebration (never guesses) -----------------------
+        publishedCountBeforePublish = 0;
+        countQueryShouldFail = true;
+        calls.length = 0;
+        publishBtn.click();
+        await waitFor(() => calls.some(c => c[0] === "publishDraft"));
+        await new Promise(r => setTimeout(r, 50));
+
+        test("count query failure: publish itself is not blocked", calls.some(c => c[0] === "publishDraft"), JSON.stringify(calls));
+        test("count query failure: fails closed — no celebration on an uncertain signal", !calls.some(c => c[0] === "showFirstPublishDialog"), JSON.stringify(calls));
+
+        countQueryShouldFail = false;
+
+        // --- Case 4: slow network — publishDraft takes a while; the count
+        // must still have been read before it started, not derived from
+        // racing its resolution -------------------------------------------
+        publishedCountBeforePublish = 0;
+        publishDelayMs = 150;
+        calls.length = 0;
+        publishBtn.click();
+        await waitFor(() => calls.some(c => c[0] === "showFirstPublishDialog"), 3000);
+
+        const slowCountIndex = calls.findIndex(c => c[0] === "getMyPublishedBuildCount");
+        const slowPublishIndex = calls.findIndex(c => c[0] === "publishDraft");
+
+        test("slow network: count is still read before the (slow) publish call", slowCountIndex < slowPublishIndex, JSON.stringify(calls));
+        test("slow network: celebration still fires once the slow publish resolves", calls.some(c => c[0] === "showFirstPublishDialog"), JSON.stringify(calls));
+
+        publishDelayMs = 0;
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`editorFirstPublishCelebration.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

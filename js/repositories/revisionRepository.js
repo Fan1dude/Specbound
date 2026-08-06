@@ -42,3 +42,32 @@ export async function getRevisionById(revisionId) {
 
     return data;
 }
+
+// Feeds Builder Journey (see
+// docs/milestones/MILESTONE_20_BUILDER_PORTFOLIO_SPECIFICATION.md §17.3) —
+// a capped, most-recent-first window of one builder's revisions across ALL
+// their public projects, joined to each revision's own build for the
+// title/slug/category the timeline needs to display. Deliberately not the
+// builder's entire history: buildBuilderJourney() (the pure function that
+// consumes this) only ever surfaces a curated top 10, so fetching more than
+// a few dozen recent rows here would just be discarded work. `limit`
+// defaults to 100 as a generous window past that top-10, not a page size —
+// there is no pagination for this feature (see spec §3.3d), so a
+// builder's very old milestones falling outside this window is a known,
+// accepted V1 limitation, not a bug.
+export async function getRecentBuilderRevisions(userId, { limit = 100 } = {}) {
+    const { data, error } = await supabase
+        .from("build_revisions")
+        .select(
+            "id, build_id, title, snapshot_title, version, milestone, update_type, created_at, " +
+            "builds!inner(title, slug, category, user_id, visibility)"
+        )
+        .eq("builds.user_id", userId)
+        .eq("builds.visibility", "public")
+        .order("created_at", { ascending: false })
+        .limit(limit);
+
+    if (error) throw error;
+
+    return data || [];
+}

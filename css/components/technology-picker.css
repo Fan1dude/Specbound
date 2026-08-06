@@ -1,0 +1,101 @@
+/* Milestone 21: First-Time Builder Experience. Shared visual language for
+   the technology picker — both the radio-card variant used by
+   upload.html's form (js/components/TechnologyRadioCard.js) and the
+   button variant used by the Welcome dialog's chooser step
+   (TechnologyChooserButton.js). No new colors — composed entirely from
+   existing tokens, matching the settled-palette constraint. */
+
+.technology-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--space-2);
+}
+
+.technology-picker-card {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+
+    width: 100%;
+    padding: var(--space-2);
+    margin-bottom: 0;
+
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+
+    font: inherit;
+    font-weight: normal;
+    text-align: left;
+    cursor: pointer;
+
+    transition:
+        transform var(--duration-fast) var(--ease-standard),
+        border-color var(--duration-fast) var(--ease-standard),
+        box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.technology-picker-card:hover,
+.technology-picker-card:focus-within {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--category-accent) 55%, transparent);
+    box-shadow: var(--shadow-md);
+}
+
+/* The radio variant's actual <input> is visually hidden (.sr-only) —
+   :focus-within on the wrapping <label> is what makes keyboard focus on
+   that hidden input visibly land on the whole card, not nowhere. */
+.technology-picker-card:has(input:checked) {
+    border-color: var(--category-accent);
+    box-shadow: 0 0 0 1px var(--category-accent);
+}
+
+.technology-picker-icon {
+    flex-shrink: 0;
+
+    width: 44px;
+    height: 44px;
+
+    display: grid;
+    place-items: center;
+
+    color: var(--category-accent);
+    background: color-mix(in srgb, var(--category-accent) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--category-accent) 30%, transparent);
+    border-radius: var(--radius-md);
+}
+
+.technology-picker-symbol {
+    width: 22px;
+    height: 22px;
+
+    display: block;
+    background: currentColor;
+
+    -webkit-mask-image: var(--category-icon);
+    mask-image: var(--category-icon);
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+}
+
+.technology-picker-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.technology-picker-body strong {
+    font-size: var(--font-size-md);
+}
+
+.technology-picker-body span {
+    color: var(--text-secondary);
+    font-size: var(--font-size-xs);
+}

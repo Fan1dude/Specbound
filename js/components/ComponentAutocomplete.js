@@ -11,7 +11,17 @@ export function setupComponentAutocomplete({
     input,
     technologyId,
     componentType,
-    minimumCharacters = 2
+    minimumCharacters = 2,
+    onSelect = () => {},
+    // Optional — when provided, an empty result set offers a "Suggest as
+    // a new component" action instead of just a dead-end message. Not
+    // repository logic itself (this file already imports searchComponents
+    // directly, so that boundary isn't new), but kept as a caller-supplied
+    // async callback rather than importing submitComponent() here, so the
+    // caller controls what technologyId/fieldKey semantics and toast
+    // feedback look like. Must return a Promise; rejecting it re-enables
+    // the button so the user can retry.
+    onSubmitNew = null
 }) {
     const inputElement =
         typeof input === "string"
@@ -36,6 +46,7 @@ export function setupComponentAutocomplete({
 
     let activeIndex = -1;
     let currentResults = [];
+    let currentQuery = "";
     let requestTimer = null;
     let destroyed = false;
 
@@ -53,6 +64,7 @@ export function setupComponentAutocomplete({
 
         const query = inputElement.value.trim();
 
+        currentQuery = query;
         inputElement.dataset.componentId = "";
         activeIndex = -1;
 
@@ -140,12 +152,7 @@ export function setupComponentAutocomplete({
 
     function renderResults() {
         if (!currentResults.length) {
-            resultsElement.innerHTML = `
-                <div class="component-autocomplete-state">
-                    No matching components found. You may keep your custom value.
-                </div>
-            `;
-
+            renderEmptyState();
             openResults();
             return;
         }
@@ -189,6 +196,56 @@ export function setupComponentAutocomplete({
         openResults();
     }
 
+    function renderEmptyState() {
+        if (!onSubmitNew) {
+            resultsElement.innerHTML = `
+                <div class="component-autocomplete-state">
+                    No matching components found. You may keep your custom value.
+                </div>
+            `;
+            return;
+        }
+
+        resultsElement.innerHTML = `
+            <div class="component-autocomplete-state">
+                No matching components found. You may keep your custom value, or suggest it for the shared catalog.
+            </div>
+
+            <button type="button" class="component-autocomplete-submit-new btn btn-ghost btn-small">
+                Suggest "${escapeHtml(currentQuery)}" as a new component
+            </button>
+        `;
+
+        resultsElement
+            .querySelector(".component-autocomplete-submit-new")
+            ?.addEventListener("click", handleSubmitNewClick);
+    }
+
+    async function handleSubmitNewClick(event) {
+        const button = event.currentTarget;
+        const submittedQuery = currentQuery;
+
+        button.disabled = true;
+        button.textContent = "Submitting...";
+
+        try {
+            await onSubmitNew(submittedQuery);
+
+            if (destroyed) return;
+
+            resultsElement.innerHTML = `
+                <div class="component-autocomplete-state">
+                    Submitted "${escapeHtml(submittedQuery)}" for review. Your typed value is still saved on this build either way.
+                </div>
+            `;
+        } catch (error) {
+            if (destroyed) return;
+
+            console.error("Component submission error:", error);
+            renderEmptyState();
+        }
+    }
+
     function updateActiveResult() {
         let activeOption = null;
 
@@ -215,6 +272,12 @@ export function setupComponentAutocomplete({
         inputElement.dataset.componentId = component.id;
 
         closeResults();
+
+        // Setting .value directly (as opposed to a user keystroke) does not
+        // dispatch a native "input" event, so a caller relying only on that
+        // listener would never learn the componentId was set — this is the
+        // callback that closes that gap.
+        onSelect(component);
     }
 
     function openResults() {

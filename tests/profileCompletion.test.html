@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 21 — profile completion checklist</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 21 — profile completion checklist</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        import { getProfileCompletionChecks, isProfileComplete } from "../js/services/profileCompletion.js";
+
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function passed(profile, key) {
+            return getProfileCompletionChecks(profile).find(c => c.key === key)?.passed;
+        }
+
+        // --- All empty -----------------------------------------------------
+        const empty = { username: "", display_name: "", avatar_path: "", avatar_url: "", headline: "", bio: "" };
+        const emptyChecks = getProfileCompletionChecks(empty);
+
+        test("all-empty: every check fails", emptyChecks.every(c => c.passed === false), JSON.stringify(emptyChecks));
+        test("all-empty: isProfileComplete is false", isProfileComplete(emptyChecks) === false);
+
+        // --- All filled ------------------------------------------------------
+        const full = {
+            username: "builder1",
+            display_name: "Builder One",
+            avatar_path: "avatars/builder1.png",
+            headline: "I build things.",
+            bio: "A longer bio about what I build."
+        };
+        const fullChecks = getProfileCompletionChecks(full);
+
+        test("all-filled: every check passes", fullChecks.every(c => c.passed === true), JSON.stringify(fullChecks));
+        test("all-filled: isProfileComplete is true", isProfileComplete(fullChecks) === true);
+
+        // --- Each field independently missing --------------------------------
+        for (const key of ["username", "display_name", "headline", "bio"]) {
+            const partial = { ...full, [key]: "" };
+            test(`missing only "${key}": that check fails`, passed(partial, key) === false);
+            test(`missing only "${key}": every other check still passes`, getProfileCompletionChecks(partial).filter(c => c.key !== key).every(c => c.passed === true));
+            test(`missing only "${key}": isProfileComplete is false`, isProfileComplete(getProfileCompletionChecks(partial)) === false);
+        }
+
+        // Avatar uses either avatar_path or avatar_url — missing both fails,
+        // either alone passes.
+        test("avatar: passes with only avatar_path set", passed({ ...full, avatar_path: "x", avatar_url: undefined }, "avatar") === true);
+        test("avatar: passes with only avatar_url set", passed({ ...full, avatar_path: undefined, avatar_url: "x" }, "avatar") === true);
+        test("avatar: fails with neither set", passed({ ...full, avatar_path: "", avatar_url: "" }, "avatar") === false);
+
+        // --- Whitespace-only text fields must not count as filled -----------
+        test("whitespace-only display_name fails", passed({ ...full, display_name: "   " }, "display_name") === false);
+        test("whitespace-only headline fails", passed({ ...full, headline: "\t\n " }, "headline") === false);
+        test("whitespace-only bio fails", passed({ ...full, bio: "   " }, "bio") === false);
+
+        // --- Missing keys entirely (not just empty strings) must not throw --
+        let threw = false;
+        try {
+            getProfileCompletionChecks({});
+        } catch {
+            threw = true;
+        }
+        test("a profile object missing keys entirely does not throw", threw === false);
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`profileCompletion.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

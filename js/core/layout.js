@@ -1,6 +1,7 @@
 import { supabase } from "./supabase.js";
 import { getCurrentUser, clearCurrentUserCache } from "./auth.js";
 import { initNotificationBell } from "./notificationBell.js";
+import { maybeShowWelcome } from "./onboarding.js";
 import { escapeHtml } from "../utils/escapeHtml.js";
 import { icon } from "../utils/icons.js";
 
@@ -16,13 +17,23 @@ export async function loadNavbar(pathPrefix = "") {
     let authLinks = "";
 
     if (user) {
+        // onboarding_welcomed_at added for Milestone 21 — this is the one
+        // place in the app that already runs on every authenticated page
+        // load and already resolves the profile, so it's also the global
+        // trigger point for the first-sign-in Welcome dialog (see
+        // core/onboarding.js). Eligibility is only known once this
+        // query resolves; maybeShowWelcome() is never called before then.
         const { data: profile } = await supabase
             .from("profiles")
-            .select("username")
+            .select("username, onboarding_welcomed_at")
             .eq("id", user.id)
             .single();
 
         const username = profile?.username || "Builder";
+
+        if (profile && !profile.onboarding_welcomed_at) {
+            maybeShowWelcome(user, profile, pathPrefix);
+        }
 
         authLinks = `
             <div class="builder-menu">
@@ -223,15 +234,38 @@ export function loadFooter(pathPrefix = "") {
                 <h3>Builders</h3>
                 <a href="${pathPrefix}pages/workshop.html">Workshop</a>
                 <a href="${pathPrefix}pages/explore.html">Profiles</a>
+                <button type="button" id="footerFeedbackBtn">Feedback</button>
             </div>
 
             <div>
                 <h3>Legal</h3>
                 <a href="${pathPrefix}pages/legal/privacy.html">Privacy</a>
                 <a href="${pathPrefix}pages/legal/terms.html">Terms</a>
+                <a href="${pathPrefix}pages/legal/community-guidelines.html">Community Guidelines</a>
             </div>
         </div>
     `;
+
+    // Milestone 22 §9 — one link's worth of footprint, not a new footer
+    // section. Signed-out visitors are sent to sign in rather than
+    // silently failing on submit_feedback()'s own auth.uid() check
+    // (0029_feedback_submissions.sql) — the same "explain, don't fail
+    // silently" posture as every other auth-gated action in this app.
+    const feedbackBtn = document.getElementById("footerFeedbackBtn");
+
+    if (feedbackBtn) {
+        feedbackBtn.addEventListener("click", async () => {
+            const user = await getCurrentUser();
+
+            if (!user) {
+                window.location.href = `${pathPrefix}pages/login.html`;
+                return;
+            }
+
+            const { showFeedbackModal } = await import("../components/FeedbackModal.js");
+            showFeedbackModal();
+        });
+    }
 }
 
 // A visually-hidden-until-focused link, inserted as the very first

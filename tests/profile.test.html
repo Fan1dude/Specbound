@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Milestone 6C — profile</title>
+    <title>Milestone 20 — profile orchestrator</title>
     <link rel="stylesheet" href="../css/styles.css">
     <style>
         body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
@@ -13,18 +13,51 @@
     </style>
 </head>
 <body>
-    <h1>Milestone 6C — profile</h1>
+    <h1>Milestone 20 — profile orchestrator (renderProfile.js)</h1>
     <div id="results"></div>
     <div id="summary"></div>
 
-    <div id="profileAvatar">?</div>
-    <h1 id="profileUsername">Loading...</h1>
-    <p id="profileDisplayName" hidden></p>
-    <p id="profileBio">Hardware Creator</p>
-    <div id="profileMeta"></div>
-    <div id="profileLinks"></div>
-    <div id="profileStats"></div>
-    <div id="profileBuilds"></div>
+    <!-- Fixture DOM — must match pages/profile.html's real ids exactly,
+         since every render*.js section function targets these by id. -->
+    <main id="fixture">
+        <section class="profile-hero" id="profileHero">
+            <div class="profile-avatar" id="profileAvatar">?</div>
+            <div class="profile-hero-info">
+                <h1 id="profileUsername">Loading...</h1>
+                <p id="profileDisplayName" hidden></p>
+                <p id="profileHeadline" hidden></p>
+                <div id="profileMeta"></div>
+                <div id="profileLinks"></div>
+                <div id="profileConnectedAccounts" hidden></div>
+                <div id="profileFollowCounts"></div>
+                <button id="followBtn" hidden>Follow</button>
+                <p id="followHint" hidden></p>
+            </div>
+        </section>
+
+        <section id="profileOverview">
+            <div id="profileStats"></div>
+            <div id="profileTechFocus" hidden></div>
+        </section>
+
+        <section id="profileEmptyState" hidden>
+            <p>Your published projects will show up here.</p>
+            <a href="../pages/upload.html">Publish Your First Build</a>
+        </section>
+
+        <section id="profileFeatured" hidden></section>
+
+        <section id="profileGallery" hidden>
+            <div id="profileGalleryFilters"></div>
+            <select id="profileGallerySort"></select>
+            <div id="profileBuilds"></div>
+            <button id="profileGalleryLoadMore" hidden>Load more</button>
+        </section>
+
+        <section id="profileTechBreakdown" hidden></section>
+        <section id="profileJourney" hidden></section>
+        <section id="profileAbout" hidden></section>
+    </main>
 
     <script type="module">
         const results = [];
@@ -36,58 +69,129 @@
             return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
         }
 
-        // --- Mock state -----------------------------------------------------
+        function absUrl(path) {
+            return new URL(path, location.href).href;
+        }
+
+        // Rewrites every relative import specifier in `src` to an absolute
+        // URL via `map` ({ "./x.js": "../js/pages/profile/x.js", ... }),
+        // then returns a ready-to-import blob URL. Mirrors the technique
+        // established in the pre-Milestone-20 version of this test file —
+        // a blob module has no real location, so every relative import it
+        // contains must be resolved to an absolute (real-file or
+        // mock-blob) URL before it can run.
+        async function loadPatched(realPath, map) {
+            const src = await (await fetch(realPath)).text();
+            let rewritten = src;
+            for (const [from, to] of Object.entries(map)) {
+                rewritten = rewritten.replaceAll(`"${from}"`, `"${to}"`);
+            }
+            return blobUrl(rewritten);
+        }
+
+        // --- Mocks: real network-touching modules, stubbed same as before ---
         let mockAvatarUrl = "";
+        globalThis.__mock = { get mockAvatarUrl() { return mockAvatarUrl; } };
 
-        globalThis.__mock = {
-            get mockAvatarUrl() { return mockAvatarUrl; }
-        };
-
-        const mediaRepoSrc = `
+        const mediaRepoMockUrl = blobUrl(`
             export async function resolveAvatarUrl(profile) {
                 return globalThis.__mock.mockAvatarUrl;
             }
-        `;
+        `);
 
-        // BlueprintCard.js has no imports of its own, so the real file is used
-        // as-is (via an absolute URL) rather than mocked — this is what lets
-        // these tests actually verify the "Unknown Creator" attachment bug is
-        // fixed, instead of just trusting a stub.
-        const blueprintCardUrl = new URL("../js/components/BlueprintCard.js", location.href).href;
+        const renderFollowMockUrl = blobUrl(`export async function renderFollow() {}`);
 
-        // renderFollow.js (Milestone 7C) is its own dedicated, separately
-        // tested unit (see renderFollow.test.html) — stubbed out here as a
-        // no-op so this file stays focused on what it already covers
-        // (avatar, bio, links, stats, builds, error state).
-        const renderFollowSrc = `export async function renderFollow() {}`;
+        // ManageRolesControl.js is Milestone 22's moderator/staff-only
+        // grant/revoke UI — never exercised by this test (which covers
+        // section visibility, not moderator actions), so it's mocked as
+        // a no-op the same way renderFollow.js is above, rather than
+        // pulling in its own real network-touching import
+        // (communityRepository.js).
+        const manageRolesControlMockUrl = blobUrl(`export function renderManageRoles() {}`);
 
-        const rewrites = {
-            '"../../components/BlueprintCard.js"': blueprintCardUrl,
-            '"../../repositories/mediaRepository.js"': blobUrl(mediaRepoSrc),
-            '"./renderFollow.js"': blobUrl(renderFollowSrc)
-        };
+        // renderProfileHero.js has its own transitive import of
+        // mediaRepository.js (a real Supabase call) — patched the same way
+        // as the top-level orchestrator below, one level deeper.
+        const renderProfileHeroUrl = await loadPatched("../js/pages/profile/renderProfileHero.js", {
+            "../../repositories/mediaRepository.js": mediaRepoMockUrl,
+            "../../utils/escapeHtml.js": absUrl("../js/utils/escapeHtml.js"),
+            "../../utils/avatarInitial.js": absUrl("../js/utils/avatarInitial.js"),
+            "../../utils/icons.js": absUrl("../js/utils/icons.js"),
+            "./formatJoinDate.js": absUrl("../js/pages/profile/formatJoinDate.js"),
+            // Milestone 22 — RoleBadge.js (and its own transitive import,
+            // communityRecognition.js) are pure/DOM-only, same reasoning
+            // as every other section component below.
+            "../../components/RoleBadge.js": absUrl("../js/components/RoleBadge.js")
+        });
 
-        const realSrc = await (await fetch("../js/pages/profile/renderProfile.js")).text();
-        let rewritten = realSrc;
-        for (const [from, to] of Object.entries(rewrites)) {
-            rewritten = rewritten.replaceAll(from, `"${to}"`);
-        }
+        // Every other section component has no network-touching imports
+        // (escapeHtml, icons, formatCategory, technologies config,
+        // BlueprintCard, progressBar are all pure/DOM-only) — loaded via
+        // their real absolute file URL as-is, same reasoning as the old
+        // test using the real BlueprintCard.js directly.
+        const renderProfileUrl = await loadPatched("../js/pages/profile/renderProfile.js", {
+            "./renderProfileHero.js": renderProfileHeroUrl,
+            "./renderFollow.js": renderFollowMockUrl,
+            "./renderBuilderOverview.js": absUrl("../js/pages/profile/renderBuilderOverview.js"),
+            "./renderFeaturedProject.js": absUrl("../js/pages/profile/renderFeaturedProject.js"),
+            "./renderProjectGallery.js": absUrl("../js/pages/profile/renderProjectGallery.js"),
+            "./renderTechnologyBreakdown.js": absUrl("../js/pages/profile/renderTechnologyBreakdown.js"),
+            "./renderBuilderJourney.js": absUrl("../js/pages/profile/renderBuilderJourney.js"),
+            "./renderAboutBuilder.js": absUrl("../js/pages/profile/renderAboutBuilder.js"),
+            "./resolveFeaturedBuild.js": absUrl("../js/pages/profile/resolveFeaturedBuild.js"),
+            "../../utils/icons.js": absUrl("../js/utils/icons.js"),
+            "../../components/ManageRolesControl.js": manageRolesControlMockUrl
+        });
 
-        const { renderProfile, renderProfileError } = await import(blobUrl(rewritten));
+        const { renderProfile, renderProfileError } = await import(renderProfileUrl);
 
         function resetDom() {
             document.getElementById("profileAvatar").innerHTML = "?";
             document.getElementById("profileUsername").textContent = "Loading...";
             document.getElementById("profileDisplayName").textContent = "";
             document.getElementById("profileDisplayName").hidden = true;
-            document.getElementById("profileBio").textContent = "Hardware Creator";
+            document.getElementById("profileHeadline").textContent = "";
+            document.getElementById("profileHeadline").hidden = true;
             document.getElementById("profileMeta").innerHTML = "";
             document.getElementById("profileLinks").innerHTML = "";
+            document.getElementById("profileConnectedAccounts").innerHTML = "";
+            document.getElementById("profileConnectedAccounts").hidden = true;
+            document.getElementById("profileFollowCounts").innerHTML = "";
+            document.getElementById("followBtn").hidden = true;
             document.getElementById("profileStats").innerHTML = "";
+            document.getElementById("profileTechFocus").innerHTML = "";
+            document.getElementById("profileTechFocus").hidden = true;
+            document.getElementById("profileEmptyState").hidden = true;
+            document.getElementById("profileFeatured").innerHTML = "";
+            document.getElementById("profileFeatured").hidden = true;
+            document.getElementById("profileGallery").hidden = true;
+            document.getElementById("profileGalleryFilters").innerHTML = "";
             document.getElementById("profileBuilds").innerHTML = "";
+            document.getElementById("profileTechBreakdown").innerHTML = "";
+            document.getElementById("profileTechBreakdown").hidden = true;
+            document.getElementById("profileJourney").innerHTML = "";
+            document.getElementById("profileJourney").hidden = true;
+            document.getElementById("profileAbout").innerHTML = "";
+            document.getElementById("profileAbout").hidden = true;
         }
 
-        // --- Case 1: full profile — every optional field present ------------
+        function makeBuild(overrides) {
+            return {
+                id: "b1",
+                title: "Build",
+                slug: "build",
+                category: "pc_build",
+                status: "planning",
+                visibility: "public",
+                views: 0,
+                likes_count: 0,
+                created_at: "2026-01-01T00:00:00Z",
+                updated_at: "2026-01-01T00:00:00Z",
+                ...overrides
+            };
+        }
+
+        // --- Case 1: full profile, no explicit pin, one completed build ----
         resetDom();
         mockAvatarUrl = "https://signed.example/avatars%2Fuser-a%2F500.jpg";
 
@@ -95,6 +199,7 @@
             id: "user-a",
             username: "alice",
             display_name: "Alice Builder",
+            headline: "Hardware engineer building open silicon",
             bio: "I build robots.",
             location: "Toronto, ON",
             website: "alice.dev",
@@ -102,42 +207,83 @@
             youtube: "",
             avatar_path: "avatars/user-a/500.jpg",
             avatar_url: null,
-            created_at: "2024-03-15T00:00:00Z"
+            created_at: "2024-03-15T00:00:00Z",
+            featured_build_id: null
         };
 
         const fullBuilds = [
-            { id: "b1", title: "Robot Arm", slug: "robot-arm", user_id: "user-a", category: "robotics", status: "building", visibility: "public", views: 120, profiles: fullProfile },
-            { id: "b2", title: "Desk Setup", slug: "desk-setup", user_id: "user-a", category: "setup", status: "completed", visibility: "public", views: 33, profiles: fullProfile }
+            makeBuild({ id: "b1", title: "Robot Arm", slug: "robot-arm", category: "robotics", status: "completed", views: 120, updated_at: "2026-06-01T00:00:00Z", profiles: fullProfile }),
+            makeBuild({ id: "b2", title: "Desk Setup", slug: "desk-setup", category: "setup", status: "planning", views: 33, updated_at: "2026-01-01T00:00:00Z", profiles: fullProfile })
         ];
 
-        await renderProfile({ profile: fullProfile, builds: fullBuilds, commentCount: 7 });
+        await renderProfile({ profile: fullProfile, builds: fullBuilds, commentCount: 7, currentUser: null, journeyEvents: [] });
 
         test("username is rendered", document.getElementById("profileUsername").textContent === "alice");
         test("display_name is shown when different from username", document.getElementById("profileDisplayName").hidden === false && document.getElementById("profileDisplayName").textContent === "Alice Builder");
-        test("bio is rendered", document.getElementById("profileBio").textContent === "I build robots.");
-        test("location appears in meta", document.getElementById("profileMeta").textContent.includes("Toronto, ON"));
-        test("join date appears in meta", document.getElementById("profileMeta").textContent.includes("Joined March 2024"));
-        test("website link is rendered with https:// normalization", document.getElementById("profileLinks").innerHTML.includes('href="https://alice.dev"'));
-        test("github link is rendered, stripping a leading @", document.getElementById("profileLinks").innerHTML.includes('href="https://github.com/alice"'));
-        test("empty youtube field produces no youtube link", !document.getElementById("profileLinks").innerHTML.includes("youtube.com"));
+        test("headline is rendered in the Hero (not bio)", document.getElementById("profileHeadline").textContent === "Hardware engineer building open silicon");
         test("avatar resolves avatar_path to a signed image", document.getElementById("profileAvatar").querySelector("img")?.getAttribute("src") === mockAvatarUrl);
 
         const statsText = document.getElementById("profileStats").textContent;
-        test("Published Projects stat equals builds.length", statsText.includes("2") && statsText.includes("Published Projects"));
-        test("Comments Received stat equals the commentCount param", statsText.includes("7") && statsText.includes("Comments Received"));
-        test("Total Views stat sums views across the builder's builds (120 + 33 = 153)", statsText.includes("153") && statsText.includes("Total Views"));
-        test("Member Since stat shows the join year", statsText.includes("2024") && statsText.includes("Member Since"));
-        test("stats show exactly four tiles (no Total Likes)", document.querySelectorAll("#profileStats .profile-stat").length === 4);
-        test("Total Likes is never shown", !statsText.includes("Total Likes"));
+        test("Overview stats show the project count", statsText.includes("2") && statsText.includes("Projects"));
+        test("Overview stats show the comment count param", statsText.includes("7") && statsText.includes("Comments Received"));
 
-        const cards = document.querySelectorAll("#profileBuilds .blueprint-card");
-        test("one BlueprintCard rendered per published project", cards.length === 2, `got ${cards.length}`);
-        const buildsTextNormalized = document.getElementById("profileBuilds").textContent.replace(/\s+/g, " ");
-        test("cards attribute the correct builder, not 'Unknown Creator' (the pre-6C bug)", buildsTextNormalized.includes("By alice") && !buildsTextNormalized.includes("Unknown Creator"));
-        test("a card shows its own build's view count (120 views)", buildsTextNormalized.includes("120 views"));
-        test("a card shows its own build's view count (33 views)", buildsTextNormalized.includes("33 views"));
+        test("Featured Project renders the most recently updated COMPLETED build (Robot Arm), no explicit pin", document.getElementById("profileFeatured").hidden === false && document.getElementById("profileFeatured").textContent.includes("Robot Arm"));
+        test("Project Gallery excludes the build shown as Featured", !document.getElementById("profileBuilds").textContent.includes("Robot Arm") && document.getElementById("profileBuilds").textContent.includes("Desk Setup"));
+        test("Technology Breakdown is visible with 2 public builds across 2 categories", document.getElementById("profileTechBreakdown").hidden === false);
+        test("About Builder shows the bio text", document.getElementById("profileAbout").textContent.includes("I build robots."));
+        test("Connected Accounts area is hidden when no discordConnection is passed", document.getElementById("profileConnectedAccounts").hidden === true);
 
-        // --- Case 2: minimal profile — every optional field absent -----------
+        // --- Case 1b: a public Discord connection renders as a real,
+        // separate clickable area (not folded into .profile-links) -----------
+        resetDom();
+        mockAvatarUrl = "";
+
+        await renderProfile({
+            profile: fullProfile,
+            builds: fullBuilds,
+            commentCount: 0,
+            currentUser: null,
+            journeyEvents: [],
+            discordConnection: { provider_user_id: "123456789012345678", provider_username: "alice#0001" }
+        });
+
+        const connectedAccountsEl = document.getElementById("profileConnectedAccounts");
+        const discordLink = connectedAccountsEl.querySelector("a");
+
+        test("a public Discord connection unhides the Connected Accounts area", connectedAccountsEl.hidden === false);
+        test("the Discord button is a real link, not the old non-clickable span", discordLink !== null);
+        test("it links to the real Discord profile deep link built from provider_user_id", discordLink?.getAttribute("href") === "https://discord.com/users/123456789012345678");
+        test("it opens in a new tab without leaking a window.opener reference", discordLink?.getAttribute("target") === "_blank" && discordLink?.getAttribute("rel")?.includes("noopener"));
+        test("the visible username is shown and escaped safely", connectedAccountsEl.textContent.includes("alice#0001"));
+        test("it is NOT folded into the separate free-text .profileLinks area", !document.getElementById("profileLinks").innerHTML.includes("alice#0001"));
+
+        // --- Case 1c: a connection missing provider_user_id (defensive —
+        // shouldn't happen given getPublicDiscordConnection's own select,
+        // but never render a dead/unbuildable link) stays hidden -------------
+        resetDom();
+        mockAvatarUrl = "";
+
+        await renderProfile({
+            profile: fullProfile,
+            builds: fullBuilds,
+            commentCount: 0,
+            currentUser: null,
+            journeyEvents: [],
+            discordConnection: { provider_username: "alice#0001" }
+        });
+
+        test("a connection missing provider_user_id never renders a broken link", document.getElementById("profileConnectedAccounts").hidden === true);
+
+        // --- Case 2: explicit featured_build_id pin wins over the fallback chain ---
+        resetDom();
+        mockAvatarUrl = "";
+
+        const pinnedProfile = { ...fullProfile, featured_build_id: "b2" };
+        await renderProfile({ profile: pinnedProfile, builds: fullBuilds, commentCount: 0, currentUser: null, journeyEvents: [] });
+
+        test("an explicit pin (Desk Setup) wins over a more-recently-updated completed build", document.getElementById("profileFeatured").textContent.includes("Desk Setup") && !document.getElementById("profileFeatured").textContent.includes("Robot Arm"));
+
+        // --- Case 3: zero builds, viewer IS the owner -> empty-state CTA ----
         resetDom();
         mockAvatarUrl = "";
 
@@ -145,6 +291,7 @@
             id: "user-b",
             username: "bob",
             display_name: null,
+            headline: null,
             bio: null,
             location: null,
             website: null,
@@ -152,53 +299,51 @@
             youtube: null,
             avatar_path: null,
             avatar_url: null,
-            created_at: "2025-11-02T00:00:00Z"
+            created_at: "2025-11-02T00:00:00Z",
+            featured_build_id: null
         };
 
-        await renderProfile({ profile: minimalProfile, builds: [], commentCount: 0 });
+        await renderProfile({ profile: minimalProfile, builds: [], commentCount: 0, currentUser: { id: "user-b" }, journeyEvents: [] });
 
         test("display_name is hidden when absent", document.getElementById("profileDisplayName").hidden === true);
-        test("bio falls back to the default when absent", document.getElementById("profileBio").textContent === "Hardware Creator");
-        test("meta shows no location text when location is absent", !document.getElementById("profileMeta").textContent.includes("null"));
-        test("meta still shows a join date when location is absent", document.getElementById("profileMeta").textContent.includes("Joined"));
-        test("links container is empty when no links are set", document.getElementById("profileLinks").innerHTML.trim() === "");
-        test("avatar falls back to an initial letter when no avatar is set", document.getElementById("profileAvatar").querySelector("img") === null && document.getElementById("profileAvatar").textContent.trim() === "B");
-        test("Published Projects is 0 for a builder with no published projects", document.getElementById("profileStats").textContent.includes("Published Projects"));
-        test("Total Views is 0 for a builder with no published projects", document.getElementById("profileStats").textContent.includes("Total Views"));
-        test("empty projects grid shows an empty-state message", document.getElementById("profileBuilds").textContent.includes("No published projects yet."));
+        test("headline is hidden when absent", document.getElementById("profileHeadline").hidden === true);
+        test("zero-project empty state IS shown to the owner, with the Publish CTA", document.getElementById("profileEmptyState").hidden === false && document.getElementById("profileEmptyState").innerHTML.includes("Publish Your First Build"));
+        test("Featured Project is omitted (not empty-rendered) with zero builds", document.getElementById("profileFeatured").hidden === true);
+        test("Project Gallery is omitted with zero builds", document.getElementById("profileGallery").hidden === true);
+        test("Technology Breakdown is omitted with zero builds", document.getElementById("profileTechBreakdown").hidden === true);
+        test("About Builder still renders for the owner even with an empty bio (shows the Settings prompt)", document.getElementById("profileAbout").hidden === false && document.getElementById("profileAbout").textContent.includes("Add a bio"));
 
-        // --- Case 2b: a build with no views field at all doesn't break the sum ---
-        resetDom();
-
-        await renderProfile({
-            profile: minimalProfile,
-            builds: [{ id: "b3", title: "No Views Field", slug: "x", user_id: "user-b", category: "setup", status: "planning", visibility: "public", profiles: minimalProfile }],
-            commentCount: 0
-        });
-
-        test("a build missing the views field entirely is treated as 0, not NaN/undefined", !document.getElementById("profileStats").textContent.includes("NaN") && !document.getElementById("profileStats").textContent.includes("undefined"));
-        test("that same build's card shows '0 views', not 'undefined views'", document.getElementById("profileBuilds").textContent.includes("0 views"));
-
-        // --- Case 3: display_name identical to username is treated as unset --
+        // --- Case 4: zero builds, viewer is NOT the owner -> fully quiet ----
         resetDom();
         mockAvatarUrl = "";
 
-        await renderProfile({
-            profile: { ...minimalProfile, display_name: "bob" },
-            builds: [],
-            commentCount: 0
-        });
+        await renderProfile({ profile: minimalProfile, builds: [], commentCount: 0, currentUser: null, journeyEvents: [] });
 
-        test("a display_name equal to the username is not shown as a separate line", document.getElementById("profileDisplayName").hidden === true);
+        test("zero-project empty state is NOT shown to a non-owner visitor", document.getElementById("profileEmptyState").hidden === true);
+        test("About Builder is omitted entirely for a non-owner when the bio is empty", document.getElementById("profileAbout").hidden === true);
 
-        // --- Case 4: error state -----------------------------------------
+        // --- Case 5: Builder Journey renders the events it's given -----------
+        resetDom();
+        mockAvatarUrl = "";
+
+        const journeyEvents = [
+            { type: "milestone", date: "2026-06-01T00:00:00Z", build: { slug: "robot-arm" }, label: "Cooling loop redone" }
+        ];
+
+        await renderProfile({ profile: fullProfile, builds: fullBuilds, commentCount: 0, currentUser: null, journeyEvents });
+
+        test("Builder Journey renders a passed-in event", document.getElementById("profileJourney").hidden === false && document.getElementById("profileJourney").textContent.includes("Cooling loop redone"));
+
+        // --- Case 6: error state ---------------------------------------------
         resetDom();
         document.getElementById("profileUsername").textContent = "Loading...";
 
         renderProfileError();
 
         test("error state replaces the loading username with a visible message", document.getElementById("profileUsername").textContent !== "Loading..." && document.getElementById("profileUsername").textContent.length > 0);
-        test("error state shows a visible explanation, not a blank/stuck page", document.getElementById("profileBuilds").textContent.toLowerCase().includes("could not be loaded"));
+        test("error state shows a visible explanation in the Headline slot", document.getElementById("profileHeadline").hidden === false && document.getElementById("profileHeadline").textContent.toLowerCase().includes("could not be loaded"));
+        test("error state hides every conditional section", ["profileEmptyState", "profileFeatured", "profileGallery", "profileTechBreakdown", "profileJourney", "profileAbout"].every(id => document.getElementById(id).hidden === true));
+        test("error state also hides the Connected Accounts area", document.getElementById("profileConnectedAccounts").hidden === true);
 
         // --- Render + report ------------------------------------------------
         const resultsEl = document.getElementById("results");

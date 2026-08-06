@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 22 polish — Discord auth error classification</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 22 polish — Discord auth error classification</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        import {
+            describeDiscordLinkError,
+            readDiscordOAuthRedirectError,
+            describeDiscordRedirectError
+        } from "../js/utils/discordAuthErrors.js";
+
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function setUrl(searchAndHash) {
+            window.history.replaceState({}, "", window.location.pathname + searchAndHash);
+        }
+
+        // --- describeDiscordLinkError: the two synchronous, pre-redirect
+        // configuration failures are told apart, and both read as plain
+        // English rather than raw Supabase text ------------------------------
+        test(
+            "manual linking disabled is recognized by error code",
+            describeDiscordLinkError({ code: "manual_linking_disabled", message: "Manual linking is disabled" })
+                .includes("aren't turned on")
+        );
+        test(
+            "manual linking disabled is recognized by message text alone (no code)",
+            describeDiscordLinkError({ message: "Manual linking is disabled" }).includes("aren't turned on")
+        );
+        test(
+            "provider not configured is recognized and phrased differently from manual linking disabled",
+            describeDiscordLinkError({ message: "Unsupported provider: provider is not enabled" }).includes("isn't set up")
+        );
+        test(
+            "an unrecognized error never leaks raw Supabase text to the user",
+            (() => {
+                const raw = "duplicate key value violates unique constraint \"social_connections_pkey\"";
+                const shown = describeDiscordLinkError({ message: raw });
+                return !shown.includes("constraint") && !shown.includes("social_connections_pkey");
+            })()
+        );
+        test(
+            "a malformed/empty error object still returns a usable string, never throws",
+            typeof describeDiscordLinkError({}) === "string" && describeDiscordLinkError({}).length > 0
+        );
+
+        // --- describeDiscordRedirectError -----------------------------------
+        test("null input returns null", describeDiscordRedirectError(null) === null);
+        test(
+            "access_denied (user cancelled) is classified as cancelled, not an error",
+            describeDiscordRedirectError({ code: "access_denied", description: "" }).type === "cancelled"
+        );
+        test(
+            "identity_already_exists is classified distinctly, with no message of its own",
+            (() => {
+                const described = describeDiscordRedirectError({ code: "identity_already_exists", description: "" });
+                return described.type === "already_exists" && described.message === null;
+            })(),
+            "the caller decides same-account vs. cross-account wording from its own reconcile result"
+        );
+        test(
+            "an unrecognized callback error falls back to the provider's own description",
+            describeDiscordRedirectError({ code: "server_error", description: "Something broke upstream" }).message
+                === "Something broke upstream"
+        );
+        test(
+            "an unrecognized callback error with no description still has a friendly fallback",
+            describeDiscordRedirectError({ code: "server_error", description: "" }).message.length > 0
+        );
+
+        // --- readDiscordOAuthRedirectError: reads AND clears the URL --------
+        setUrl("?foo=bar");
+        test("a clean URL with no error params returns null", readDiscordOAuthRedirectError() === null);
+        test("a clean URL is left untouched", window.location.search === "?foo=bar");
+
+        setUrl("?error=access_denied&error_description=User%20denied%20access");
+        {
+            const result = readDiscordOAuthRedirectError();
+            test("reads error + error_description from the query string", result?.code === "access_denied" && result?.description === "User denied access");
+            test("clears the error params from the URL after reading them", !window.location.search.includes("error"));
+        }
+
+        setUrl("#error_code=identity_already_exists&error_description=Already%20linked");
+        {
+            const result = readDiscordOAuthRedirectError();
+            test("reads error_code + error_description from a #hash fragment", result?.code === "identity_already_exists" && result?.description === "Already linked");
+            test("clears the error params from the hash after reading them", !window.location.hash.includes("error"));
+        }
+
+        setUrl("?code=abc123&state=xyz&error=server_error");
+        {
+            const result = readDiscordOAuthRedirectError();
+            test("reports the callback error alongside a pending code/state exchange", result?.code === "server_error");
+            test(
+                "a code/state param the Supabase client still needs is left untouched, not stripped",
+                window.location.search.includes("code=abc123") && window.location.search.includes("state=xyz")
+            );
+        }
+
+        setUrl("?foo=bar");
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`discordAuthErrors.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

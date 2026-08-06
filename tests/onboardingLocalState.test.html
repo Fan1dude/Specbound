@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 21 — onboarding localStorage/sessionStorage helper</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 21 — onboarding localStorage/sessionStorage helper</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        import {
+            isOnboardingFlagSet,
+            setOnboardingFlag,
+            hasSeenWelcomeThisSession,
+            markWelcomeSeenThisSession
+        } from "../js/utils/onboardingLocalState.js";
+
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        // Clean slate — this file's own namespace only, doesn't touch
+        // anything else a real page might have stored.
+        function clearNamespace(storage) {
+            for (let i = storage.length - 1; i >= 0; i--) {
+                const key = storage.key(i);
+                if (key?.startsWith("specbound:onboarding:v1")) storage.removeItem(key);
+            }
+        }
+        clearNamespace(localStorage);
+        clearNamespace(sessionStorage);
+
+        // --- Normal operation (storage available) ----------------------------
+        test("flag starts unset", isOnboardingFlagSet("test:flagA") === false);
+        setOnboardingFlag("test:flagA");
+        test("flag reads as set after setOnboardingFlag", isOnboardingFlagSet("test:flagA") === true);
+        test("a different key is unaffected", isOnboardingFlagSet("test:flagB") === false);
+        test("the underlying localStorage key is actually namespaced and versioned", localStorage.getItem("specbound:onboarding:v1:test:flagA") === "1");
+
+        test("session flag starts unset", hasSeenWelcomeThisSession() === false);
+        markWelcomeSeenThisSession();
+        test("session flag reads as set after marking", hasSeenWelcomeThisSession() === true);
+        test("the session flag is stored in sessionStorage, not localStorage", sessionStorage.getItem("specbound:onboarding:v1:welcomeShownThisSession") === "1" && localStorage.getItem("specbound:onboarding:v1:welcomeShownThisSession") === null);
+
+        clearNamespace(localStorage);
+        clearNamespace(sessionStorage);
+
+        // --- Storage fully unavailable (private browsing / disabled) --------
+        // Overrides the accessor property itself so even referencing
+        // `localStorage`/`sessionStorage` throws — matching what some
+        // browsers' private-mode/locked-down storage actually does, not
+        // just a failing .getItem/.setItem call.
+        const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(window, "localStorage")
+            || Object.getOwnPropertyDescriptor(Window.prototype, "localStorage");
+        const originalSessionStorageDescriptor = Object.getOwnPropertyDescriptor(window, "sessionStorage")
+            || Object.getOwnPropertyDescriptor(Window.prototype, "sessionStorage");
+
+        function withStorageThrowing(fn) {
+            Object.defineProperty(window, "localStorage", {
+                configurable: true,
+                get() { throw new DOMException("Storage unavailable", "SecurityError"); }
+            });
+            Object.defineProperty(window, "sessionStorage", {
+                configurable: true,
+                get() { throw new DOMException("Storage unavailable", "SecurityError"); }
+            });
+
+            try {
+                return fn();
+            } finally {
+                Object.defineProperty(window, "localStorage", originalLocalStorageDescriptor);
+                Object.defineProperty(window, "sessionStorage", originalSessionStorageDescriptor);
+            }
+        }
+
+        let threwOnGet = false;
+        let threwOnSet = false;
+        let threwOnSessionGet = false;
+        let threwOnSessionSet = false;
+        let getResult, sessionGetResult;
+
+        withStorageThrowing(() => {
+            try { getResult = isOnboardingFlagSet("test:flagC"); } catch { threwOnGet = true; }
+            try { setOnboardingFlag("test:flagC"); } catch { threwOnSet = true; }
+            try { sessionGetResult = hasSeenWelcomeThisSession(); } catch { threwOnSessionGet = true; }
+            try { markWelcomeSeenThisSession(); } catch { threwOnSessionSet = true; }
+        });
+
+        test("localStorage unavailable: isOnboardingFlagSet never throws", threwOnGet === false);
+        test("localStorage unavailable: isOnboardingFlagSet fails open (reports not-set)", getResult === false);
+        test("localStorage unavailable: setOnboardingFlag never throws", threwOnSet === false);
+        test("sessionStorage unavailable: hasSeenWelcomeThisSession never throws", threwOnSessionGet === false);
+        test("sessionStorage unavailable: hasSeenWelcomeThisSession fails open (reports not-seen)", sessionGetResult === false);
+        test("sessionStorage unavailable: markWelcomeSeenThisSession never throws", threwOnSessionSet === false);
+
+        // --- Storage available but setItem/getItem individually throw
+        // (quota exceeded) ----------------------------------------------------
+        const originalSetItem = Storage.prototype.setItem;
+        const originalGetItem = Storage.prototype.getItem;
+        Storage.prototype.setItem = () => { throw new DOMException("Quota exceeded", "QuotaExceededError"); };
+        Storage.prototype.getItem = () => { throw new DOMException("Quota exceeded", "QuotaExceededError"); };
+
+        let quotaThrew = false;
+        let quotaResult;
+        try {
+            setOnboardingFlag("test:flagD");
+            quotaResult = isOnboardingFlagSet("test:flagD");
+        } catch {
+            quotaThrew = true;
+        }
+
+        Storage.prototype.setItem = originalSetItem;
+        Storage.prototype.getItem = originalGetItem;
+
+        test("quota exceeded: never throws all the way out to the caller", quotaThrew === false);
+        test("quota exceeded: fails open (reports not-set)", quotaResult === false);
+
+        clearNamespace(localStorage);
+        clearNamespace(sessionStorage);
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`onboardingLocalState.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

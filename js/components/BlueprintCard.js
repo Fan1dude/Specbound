@@ -1,6 +1,7 @@
 import { escapeHtml, escapeAttribute } from "../utils/escapeHtml.js";
 import { formatCategory } from "../utils/formatCategory.js";
 import { icon } from "../utils/icons.js";
+import { getSpecDisplayName, isSpecEntryFilled } from "../utils/specifications.js";
 
 export function BlueprintCard(build, pathPrefix = "", options = {}) {
     const { variant = "default" } = options;
@@ -44,6 +45,18 @@ export function BlueprintCard(build, pathPrefix = "", options = {}) {
     const imageUrl = build.image_url || fallbackImage;
     const specificationItems = getSpecificationItems(build.category, specs);
 
+    // V2 hardware line — plain inline text, not a bordered grid (see
+    // css/components/blueprint-card.css's file header for the full
+    // rationale). Built as one string with inline label spans rather
+    // than a flex/grid layout of separate elements, so the whole line
+    // can truncate with a single text-overflow: ellipsis on its parent
+    // instead of needing wrapping/overflow logic of its own.
+    const hardwareLine = specificationItems.length
+        ? specificationItems
+            .map(item => `<span class="blueprint-card-hw-label">${escapeHtml(item.label)}</span> ${escapeHtml(item.value)}`)
+            .join(`<span class="blueprint-card-hw-sep">&middot;</span>`)
+        : null;
+
     return `
         <article class="blueprint-card card">
             <a
@@ -73,7 +86,7 @@ export function BlueprintCard(build, pathPrefix = "", options = {}) {
                     </span>
                 </div>
 
-                <h3>
+                <h3 class="blueprint-card-title">
                     <a href="${buildUrl}">
                         ${escapeHtml(build.title || "Untitled Blueprint")}
                     </a>
@@ -93,20 +106,13 @@ export function BlueprintCard(build, pathPrefix = "", options = {}) {
                 </p>
 
                 ${
-                    specificationItems.length
+                    hardwareLine
                         ? `
-                            <div class="blueprint-card-specs">
-                                ${specificationItems
-                                    .map(
-                                        item => `
-                                            <div class="blueprint-card-spec">
-                                                <span>${escapeHtml(item.label)}</span>
-                                                <strong>${escapeHtml(item.value)}</strong>
-                                            </div>
-                                        `
-                                    )
-                                    .join("")}
-                            </div>
+                            <p class="blueprint-card-hardware" title="${escapeAttribute(
+                                specificationItems.map(item => `${item.label} ${item.value}`).join(" · ")
+                            )}">
+                                ${hardwareLine}
+                            </p>
                         `
                         : `
                             <p class="blueprint-card-summary">
@@ -167,6 +173,12 @@ export function BlueprintCard(build, pathPrefix = "", options = {}) {
 }
 
 function getSpecificationItems(category, specs) {
+    // Every specs.X read stays a raw value here — display resolution
+    // happens once, below, via getSpecDisplayName(), since a value may be
+    // either the old plain-string shape or the new {componentId, name}
+    // shape (see js/utils/specifications.js). specs.filament here matched
+    // js/config/technologies/printing.js's field key was "material", so
+    // this line never displayed anything — now reads the real key.
     const categoryFields = {
         pc_build: [
             ["CPU", specs.cpu],
@@ -184,13 +196,17 @@ function getSpecificationItems(category, specs) {
             ["Display", specs.display]
         ],
         robotics: [
-            ["Controller", specs.controller || specs.board],
+            // specs.controller may be a structured {componentId, name}
+            // object even when "empty" — always truthy, so a plain ||
+            // fallback would never reach specs.board. isSpecEntryFilled
+            // checks the actual display name instead.
+            ["Controller", isSpecEntryFilled(specs.controller) ? specs.controller : specs.board],
             ["Motor", specs.motor],
             ["Power", specs.battery]
         ],
         "3d_printer": [
             ["Printer", specs.printer],
-            ["Material", specs.filament],
+            ["Material", specs.material],
             ["Nozzle", specs.nozzle]
         ],
         homelab: [
@@ -201,11 +217,11 @@ function getSpecificationItems(category, specs) {
     };
 
     return (categoryFields[category] || Object.entries(specs))
-        .filter(([, value]) => value)
+        .filter(([, value]) => isSpecEntryFilled(value))
         .slice(0, 3)
         .map(([label, value]) => ({
             label,
-            value: String(value)
+            value: getSpecDisplayName(value)
         }));
 }
 

@@ -13,7 +13,7 @@
 -- application code remembering to set it. Attached to project_drafts here;
 -- reusable by any future table with the same column.
 --
--- Rollback: see 0001_project_drafts_and_media_rollback.sql in this folder.
+-- Rollback: see 0001_project_drafts_and_media_rollback.sql in supabase/rollbacks/.
 
 begin;
 

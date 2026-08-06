@@ -92,11 +92,20 @@
             }
         `;
 
+        // These three have no imports of their own, so the real files are
+        // used as-is.
+        const escapeHtmlUrl = new URL("../js/utils/escapeHtml.js", location.href).href;
+        const avatarInitialUrl = new URL("../js/utils/avatarInitial.js", location.href).href;
+        const iconsUrl = new URL("../js/utils/icons.js", location.href).href;
+
         const rewrites = {
             '"../../repositories/followRepository.js"': blobUrl(followRepoSrc),
             '"../../repositories/profileRepository.js"': blobUrl(profileRepoSrc),
             '"../../repositories/mediaRepository.js"': blobUrl(mediaRepoSrc),
-            '"../../core/toast.js"': blobUrl(toastSrc)
+            '"../../core/toast.js"': blobUrl(toastSrc),
+            '"../../utils/escapeHtml.js"': escapeHtmlUrl,
+            '"../../utils/avatarInitial.js"': avatarInitialUrl,
+            '"../../utils/icons.js"': iconsUrl
         };
 
         const realSrc = await (await fetch("../js/pages/followList/renderFollowList.js")).text();
@@ -231,11 +240,11 @@
         // --- Case 8: empty state, worded per type -----------------------------
         pageQueue = [[]];
         await renderFollowList("followers", "user-x", viewer);
-        test("empty followers list shows 'No followers yet.'", listEl.textContent.includes("No followers yet."));
+        test("empty followers list shows 'No followers yet'", listEl.textContent.includes("No followers yet"));
 
         pageQueue = [[]];
         await renderFollowList("following", "user-x", viewer);
-        test("empty following list shows 'Not following anyone yet.'", listEl.textContent.includes("Not following anyone yet."));
+        test("empty following list shows 'Not following anyone yet'", listEl.textContent.includes("Not following anyone yet"));
 
         // --- Case 9: load failure shows a visible error, not a blank/stuck list ---
         pageError = "network down";

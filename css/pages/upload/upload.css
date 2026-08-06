@@ -38,6 +38,25 @@
     margin: 10px 0 24px;
 }
 
+/* Fieldset/legend reset — legends don't inherit typography.css's global
+   label { font-weight: 600; margin-bottom: 8px; } rule (different
+   element), so it's restated here to match the Project Title label
+   directly above it. Replaces the old <select id="category" required>;
+   see js/components/TechnologyRadioCard.js for the card grid itself. */
+.upload-technology-fieldset {
+    border: none;
+    padding: 0;
+    margin: 0 0 18px;
+}
+
+.upload-technology-fieldset legend {
+    display: block;
+    width: 100%;
+    padding: 0;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
 .upload-form input,
 .upload-form textarea,
 .upload-form select {
@@ -78,6 +97,12 @@
 
 .technology-form-heading {
     margin-bottom: var(--space-3);
+}
+
+.specifications-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: var(--space-2);
 }
 
 .technology-form-heading > p:last-child {

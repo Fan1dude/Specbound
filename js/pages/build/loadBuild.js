@@ -18,6 +18,7 @@ import { renderComments } from "./renderComments.js";
 import { renderLike } from "./renderLike.js";
 import { renderSave } from "./renderSave.js";
 import { recordBuildView } from "../../repositories/viewRepository.js";
+import { ReportButton, wireReportButtons } from "../../components/ReportButton.js";
 
 export async function loadBuild() {
     const params = new URLSearchParams(window.location.search);
@@ -173,6 +174,12 @@ export async function loadBuild() {
         console.error("Save render error:", error);
     }
 
+    try {
+        renderReportAction(build, currentUser);
+    } catch (error) {
+        console.error("Report action render error:", error);
+    }
+
     // Not awaited — the page has already rendered with the
     // pre-increment count, and recording a view isn't something the
     // rest of the page should wait on. As soon as the RPC resolves,
@@ -201,6 +208,18 @@ export async function loadBuild() {
             message: error.message,
             error
         }));
+}
+
+// Milestone 22 §8.3 — omitted entirely for a signed-out visitor or the
+// build's own owner (reporting your own project isn't a real case, same
+// "not against yourself" posture as renderComments.js's own canReport
+// check).
+function renderReportAction(build, currentUser) {
+    const container = document.getElementById("buildReportAction");
+    if (!container || !currentUser || currentUser.id === build.user_id) return;
+
+    container.innerHTML = ReportButton({ targetType: "build", targetId: build.id });
+    wireReportButtons(container);
 }
 
 async function retryTimeline(build) {

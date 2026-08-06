@@ -40,7 +40,7 @@
 -- Touches: none (new table only). Adds comments, create_comment(),
 -- delete_comment().
 --
--- Rollback: see 0007_comments_rollback.sql in this folder.
+-- Rollback: see 0007_comments_rollback.sql in supabase/rollbacks/.
 
 begin;
 

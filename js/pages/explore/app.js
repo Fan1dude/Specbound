@@ -8,6 +8,7 @@ import {
     getTechnologyFilters
 } from "../../config/technologies/index.js";
 import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
+import { getSpecDisplayName, isSpecEntryFilled } from "../../utils/specifications.js";
 
 import {
     fuzzyMatches,
@@ -39,6 +40,23 @@ let allBuilds = [];
 let activeCategory = "all";
 let activeLifecycle = "all";
 let activeTechnologyFilterValues = {};
+
+// Mirrors search/app.js's ?q= pattern — the only way in today (a category
+// page's "Explore {Category}" CTA, see js/pages/categories/renderCategoryPage.js)
+// is a link, not a form, so this is read-only on load rather than a full
+// two-way sync: clicking pills afterward doesn't rewrite the URL, the same
+// way it didn't before this param existed.
+const categoryParam = new URLSearchParams(window.location.search).get("category");
+
+if (categoryParam) {
+    const matchingButton = Array.from(categoryButtons)
+        .find(button => button.dataset.category === categoryParam);
+
+    if (matchingButton) {
+        activeCategory = categoryParam;
+        setActiveButton(categoryButtons, matchingButton);
+    }
+}
 
 async function initExplore() {
     try {
@@ -221,7 +239,7 @@ function matchesTechnologyFilters(build) {
             }
 
             return fuzzyMatches(
-                specs[key] || "",
+                getSpecDisplayName(specs[key]),
                 filterValue
             );
         });
@@ -455,9 +473,9 @@ function getBuildSearchScore(build, query) {
         getRelevanceScore(build.category, query) * 0.75;
 
     const specificationScores = Object.values(specs)
-        .filter(Boolean)
+        .filter(isSpecEntryFilled)
         .map(value =>
-            getRelevanceScore(value, query) * 1.6
+            getRelevanceScore(getSpecDisplayName(value), query) * 1.6
         );
 
     return Math.max(
@@ -481,7 +499,7 @@ function collectSearchChoices() {
         );
 
         Object.values(build.specifications || {})
-            .forEach(value => values.push(value));
+            .forEach(value => values.push(getSpecDisplayName(value)));
     });
 
     return values

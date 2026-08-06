@@ -52,7 +52,7 @@
 -- Touches: none. Adds get_activity_feed() only — no new table, no new
 -- columns, no new RLS policy.
 --
--- Rollback: see 0013_activity_feed_rollback.sql in this folder.
+-- Rollback: see 0013_activity_feed_rollback.sql in supabase/rollbacks/.
 
 begin;
 

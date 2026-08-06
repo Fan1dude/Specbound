@@ -80,7 +80,7 @@
 -- Touches: storage.objects (four policies dropped, two added). No table,
 -- column, or function changes.
 --
--- Rollback: see 0017_storage_rls_hardening_rollback.sql in this folder.
+-- Rollback: see 0017_storage_rls_hardening_rollback.sql in supabase/rollbacks/.
 -- Restores all four original policies exactly (same name, same
 -- role/qual/with_check as the live pg_policies dump they were removed
 -- from) and drops the two new avatar policies — reintroducing the

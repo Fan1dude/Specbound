@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 22 — FeedbackModal</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 22 — FeedbackModal</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function waitFor(predicate, timeoutMs = 2000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                const check = () => {
+                    if (predicate()) return resolve();
+                    if (Date.now() - start > timeoutMs) return reject(new Error("timed out: " + predicate.toString()));
+                    setTimeout(check, 10);
+                };
+                check();
+            });
+        }
+
+        function findDialog() {
+            return document.querySelector(".modal");
+        }
+
+        async function freshFeedbackModal({ submitThrows = false } = {}) {
+            const calls = [];
+            const mockKey = `__mock_${Math.random().toString(36).slice(2)}`;
+            globalThis[mockKey] = { calls, submitThrows };
+
+            const repoSrc = `
+                export async function submitFeedback(category, message, pageUrl) {
+                    const m = globalThis["${mockKey}"];
+                    if (m.submitThrows) throw new Error("submit failed");
+                    m.calls.push(["submitFeedback", category, message, pageUrl]);
+                    return { id: "feedback-1" };
+                }
+            `;
+
+            const realSrc = await (await fetch("../js/components/FeedbackModal.js")).text();
+            const rewritten = realSrc
+                .replace('"../repositories/communityRepository.js"', `"${blobUrl(repoSrc)}"`)
+                .replace('"../utils/escapeHtml.js"', `"${new URL("../js/utils/escapeHtml.js", location.href).href}"`)
+                .replace('"../core/toast.js"', `"${new URL("../js/core/toast.js", location.href).href}"`);
+
+            const mod = await import(blobUrl(rewritten));
+            return { ...mod, calls };
+        }
+
+        // --- Opens with all four categories, Bug pre-selected ------------
+        {
+            const { showFeedbackModal } = await freshFeedbackModal();
+            showFeedbackModal();
+            await waitFor(() => findDialog() !== null);
+
+            const dialog = findDialog();
+            const radios = [...dialog.querySelectorAll('input[name="feedbackCategory"]')];
+
+            test("exactly the four specified categories are offered", radios.map(r => r.value).join(",") === "bug,confusing,suggestion,feature_request", radios.map(r => r.value).join(","));
+            test("Bug is pre-selected by default", radios.find(r => r.value === "bug")?.checked === true);
+            test("no XP/points/level language anywhere in the dialog", !/xp|points|level/i.test(dialog.textContent));
+
+            dialog.querySelector('[data-action="cancel"]').click();
+            await waitFor(() => findDialog() === null);
+        }
+
+        // --- Empty message is rejected -------------------------------------
+        {
+            const { showFeedbackModal, calls } = await freshFeedbackModal();
+            showFeedbackModal();
+            await waitFor(() => findDialog() !== null);
+
+            findDialog().querySelector('[data-action="submit"]').click();
+            await new Promise(r => setTimeout(r, 30));
+
+            test("submitting with an empty message does not call submitFeedback", !calls.some(c => c[0] === "submitFeedback"));
+            test("the dialog stays open when the message is empty", findDialog() !== null);
+
+            findDialog().querySelector('[data-action="cancel"]').click();
+            await waitFor(() => findDialog() === null);
+        }
+
+        // --- A real submission passes the selected category, the
+        // trimmed message, and the current page URL -------------------------
+        {
+            const { showFeedbackModal, calls } = await freshFeedbackModal();
+            showFeedbackModal();
+            await waitFor(() => findDialog() !== null);
+
+            const dialog = findDialog();
+            dialog.querySelector('input[name="feedbackCategory"][value="suggestion"]').checked = true;
+            dialog.querySelector("#feedbackMessageInput").value = "  Add dark mode toggle in settings.  ";
+            dialog.querySelector('[data-action="submit"]').click();
+
+            await waitFor(() => calls.some(c => c[0] === "submitFeedback"));
+
+            const call = calls.find(c => c[0] === "submitFeedback");
+            test("the selected category is passed through", call[1] === "suggestion");
+            test("submitFeedback receives the raw message (component doesn't need to trim — the RPC/server does)", call[2].includes("dark mode toggle"));
+            test("the current page URL is passed as context", call[3] === window.location.href);
+
+            await waitFor(() => findDialog() === null);
+            test("the dialog closes after a successful submit", findDialog() === null);
+        }
+
+        // --- Server-side failure keeps the dialog open ---------------------
+        {
+            const { showFeedbackModal } = await freshFeedbackModal({ submitThrows: true });
+            showFeedbackModal();
+            await waitFor(() => findDialog() !== null);
+
+            const dialog = findDialog();
+            dialog.querySelector("#feedbackMessageInput").value = "Something broke.";
+            const submitBtn = dialog.querySelector('[data-action="submit"]');
+            submitBtn.click();
+
+            await waitFor(() => submitBtn.disabled === false);
+            test("a failed submission re-enables Send", submitBtn.disabled === false);
+            test("a failed submission keeps the dialog open", findDialog() !== null);
+
+            dialog.querySelector('[data-action="cancel"]').click();
+            await waitFor(() => findDialog() === null);
+        }
+
+        // --- Backdrop/Escape never submit -----------------------------------
+        {
+            const { showFeedbackModal, calls } = await freshFeedbackModal();
+            showFeedbackModal();
+            await waitFor(() => findDialog() !== null);
+            findDialog().dispatchEvent(new Event("cancel", { cancelable: true }));
+
+            await waitFor(() => findDialog() === null);
+            test("Escape (cancel event) closes without submitting", !calls.some(c => c[0] === "submitFeedback"));
+        }
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`feedbackModal.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

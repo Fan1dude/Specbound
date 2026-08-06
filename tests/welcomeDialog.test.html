@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 21 — Welcome dialog and global onboarding trigger</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 21 — Welcome dialog and global onboarding trigger</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <!--
+        Real Escape keypresses and Tab-cycling within the native focus trap
+        require actual OS-level key events (Playwright's page.keyboard, not
+        an in-page synthetic dispatchEvent, which does not invoke a
+        browser's native <dialog> keyboard handling) — those are verified
+        live in the Milestone 21 browser verification pass, not here. This
+        file verifies everything that IS meaningfully testable as pure DOM
+        behavior: which profiles trigger the dialog, that every exit path
+        (Skip click, the native "cancel" event the browser is documented to
+        fire on a real Escape press, backdrop click) closes it immediately
+        regardless of network speed or failure, the session-level guard,
+        the one-time/promise guard, and focus capture/restoration.
+    -->
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function waitFor(predicate, timeoutMs = 2000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                const check = () => {
+                    if (predicate()) return resolve();
+                    if (Date.now() - start > timeoutMs) return reject(new Error("timed out: " + predicate.toString()));
+                    setTimeout(check, 10);
+                };
+                check();
+            });
+        }
+
+        function clearNamespace(storage) {
+            for (let i = storage.length - 1; i >= 0; i--) {
+                const key = storage.key(i);
+                if (key?.startsWith("specbound:onboarding:v1")) storage.removeItem(key);
+            }
+        }
+
+        function findDialog() {
+            return document.querySelector(".modal-onboarding");
+        }
+
+        // Builds a fresh onboarding.js + WelcomeDialog.js module pair per
+        // call — the promise guard in onboarding.js is deliberately
+        // once-per-module-instance (see its own comment), so simulating
+        // "a later page in the same browser session" means a fresh module
+        // import (a real navigation re-imports every module), while
+        // sessionStorage — a real browser API, not part of the module
+        // graph — persists across these calls exactly like it would across
+        // real page loads in one tab.
+        async function freshOnboardingModule({ markSaveShouldFail = false, markSaveDelayMs = 0, createDraftDelayMs = 0, neverResolveCreateDraft = false } = {}) {
+            const calls = [];
+            const mockKey = `__mock_${Math.random().toString(36).slice(2)}`;
+
+            globalThis[mockKey] = { calls, markSaveShouldFail, markSaveDelayMs, createDraftDelayMs, neverResolveCreateDraft };
+
+            const profileRepoSrc = `
+                export async function markOnboardingWelcomed(id) {
+                    const m = globalThis["${mockKey}"];
+                    if (m.markSaveDelayMs) await new Promise(r => setTimeout(r, m.markSaveDelayMs));
+                    m.calls.push(["markOnboardingWelcomed", id]);
+                    if (m.markSaveShouldFail) throw new Error("save failed");
+                }
+            `;
+            // neverResolveCreateDraft: records the call (so the test can
+            // assert what it was called with) but never resolves — used
+            // to verify the create-draft step without letting
+            // WelcomeDialog.js's subsequent real
+            // "window.location.href = ..." navigation actually fire and
+            // tear down this test page before it can report results.
+            const draftRepoSrc = `
+                export async function createDraft({ userId, title, category }) {
+                    const m = globalThis["${mockKey}"];
+                    m.calls.push(["createDraft", userId, title, category]);
+                    if (m.neverResolveCreateDraft) return new Promise(() => {});
+                    if (m.createDraftDelayMs) await new Promise(r => setTimeout(r, m.createDraftDelayMs));
+                    return { id: "draft-new-1" };
+                }
+            `;
+
+            const componentsOrigin = new URL("../js/components/", location.href).href;
+            const coreOrigin = new URL("../js/core/", location.href).href;
+
+            // Real WelcomeDialog.js source, with only its Supabase/network
+            // -touching imports mocked — everything pure (icons,
+            // TECHNOLOGIES config, TechnologyChooserButton, the shared
+            // hydration helper) stays real.
+            const realWelcomeDialogSrc = await (await fetch("../js/components/WelcomeDialog.js")).text();
+            const rewrittenWelcomeDialog = realWelcomeDialogSrc
+                .replaceAll('"../repositories/profileRepository.js"', `"${blobUrl(profileRepoSrc)}"`)
+                .replaceAll('"../repositories/draftRepository.js"', `"${blobUrl(draftRepoSrc)}"`)
+                .replaceAll('"../utils/icons.js"', `"${new URL("icons.js", new URL("../utils/", componentsOrigin)).href}"`)
+                .replaceAll('"../config/technologies/index.js"', `"${new URL("index.js", new URL("../config/technologies/", componentsOrigin)).href}"`)
+                .replaceAll('"./TechnologyChooserButton.js"', `"${new URL("TechnologyChooserButton.js", componentsOrigin).href}"`)
+                .replaceAll('"./technologyPickerShared.js"', `"${new URL("technologyPickerShared.js", componentsOrigin).href}"`);
+            const welcomeDialogBlobUrl = blobUrl(rewrittenWelcomeDialog);
+
+            // Real onboarding.js source, pointed at the rewritten
+            // WelcomeDialog.js blob above. onboardingLocalState.js is left
+            // real (pure, local-only) — its actual sessionStorage keys are
+            // asserted against directly via the cases below.
+            const realOnboardingSrc = await (await fetch("../js/core/onboarding.js")).text();
+            const rewrittenOnboarding = realOnboardingSrc
+                .replaceAll('"../components/WelcomeDialog.js"', `"${welcomeDialogBlobUrl}"`)
+                .replaceAll('"../utils/onboardingLocalState.js"', `"${new URL("onboardingLocalState.js", new URL("../utils/", coreOrigin)).href}"`);
+
+            const mod = await import(blobUrl(rewrittenOnboarding));
+            return { ...mod, calls };
+        }
+
+        clearNamespace(localStorage);
+        clearNamespace(sessionStorage);
+
+        // --- Case: existing user (onboarding_welcomed_at already set) —
+        // no dialog ------------------------------------------------------------
+        {
+            const { maybeShowWelcome } = await freshOnboardingModule();
+            await maybeShowWelcome({ id: "user-existing" }, { id: "user-existing", onboarding_welcomed_at: "2026-01-01T00:00:00Z" }, "../");
+            await new Promise(r => setTimeout(r, 30));
+
+            test("existing user (onboarding_welcomed_at set): no Welcome dialog appears", findDialog() === null);
+        }
+
+        // --- Case: signed-out shape — layout.js's own `if (user)` gate
+        // (unchanged by this milestone) means maybeShowWelcome is never even
+        // called for a signed-out visitor in the real app. Confirmed here at
+        // the function level: called with no profile, it must still no-op
+        // safely rather than assume one exists. ---------------------------------
+        {
+            const { maybeShowWelcome } = await freshOnboardingModule();
+            let threw = false;
+            try {
+                await maybeShowWelcome(null, null, "../");
+            } catch {
+                threw = true;
+            }
+            test("called with no user/profile (signed-out shape): never throws", threw === false);
+            test("called with no user/profile: still no dialog", findDialog() === null);
+        }
+
+        // --- Case: brand-new user (onboarding_welcomed_at null) — dialog
+        // appears, focus moves into it, copy matches, a visible Skip exists ---
+        const focusTarget = document.createElement("button");
+        focusTarget.textContent = "page content";
+        document.body.appendChild(focusTarget);
+        focusTarget.focus();
+
+        clearNamespace(localStorage);
+        clearNamespace(sessionStorage);
+
+        const { maybeShowWelcome: showA, calls: callsA } = await freshOnboardingModule();
+        await showA({ id: "user-new" }, { id: "user-new", onboarding_welcomed_at: null }, "../");
+        await waitFor(() => findDialog() !== null);
+
+        test("brand-new user (onboarding_welcomed_at null): Welcome dialog appears", findDialog() !== null);
+        test("on open, focus moves inside the dialog (native focus trap)", findDialog().contains(document.activeElement));
+        test("title/body copy match the approved text", findDialog().querySelector(".modal-title")?.textContent === "Welcome to Specbound");
+        test("Continue is the only labeled action on the Welcome step", findDialog().querySelectorAll(".modal-actions button").length === 1 && findDialog().querySelector('[data-action="continue"]')?.textContent.trim() === "Continue");
+        test("a visible, discoverable Skip/close control exists (not just Esc/backdrop)", findDialog().querySelector('[data-action="skip"]') !== null);
+
+        // Skip closes immediately and marks exactly once.
+        findDialog().querySelector('[data-action="skip"]').click();
+        await waitFor(() => findDialog() === null);
+        await new Promise(r => setTimeout(r, 20));
+
+        test("clicking Skip closes the dialog", findDialog() === null);
+        test("clicking Skip marks onboarding_welcomed_at exactly once", callsA.filter(c => c[0] === "markOnboardingWelcomed").length === 1, JSON.stringify(callsA));
+        test("focus returns to whatever had focus before the dialog opened", document.activeElement === focusTarget);
+
+        focusTarget.remove();
+
+        // --- Case: slow network — dialog closes immediately even though the
+        // save takes a while, and never traps the user waiting on it ---------
+        clearNamespace(localStorage);
+        clearNamespace(sessionStorage);
+
+        const { maybeShowWelcome: showB, calls: callsB } = await freshOnboardingModule({ markSaveDelayMs: 300 });
+        await showB({ id: "user-slow" }, { id: "user-slow", onboarding_welcomed_at: null }, "../");
+        await waitFor(() => findDialog() !== null);
+
+        const closeStart = performance.now();
+        findDialog().querySelector('[data-action="skip"]').click();
+        await waitFor(() => findDialog() === null);
+        const closeElapsed = performance.now() - closeStart;
+
+        test("slow network: dialog closes almost immediately, not waiting on the ~300ms save", closeElapsed < 250, `${closeElapsed}ms`);
+        test("slow network: the save is still in flight (not yet resolved) at close time", callsB.filter(c => c[0] === "markOnboardingWelcomed").length === 0, JSON.stringify(callsB));
+
+        await waitFor(() => callsB.some(c => c[0] === "markOnboardingWelcomed"), 1000);
+        test("slow network: the save does eventually complete in the background", callsB.some(c => c[0] === "markOnboardingWelcomed"));
+
+        // --- Case: failed timestamp save — dialog still closes immediately,
+        // no error surfaces to the caller, and the session guard still
+        // prevents a reopen this session even though the DB write never
+        // succeeded -------------------------------------------------------------
+        clearNamespace(localStorage);
+        clearNamespace(sessionStorage);
+
+        const { maybeShowWelcome: showC } = await freshOnboardingModule({ markSaveShouldFail: true });
+
+        const originalConsoleError = console.error;
+        let loggedError = false;
+        console.error = (...args) => { loggedError = true; originalConsoleError(...args); };
+
+        await showC({ id: "user-fail" }, { id: "user-fail", onboarding_welcomed_at: null }, "../");
+        await waitFor(() => findDialog() !== null);
+        findDialog().querySelector('[data-action="skip"]').click();
+        await waitFor(() => findDialog() === null);
+        await new Promise(r => setTimeout(r, 30));
+
+        console.error = originalConsoleError;
+
+        test("failed save: dialog still closes immediately (never blocks on the failing write)", findDialog() === null);
+        test("failed save: the failure is logged, not thrown/unhandled", loggedError === true);
+
+        // A brand-new module instance simulates "the user navigated to
+        // another page" (a real page load re-imports every module fresh)
+        // while sessionStorage persists, exactly like a real browser tab.
+        const { maybeShowWelcome: showCAgain } = await freshOnboardingModule({ markSaveShouldFail: true });
+        await showCAgain({ id: "user-fail" }, { id: "user-fail", onboarding_welcomed_at: null }, "../");
+        await new Promise(r => setTimeout(r, 30));
+
+        test("same session, later page: Welcome does NOT reopen even though the earlier save failed (onboarding_welcomed_at is still null)", findDialog() === null);
+
+        // --- One-time/promise guard: calling maybeShowWelcome twice on the
+        // SAME module instance (simulating loadNavbar() somehow running
+        // twice on one page) must not open a second dialog ---------------------
+        clearNamespace(localStorage);
+        clearNamespace(sessionStorage);
+
+        const { maybeShowWelcome: showD } = await freshOnboardingModule();
+        const profileD = { id: "user-double", onboarding_welcomed_at: null };
+
+        const p1 = showD({ id: "user-double" }, profileD, "../");
+        const p2 = showD({ id: "user-double" }, profileD, "../");
+        await Promise.all([p1, p2]);
+        await waitFor(() => findDialog() !== null);
+
+        test("calling maybeShowWelcome twice on one page opens only one dialog", document.querySelectorAll(".modal-onboarding").length === 1);
+
+        findDialog().querySelector('[data-action="skip"]').click();
+        await waitFor(() => findDialog() === null);
+
+        // --- Continue transitions to the chooser step within the SAME
+        // dialog, and marks onboarding_welcomed_at at that point (not
+        // deferred until the chooser is also exited) ---------------------------
+        clearNamespace(localStorage);
+        clearNamespace(sessionStorage);
+
+        // neverResolveCreateDraft: true — selecting a card below triggers
+        // the real WelcomeDialog.js code path through createDraft()
+        // succeeding and then `window.location.href = ...`, a REAL
+        // navigation this test page must not actually undergo (it would
+        // tear down this script before it can report results). Leaving
+        // createDraft() perpetually pending lets the "was it called with
+        // the right args" assertion run while never reaching that line.
+        const { maybeShowWelcome: showE, calls: callsE } = await freshOnboardingModule({ neverResolveCreateDraft: true });
+        await showE({ id: "user-chooser" }, { id: "user-chooser", onboarding_welcomed_at: null }, "../");
+        await waitFor(() => findDialog() !== null);
+
+        const dialogEl = findDialog();
+        dialogEl.querySelector('[data-action="continue"]').click();
+        await waitFor(() => dialogEl.querySelector(".technology-picker-grid") !== null);
+        await new Promise(r => setTimeout(r, 20));
+
+        test("Continue transitions to the chooser step within the same dialog element (not a new one)", document.querySelectorAll(".modal-onboarding").length === 1);
+        test("chooser title matches the approved copy", dialogEl.querySelector(".modal-title")?.textContent === "What are you documenting?");
+        test("Continue already marked onboarding_welcomed_at (not deferred to the chooser's own exit)", callsE.filter(c => c[0] === "markOnboardingWelcomed").length === 1, JSON.stringify(callsE));
+        test("chooser renders one card per technology", dialogEl.querySelectorAll(".technology-picker-card").length > 0);
+
+        const firstCard = dialogEl.querySelector(".technology-picker-card");
+        firstCard.click();
+        await waitFor(() => callsE.some(c => c[0] === "createDraft"));
+
+        test("selecting a technology creates a draft with an empty title (skips the title-entry step for this entry point)", callsE.find(c => c[0] === "createDraft")?.[2] === "");
+        test("selecting a technology still only marked the Welcome exit once, total", callsE.filter(c => c[0] === "markOnboardingWelcomed").length === 1, JSON.stringify(callsE));
+
+        // createDraft() was deliberately left pending (neverResolveCreateDraft)
+        // so the real "window.location.href = ..." navigation line is never
+        // reached — by design, this dialog is never closed through the
+        // app's own flow. Removed directly here purely to reset this test
+        // page's DOM for the next case; not something the real app ever
+        // needs to do, since a real navigation would tear down the whole
+        // page anyway.
+        dialogEl.remove();
+
+        // --- Cancel event (what the browser fires on a real Escape press,
+        // per the HTML <dialog> spec) is treated as a valid exit path,
+        // never trapping the user -------------------------------------------
+        clearNamespace(localStorage);
+        clearNamespace(sessionStorage);
+
+        const { maybeShowWelcome: showF, calls: callsF } = await freshOnboardingModule();
+        await showF({ id: "user-cancel" }, { id: "user-cancel", onboarding_welcomed_at: null }, "../");
+        await waitFor(() => findDialog() !== null);
+
+        findDialog().dispatchEvent(new Event("cancel", { cancelable: true }));
+        await waitFor(() => findDialog() === null);
+
+        test("a cancel event (Escape) closes the dialog, same as Skip", findDialog() === null);
+        test("a cancel event (Escape) marks the exit exactly once", callsF.filter(c => c[0] === "markOnboardingWelcomed").length === 1);
+
+        // --- Backdrop click is also a valid, never-trapping exit path -------
+        clearNamespace(localStorage);
+        clearNamespace(sessionStorage);
+
+        const { maybeShowWelcome: showG, calls: callsG } = await freshOnboardingModule();
+        await showG({ id: "user-backdrop" }, { id: "user-backdrop", onboarding_welcomed_at: null }, "../");
+        await waitFor(() => findDialog() !== null);
+
+        // event.target === dialog only happens on the ::backdrop itself,
+        // which a plain .click() on the element (not its content) reliably
+        // simulates.
+        findDialog().click();
+        await waitFor(() => findDialog() === null);
+
+        test("a backdrop click closes the dialog", findDialog() === null);
+        test("a backdrop click marks the exit exactly once", callsG.filter(c => c[0] === "markOnboardingWelcomed").length === 1);
+
+        clearNamespace(localStorage);
+        clearNamespace(sessionStorage);
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`welcomeDialog.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

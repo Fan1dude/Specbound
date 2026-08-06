@@ -61,12 +61,25 @@
 
         const mediaRepoUrl = blobUrl(mediaRepoSrc);
 
+        // formatCategory.js, avatarInitial.js, escapeHtml.js, formatDate.js,
+        // and icons.js (the remaining imports across renderBuild.js and
+        // renderTimeline.js) have no imports of their own, so the real
+        // files are used as-is rather than mocked.
+        const formatCategoryUrl = new URL("../js/utils/formatCategory.js", location.href).href;
+        const avatarInitialUrl = new URL("../js/utils/avatarInitial.js", location.href).href;
+        const escapeHtmlUrl = new URL("../js/utils/escapeHtml.js", location.href).href;
+        const formatDateUrl = new URL("../js/utils/formatDate.js", location.href).href;
+        const iconsUrl = new URL("../js/utils/icons.js", location.href).href;
+
         async function loadRewritten(path) {
             const src = await (await fetch(path)).text();
-            const rewritten = src.replace(
-                '"../../repositories/mediaRepository.js"',
-                `"${mediaRepoUrl}"`
-            );
+            const rewritten = src
+                .replaceAll('"../../repositories/mediaRepository.js"', `"${mediaRepoUrl}"`)
+                .replaceAll('"../../utils/formatCategory.js"', `"${formatCategoryUrl}"`)
+                .replaceAll('"../../utils/avatarInitial.js"', `"${avatarInitialUrl}"`)
+                .replaceAll('"../../utils/escapeHtml.js"', `"${escapeHtmlUrl}"`)
+                .replaceAll('"../../utils/formatDate.js"', `"${formatDateUrl}"`)
+                .replaceAll('"../../utils/icons.js"', `"${iconsUrl}"`);
             return import(blobUrl(rewritten));
         }
 

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 21 — Workshop profile completion checklist card</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 21 — Workshop profile completion checklist card</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <section id="profileChecklistCard" hidden></section>
+
+    <script type="module">
+        import { renderProfileChecklist } from "../js/pages/workshop/renderProfileChecklist.js";
+
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function clearNamespace(storage) {
+            for (let i = storage.length - 1; i >= 0; i--) {
+                const key = storage.key(i);
+                if (key?.startsWith("specbound:onboarding:v1")) storage.removeItem(key);
+            }
+        }
+        clearNamespace(localStorage);
+
+        const card = document.getElementById("profileChecklistCard");
+
+        // --- Incomplete profile — card renders, shows the right items -------
+        const incompleteProfile = {
+            id: "user-1",
+            username: "builder1",
+            display_name: "",
+            avatar_path: "",
+            avatar_url: "",
+            headline: "",
+            bio: "A bio, but nothing else filled in."
+        };
+
+        renderProfileChecklist(incompleteProfile);
+
+        // getAttribute() comparisons, not a literal href attribute-selector
+        // string, so this repo's static reference checker (which scans for
+        // that exact text pattern across all files, including test
+        // fixtures) doesn't mistake these JS-string assertions for a real
+        // broken link.
+        function linksTo(fragment) {
+            return [...card.querySelectorAll("a")].some(a => a.getAttribute("href") === fragment);
+        }
+
+        test("incomplete profile: card is not hidden", card.hidden === false);
+        test("incomplete profile: shows a dismiss control", card.querySelector("#profileChecklistDismiss") !== null);
+        test("incomplete profile: username reads complete (already set at signup)", card.querySelector(".profile-checklist-item.is-complete")?.textContent.includes("Username"));
+        test("incomplete profile: display name reads incomplete and links to Settings", linksTo("settings.html#displayName"));
+        test("incomplete profile: avatar reads incomplete and links to Settings", linksTo("settings.html#avatar"));
+        test("incomplete profile: headline reads incomplete and links to Settings", linksTo("settings.html#headline"));
+        test("incomplete profile: bio (filled in) does NOT link — it's already complete", !linksTo("settings.html#bio"));
+
+        // --- Nothing here is a publish gate: the card is purely
+        // informational, has no form, no disabled controls. -------------------
+        test("the checklist card contains no <button> that disables anything else on the page (informational only)", card.querySelectorAll("button:not(#profileChecklistDismiss)").length === 0);
+
+        // --- Dismiss hides the card and persists (namespaced localStorage) --
+        card.querySelector("#profileChecklistDismiss").click();
+        test("dismissing hides the card", card.hidden === true);
+        test("dismissal is stored under the namespaced, versioned key", localStorage.getItem("specbound:onboarding:v1:profileChecklistDismissed:user-1") === "1");
+
+        // Re-rendering (e.g. a later page load) respects the earlier dismissal.
+        renderProfileChecklist(incompleteProfile);
+        test("a later render for the same still-incomplete profile stays hidden (dismissal respected)", card.hidden === true);
+
+        clearNamespace(localStorage);
+
+        // --- Complete profile — card never shows, no dismiss needed ---------
+        const completeProfile = {
+            id: "user-2",
+            username: "builder2",
+            display_name: "Builder Two",
+            avatar_path: "avatars/builder2.png",
+            headline: "I build things.",
+            bio: "A complete bio."
+        };
+
+        renderProfileChecklist(completeProfile);
+        test("complete profile: card auto-hides (nothing to finish)", card.hidden === true);
+
+        // --- Every onboarding phase stays optional: a profile with EVERY
+        // field empty must still allow the rest of Workshop to function —
+        // this card never throws or blocks rendering regardless of shape ----
+        let threw = false;
+        try {
+            renderProfileChecklist({ id: "user-3" });
+        } catch {
+            threw = true;
+        }
+        test("a profile object missing every optional field entirely does not throw", threw === false);
+
+        clearNamespace(localStorage);
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`renderProfileChecklist.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

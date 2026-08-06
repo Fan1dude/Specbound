@@ -4,16 +4,20 @@ import { showToast } from "../../core/toast.js";
 import { getDraft, updateDraft } from "../../repositories/draftRepository.js";
 import { publishDraft, setBuildVisibility } from "../../repositories/publishRepository.js";
 import { getBuildById } from "../../repositories/buildRepository.js";
+import { getMyPublishedBuildCount } from "../../repositories/dashboardRepository.js";
 import { createAutosaveController } from "../../services/draftAutosave.js";
 import { renderOverviewSection } from "./renderOverviewSection.js";
 import { renderSpecificationsSection } from "./renderSpecificationsSection.js";
 import { renderResourcesSection } from "./renderResourcesSection.js";
 import { renderGallerySection } from "./renderGallerySection.js";
 import { renderReadinessChecklist } from "./renderReadinessChecklist.js";
+import { renderContextualHints } from "./renderContextualHints.js";
 import { setupEditorTabs } from "./editorTabs.js";
 import { setEditorStatus } from "./editorStatus.js";
 import { maybeShowRecoveryBanner } from "./draftRecoveryBanner.js";
 import { confirmDialog } from "../../utils/modal.js";
+import { showFirstPublishDialog } from "../../components/FirstPublishDialog.js";
+import { requireGuidelinesAcceptance } from "../../components/GuidelinesGate.js";
 
 loadNavbar("../../");
 loadFooter("../../");
@@ -195,8 +199,26 @@ async function initEditor(id) {
             return;
         }
 
+        // Milestone 22 §7 — the first of two possible first-time gates
+        // (publishing or commenting, whichever a builder does first);
+        // resolves immediately (true) for every account that's already
+        // accepted, so this is a no-op read on every publish after the
+        // first.
+        if (!(await requireGuidelinesAcceptance(user.id, "../../"))) return;
+
         isPublishing = true;
         updatePublishBtn();
+
+        // Milestone 21: must be read BEFORE publishDraft() below, never
+        // after — counting published builds once the new one already
+        // exists would always return >=1, making "was this the first
+        // publish?" permanently unanswerable that way. `null` (query
+        // failed) is kept distinct from `0` so a failure fails closed
+        // (no celebration) rather than guessing.
+        const publishedCountBeforePublish = await getMyPublishedBuildCount(user.id).catch(error => {
+            console.error("Could not check prior publish count:", error);
+            return null;
+        });
 
         try {
             // Publish reads project_drafts server-side, so anything still
@@ -209,6 +231,18 @@ async function initEditor(id) {
 
             showPublished(build);
             showToast("Project published.", "success");
+
+            // Strictly === 0, not falsy — a failed pre-count (null) must
+            // never celebrate. Two tabs publishing near-simultaneously
+            // could both read 0 and both celebrate once each; accepted as
+            // rare, low-stakes, cosmetic duplication, not a defect worth a
+            // DB lock or a persisted "celebrated" flag over.
+            if (publishedCountBeforePublish === 0) {
+                showFirstPublishDialog({
+                    buildUrl: `../build/build.html?slug=${encodeURIComponent(build.slug)}`,
+                    pathPrefix: "../../"
+                });
+            }
         } catch (error) {
             // Log the full error object, not just .message — Postgrest
             // errors carry .details/.hint/.code too, and a thrown
@@ -280,6 +314,33 @@ async function initEditor(id) {
     const specifications = renderSpecificationsSection(draft, autosave);
     const resources = renderResourcesSection(draft, autosave);
 
+    // renderReadinessChecklist() ran its own one-time initial update()
+    // before any of the three lines above — at that point fieldTitle/
+    // fieldDescription/fieldCategory were still empty (renderOverviewSection
+    // hadn't populated them from `draft` yet), so the checklist's very
+    // first render always showed everything incomplete regardless of what
+    // the loaded draft actually contains. Nothing before this line
+    // re-checks it: applyFields() (called by renderOverviewSection above)
+    // only sets DOM values, it doesn't call readiness.update() itself. In
+    // practice this was masked by Gallery's own initial media-count
+    // callback also calling readiness.update() once its async fetch
+    // resolves — but that's incidental (a different section's unrelated
+    // callback happening to also fix this one), not a real correctness
+    // guarantee, and shows a real "everything incomplete" flash on load
+    // for a fully-ready draft (or a genuinely stuck stale state, on a slow
+    // connection or if Gallery is ever refactored) until it fires. Calling
+    // it explicitly here makes the checklist correct immediately, the
+    // moment Overview/Specifications/Resources have applied the loaded
+    // draft's real values — Gallery's own call after this remains needed
+    // for hasCoverImage specifically, which nothing above can report.
+    readiness.update();
+
+    // Milestone 21: purely informational, never a publish gate — not
+    // awaited, since nothing else on the page depends on it and a slow
+    // or failed check (fails closed internally, see its own comment)
+    // must never delay the rest of the editor loading.
+    renderContextualHints(user.id);
+
     renderGallerySection(draft, count => {
         mediaCount = count;
         readiness.update();
@@ -291,11 +352,17 @@ async function initEditor(id) {
     // comment). Every section's applyFields is a no-op for keys it doesn't
     // own, so calling all three with the same full buffer is safe and
     // correctly restores whichever fields were actually pending, instead of
-    // only ever restoring Overview's three fields.
+    // only ever restoring Overview's three fields. Same reload-timing gap
+    // as above applies here too — applyFields() alone doesn't re-check
+    // readiness, so a restored buffer that happens to complete the
+    // checklist (e.g. the recovered text pushes description over the
+    // minimum) wouldn't reflect that until something else incidentally
+    // re-triggered it.
     function applyRestoredFields(fields) {
         overview.applyFields(fields);
         specifications.applyFields(fields);
         resources.applyFields(fields);
+        readiness.update();
     }
 
     maybeShowRecoveryBanner(draft, autosave, applyRestoredFields);

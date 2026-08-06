@@ -107,6 +107,22 @@
         const tabsSrc = `export function setupEditorTabs() {}`;
         const statusSrc = `export function setEditorStatus() {}`;
         const recoverySrc = `export function maybeShowRecoveryBanner() {}`;
+        // Milestone 21 additions to app.js — mocked here purely so this
+        // pre-existing test's module graph doesn't attempt a real
+        // Supabase call (dashboardRepository.js) or pull in unrelated
+        // dialog/hint components. Fixed at 1 ("not a first publish") so
+        // none of this file's existing assertions have to account for
+        // the celebration dialog — that behavior gets its own dedicated
+        // coverage in editorFirstPublishCelebration.test.html.
+        const dashboardRepoSrc = `export async function getMyPublishedBuildCount() { return 1; }`;
+        const contextualHintsSrc = `export async function renderContextualHints() {}`;
+        const firstPublishDialogSrc = `export function showFirstPublishDialog() { globalThis.__mock.calls.push(["showFirstPublishDialog"]); }`;
+        // Real confirmDialog() opens an actual <dialog> that needs a real
+        // button click to resolve — this test clicks Unpublish and waits
+        // for the resulting state change, never interacting with a
+        // confirmation dialog itself (that's not what this test is
+        // checking), so the mock always confirms.
+        const modalSrc = `export function confirmDialog() { return Promise.resolve(true); }`;
 
         const editorOrigin = new URL("../js/pages/editor/", location.href).href;
 
@@ -125,7 +141,14 @@
             '"./renderGallerySection.js"': blobUrl(gallerySrc),
             '"./editorTabs.js"': blobUrl(tabsSrc),
             '"./editorStatus.js"': blobUrl(statusSrc),
-            '"./draftRecoveryBanner.js"': blobUrl(recoverySrc)
+            '"./draftRecoveryBanner.js"': blobUrl(recoverySrc),
+            '"../../utils/modal.js"': blobUrl(modalSrc),
+            '"../../repositories/dashboardRepository.js"': blobUrl(dashboardRepoSrc),
+            '"./renderContextualHints.js"': blobUrl(contextualHintsSrc),
+            '"../../components/FirstPublishDialog.js"': blobUrl(firstPublishDialogSrc),
+            '"../../components/GuidelinesGate.js"': blobUrl(`
+                export async function requireGuidelinesAcceptance() { return true; }
+            `)
             // "./renderReadinessChecklist.js" deliberately left real — the
             // readiness-gating logic (isReady) is exactly what this test
             // needs to exercise for real.

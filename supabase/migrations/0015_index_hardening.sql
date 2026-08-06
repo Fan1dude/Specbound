@@ -36,7 +36,7 @@
 -- Touches: builds (new unique index), build_revisions (two new
 -- indexes). No column or function changes.
 --
--- Rollback: see 0015_index_hardening_rollback.sql in this folder.
+-- Rollback: see 0015_index_hardening_rollback.sql in supabase/rollbacks/.
 
 begin;
 

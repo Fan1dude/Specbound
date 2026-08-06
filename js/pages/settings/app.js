@@ -2,12 +2,26 @@ import { loadNavbar, loadFooter } from "../../core/layout.js";
 import { supabase } from "../../core/supabase.js";
 import { showToast } from "../../core/toast.js";
 import { requireAuth } from "../../core/auth.js";
-import { updateAvatarPath } from "../../repositories/profileRepository.js";
+import { updateAvatarPath, getProfileBuilds } from "../../repositories/profileRepository.js";
 import { resolveAvatarUrl } from "../../repositories/mediaRepository.js";
 import { uploadAvatar } from "../../services/imageService.js";
 import { renderErrorState } from "../../utils/listState.js";
-import { escapeAttribute } from "../../utils/escapeHtml.js";
+import { escapeAttribute, escapeHtml } from "../../utils/escapeHtml.js";
 import { avatarInitial } from "../../utils/avatarInitial.js";
+import { icon } from "../../utils/icons.js";
+import {
+    getMyDiscordConnection,
+    linkDiscord,
+    disconnectDiscord,
+    setDiscordVisibility,
+    reconcileDiscordConnection
+} from "../../repositories/discordRepository.js";
+import { confirmDialog } from "../../utils/modal.js";
+import {
+    describeDiscordLinkError,
+    readDiscordOAuthRedirectError,
+    describeDiscordRedirectError
+} from "../../utils/discordAuthErrors.js";
 
 loadNavbar("../");
 loadFooter("../");
@@ -17,6 +31,7 @@ const user = await requireAuth("login.html");
 if (user) {
     await loadSettings(user);
     initPasswordForm(user);
+    initDiscordConnection(user);
 }
 
 async function loadSettings(user) {
@@ -65,17 +80,22 @@ async function loadSettings(user) {
 
     document.getElementById("displayName").value = profile?.display_name || "";
     document.getElementById("username").value = profile?.username || "";
+    document.getElementById("headline").value = profile?.headline || "";
     document.getElementById("bio").value = profile?.bio || "";
     document.getElementById("location").value = profile?.location || "";
     document.getElementById("website").value = profile?.website || "";
     document.getElementById("github").value = profile?.github || "";
     document.getElementById("youtube").value = profile?.youtube || "";
 
+    initHeadlineCounter();
+
     const avatarPreview = document.getElementById("avatarPreview");
 
     if (avatarPreview) {
         await renderAvatarPreview(avatarPreview, profile);
     }
+
+    await loadFeaturedBuildOptions(user, profile);
 
     const avatarInput = document.getElementById("avatar");
 
@@ -111,14 +131,22 @@ async function loadSettings(user) {
     }
 
     document.getElementById("saveProfile").addEventListener("click", async () => {
+        const featuredBuildValue = document.getElementById("featuredBuild").value;
+
         const updates = {
             display_name: document.getElementById("displayName").value.trim(),
             username: document.getElementById("username").value.trim(),
+            headline: document.getElementById("headline").value.trim() || null,
             bio: document.getElementById("bio").value.trim(),
             location: document.getElementById("location").value.trim(),
             website: document.getElementById("website").value.trim(),
             github: document.getElementById("github").value.trim(),
-            youtube: document.getElementById("youtube").value.trim()
+            youtube: document.getElementById("youtube").value.trim(),
+            // "Choose automatically" is the empty option — unpins any
+            // existing selection, falling back to the documented
+            // completed -> published -> hidden chain (see
+            // js/pages/profile/resolveFeaturedBuild.js).
+            featured_build_id: featuredBuildValue || null
         };
 
         const { error: updateError } = await supabase
@@ -133,6 +161,49 @@ async function loadSettings(user) {
 
         showToast("Profile updated successfully.", "success");
     });
+}
+
+function initHeadlineCounter() {
+    const input = document.getElementById("headline");
+    const countEl = document.getElementById("headlineCount");
+
+    if (!input || !countEl) return;
+
+    const update = () => {
+        countEl.textContent = `${input.value.length}/120`;
+    };
+
+    update();
+    input.addEventListener("input", update);
+}
+
+// Featured Build picker options are restricted to this builder's own
+// published (visibility "public") projects — the picker's data source is
+// the primary guard against picking an ineligible build (spec §19 Phase
+// 5 / §20.2); the 0024 migration's ownership trigger is defense in
+// depth, not the mechanism a user ever actually encounters. A failure
+// here degrades to "Choose automatically" being the only option, not a
+// broken settings page.
+async function loadFeaturedBuildOptions(user, profile) {
+    const select = document.getElementById("featuredBuild");
+
+    if (!select) return;
+
+    let builds = [];
+
+    try {
+        builds = await getProfileBuilds(user.id);
+    } catch (error) {
+        console.error("Featured build options load error:", error);
+        return;
+    }
+
+    const options = builds
+        .map(build => `<option value="${escapeAttribute(build.id)}">${escapeHtml(build.title || "Untitled project")}</option>`)
+        .join("");
+
+    select.innerHTML = `<option value="">Choose automatically</option>${options}`;
+    select.value = profile?.featured_build_id || "";
 }
 
 async function renderAvatarPreview(container, profile) {
@@ -199,6 +270,179 @@ function initPasswordForm(user) {
         } finally {
             submitButton.disabled = false;
             submitButton.textContent = "Update Password";
+        }
+    });
+}
+
+// Milestone 22 §4. reconcileDiscordConnection() is called unconditionally
+// on every load (not just right after an OAuth redirect) — cheap, and it
+// self-heals a linked-but-unsynced or disconnected-but-stale state
+// either way (see the repository's own comment).
+async function initDiscordConnection(user) {
+    const emptyState = document.getElementById("discordConnectEmpty");
+    const activeState = document.getElementById("discordConnectActive");
+    const iconEl = document.getElementById("discordIcon");
+    const usernameEl = document.getElementById("discordUsername");
+    const visibilityToggle = document.getElementById("discordVisibilityToggle");
+    const connectBtn = document.getElementById("connectDiscordBtn");
+    const refreshBtn = document.getElementById("refreshDiscordBtn");
+    const disconnectBtn = document.getElementById("disconnectDiscordBtn");
+    const menuTrigger = document.getElementById("discordMenuTrigger");
+    const menuIcon = document.getElementById("discordMenuIcon");
+    const menuDropdown = document.getElementById("discordMenuDropdown");
+
+    if (!emptyState || !activeState) return;
+
+    if (iconEl) iconEl.innerHTML = icon("discord", 20);
+    if (menuIcon) menuIcon.innerHTML = icon("more", 16);
+
+    function closeMenu() {
+        menuDropdown?.classList.remove("show-dropdown");
+        menuTrigger?.setAttribute("aria-expanded", "false");
+    }
+
+    menuTrigger?.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const isOpen = menuDropdown.classList.toggle("show-dropdown");
+        menuTrigger.setAttribute("aria-expanded", String(isOpen));
+    });
+
+    document.addEventListener("click", (event) => {
+        if (menuTrigger?.contains(event.target) || menuDropdown?.contains(event.target)) return;
+        closeMenu();
+    });
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        if (!menuDropdown?.classList.contains("show-dropdown")) return;
+        closeMenu();
+        menuTrigger?.focus();
+    });
+
+    function render(connection) {
+        if (connection) {
+            emptyState.hidden = true;
+            activeState.hidden = false;
+            usernameEl.textContent = connection.provider_username;
+            visibilityToggle.checked = connection.is_public;
+        } else {
+            emptyState.hidden = false;
+            activeState.hidden = true;
+            closeMenu();
+        }
+    }
+
+    // Read (and clear) any OAuth error Discord's own redirect back may
+    // carry — cancellation, an identity already linked somewhere, or a
+    // provider-side callback failure — *before* reconciling, since the
+    // reconcile result is how "already linked to you" (harmless) gets
+    // told apart from "already linked to someone else" (a real conflict)
+    // below.
+    const redirectError = readDiscordOAuthRedirectError();
+
+    let connection = null;
+
+    try {
+        connection = await reconcileDiscordConnection(user.id);
+    } catch (error) {
+        console.error("Discord connection load error:", error);
+        // Fails soft: the "Connect Discord" empty state is already the
+        // page's default, so a failed check just means the connect
+        // button is offered even if a connection secretly already
+        // exists — the next successful load corrects it, never a broken
+        // page.
+    }
+
+    if (redirectError) {
+        const described = describeDiscordRedirectError(redirectError);
+
+        if (described.type === "already_exists") {
+            showToast(
+                connection
+                    ? "Discord is already connected."
+                    : "This Discord account is already linked to a different Specbound account.",
+                connection ? "info" : "error"
+            );
+        } else {
+            showToast(described.message, described.type === "cancelled" ? "info" : "error");
+        }
+    }
+
+    render(connection);
+
+    connectBtn?.addEventListener("click", async () => {
+        connectBtn.disabled = true;
+
+        try {
+            await linkDiscord(window.location.href);
+            // linkIdentity() redirects the browser away immediately on
+            // success — nothing after this line runs in practice. The
+            // disabled state and catch below only matter for the
+            // network-error-before-redirect case, and for the
+            // synchronous configuration errors (manual linking off,
+            // provider not set up) that GoTrue rejects before ever
+            // redirecting to Discord.
+        } catch (error) {
+            console.error("Discord link error:", error);
+            showToast(describeDiscordLinkError(error), "error");
+            connectBtn.disabled = false;
+        }
+    });
+
+    refreshBtn?.addEventListener("click", async () => {
+        closeMenu();
+        refreshBtn.disabled = true;
+
+        try {
+            render(await reconcileDiscordConnection(user.id));
+            showToast("Discord connection refreshed.", "success");
+        } catch (error) {
+            console.error("Discord refresh error:", error);
+            showToast("Could not refresh Discord connection.", "error");
+        } finally {
+            refreshBtn.disabled = false;
+        }
+    });
+
+    visibilityToggle?.addEventListener("change", async () => {
+        const isPublic = visibilityToggle.checked;
+        visibilityToggle.disabled = true;
+
+        try {
+            await setDiscordVisibility(user.id, isPublic);
+            showToast(isPublic ? "Discord is now shown on your public profile." : "Discord is now hidden from your public profile.", "success");
+        } catch (error) {
+            console.error("Discord visibility update error:", error);
+            showToast("Could not update visibility.", "error");
+            visibilityToggle.checked = !isPublic;
+        } finally {
+            visibilityToggle.disabled = false;
+        }
+    });
+
+    disconnectBtn?.addEventListener("click", async () => {
+        closeMenu();
+
+        const confirmed = await confirmDialog({
+            title: "Disconnect Discord?",
+            body: "Your Discord connection and any public display of it will be removed.",
+            confirmLabel: "Disconnect",
+            danger: true
+        });
+
+        if (!confirmed) return;
+
+        disconnectBtn.disabled = true;
+
+        try {
+            await disconnectDiscord();
+            render(null);
+            showToast("Discord disconnected.", "success");
+        } catch (error) {
+            console.error("Discord disconnect error:", error);
+            showToast("Could not disconnect Discord.", "error");
+        } finally {
+            disconnectBtn.disabled = false;
         }
     });
 }

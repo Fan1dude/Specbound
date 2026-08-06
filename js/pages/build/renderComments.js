@@ -8,6 +8,8 @@ import { avatarInitial } from "../../utils/avatarInitial.js";
 import { confirmDialog } from "../../utils/modal.js";
 import { commentsSkeleton } from "../../utils/skeletons.js";
 import { icon } from "../../utils/icons.js";
+import { ReportButton, wireReportButtons } from "../../components/ReportButton.js";
+import { requireGuidelinesAcceptance } from "../../components/GuidelinesGate.js";
 
 const PAGE_SIZE = 50;
 
@@ -134,6 +136,12 @@ export async function renderComments(build, currentUser) {
                 return;
             }
 
+            // Milestone 22 §7 — the second of two possible first-time
+            // gates (publishing or commenting, whichever a builder does
+            // first); a no-op read for every account that's already
+            // accepted.
+            if (!(await requireGuidelinesAcceptance(currentUser.id, "../"))) return;
+
             hint.hidden = true;
             textarea.disabled = true;
             submitBtn.disabled = true;
@@ -209,6 +217,7 @@ export async function renderComments(build, currentUser) {
         listEl.innerHTML = await renderCommentsBatch(comments);
 
         bindDeleteButtons(listEl.querySelectorAll(".comment-delete-btn"));
+        wireReportButtons(listEl);
 
         if (loadMoreBtn) loadMoreBtn.hidden = !hasMore;
     }
@@ -232,6 +241,7 @@ export async function renderComments(build, currentUser) {
         bindDeleteButtons(fragment.querySelectorAll(".comment-delete-btn"));
 
         listEl.appendChild(fragment);
+        wireReportButtons(listEl);
     }
 
     function bindDeleteButtons(buttons) {
@@ -272,6 +282,11 @@ export async function renderComments(build, currentUser) {
         const canDelete = Boolean(currentUser) &&
             (currentUser.id === comment.user_id || currentUser.id === build.user_id);
 
+        // Reporting your own comment isn't a real case — the same
+        // "not against yourself" posture as create_notification()'s own
+        // self-notification guard.
+        const canReport = Boolean(currentUser) && currentUser.id !== comment.user_id;
+
         return `
             <article class="comment-item" data-id="${escapeAttribute(comment.id)}">
                 <div class="comment-avatar">
@@ -295,20 +310,23 @@ export async function renderComments(build, currentUser) {
                     <p class="comment-body">${escapeHtml(comment.body)}</p>
                 </div>
 
-                ${
-                    canDelete
-                        ? `
-                            <button
-                                type="button"
-                                class="btn btn-ghost btn-small comment-delete-btn"
-                                data-id="${escapeAttribute(comment.id)}"
-                                aria-label="Delete this comment"
-                            >
-                                Delete
-                            </button>
-                        `
-                        : ""
-                }
+                <div class="comment-item-actions">
+                    ${canReport ? ReportButton({ targetType: "comment", targetId: comment.id }) : ""}
+                    ${
+                        canDelete
+                            ? `
+                                <button
+                                    type="button"
+                                    class="btn btn-ghost btn-small comment-delete-btn"
+                                    data-id="${escapeAttribute(comment.id)}"
+                                    aria-label="Delete this comment"
+                                >
+                                    Delete
+                                </button>
+                            `
+                            : ""
+                    }
+                </div>
             </article>
         `;
     }
