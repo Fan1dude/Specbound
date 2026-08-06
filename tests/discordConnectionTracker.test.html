@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Production stabilization — Discord connection state tracker</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Production stabilization — Discord connection state tracker</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        import { createDiscordConnectionTracker } from "../js/pages/settings/discordConnectionTracker.js";
+
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function deferred() {
+            let resolve, reject;
+            const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+            return { promise, resolve, reject };
+        }
+
+        // --- Case 1: a successful fetch that finds a connection reports
+        // "connected" and passes the row through untouched — is_public true
+        // (public) and false (private) both just pass through; the tracker
+        // itself makes no visibility decision, that's the caller's job. ----
+        {
+            const tracker = createDiscordConnectionTracker(() => Promise.resolve({ provider_username: "alice#0001", is_public: true }));
+            const result = await tracker.run();
+            test("a found connection reports status 'connected'", result?.status === "connected");
+            test("the connection payload (including is_public: true) is passed through", result?.connection?.is_public === true);
+        }
+        {
+            const tracker = createDiscordConnectionTracker(() => Promise.resolve({ provider_username: "alice#0001", is_public: false }));
+            const result = await tracker.run();
+            test("a private connection still reports status 'connected' (Settings shows connected regardless of is_public)", result?.status === "connected");
+            test("is_public: false is passed through untouched", result?.connection?.is_public === false);
+        }
+
+        // --- Case 2: a successful fetch that finds nothing reports
+        // "disconnected" — a genuinely definitive answer, not a guess. ------
+        {
+            const tracker = createDiscordConnectionTracker(() => Promise.resolve(null));
+            const result = await tracker.run();
+            test("no connection found reports status 'disconnected'", result?.status === "disconnected");
+        }
+
+        // --- Case 3: a rejected fetch reports "error", never "disconnected"
+        // — the core fix for "Settings sometimes says Not connected" being
+        // traceable to a swallowed failure. ----------------------------------
+        {
+            const tracker = createDiscordConnectionTracker(() => Promise.reject(new Error("network blip")));
+            const result = await tracker.run();
+            test("a failed fetch reports status 'error'", result?.status === "error");
+            test("a failed fetch is never reported as 'disconnected'", result?.status !== "disconnected");
+            test("the error itself is available on the result for logging", result?.error instanceof Error);
+        }
+
+        // --- Case 4: an older, slower request must never overwrite a
+        // newer one's result — the Refresh-button-while-initial-load-is-
+        // still-pending race this pass was required to guard against. ------
+        {
+            const first = deferred();
+            const second = deferred();
+            let call = 0;
+
+            const tracker = createDiscordConnectionTracker(() => {
+                call++;
+                return call === 1 ? first.promise : second.promise;
+            });
+
+            const firstRunPromise = tracker.run();
+            const secondRunPromise = tracker.run();
+
+            // Resolve the SECOND (newer) call first, then the first
+            // (older) call — simulating Refresh finishing before the
+            // slower initial load does.
+            second.resolve({ provider_username: "bob#0002", is_public: true });
+            const secondResult = await secondRunPromise;
+
+            first.resolve({ provider_username: "STALE-should-never-be-seen", is_public: true });
+            const firstResult = await firstRunPromise;
+
+            test("the newer (second) call's result is applied", secondResult?.status === "connected" && secondResult?.connection?.provider_username === "bob#0002");
+            test("the older (first) call resolves to null once superseded — callers must discard it, never render it", firstResult === null);
+        }
+
+        // --- Case 5: the reverse ordering also holds — an older call that
+        // resolves LAST still doesn't get to render over a newer call that
+        // already finished and rendered. -------------------------------------
+        {
+            const first = deferred();
+            const second = deferred();
+            let call = 0;
+
+            const tracker = createDiscordConnectionTracker(() => {
+                call++;
+                return call === 1 ? first.promise : second.promise;
+            });
+
+            const firstRunPromise = tracker.run();
+            const secondRunPromise = tracker.run();
+
+            first.reject(new Error("older call also happens to fail"));
+            const firstResult = await firstRunPromise;
+
+            second.resolve({ provider_username: "carol#0003", is_public: false });
+            const secondResult = await secondRunPromise;
+
+            test("an older call's rejection is discarded (null), not surfaced as an error state", firstResult === null);
+            test("the newer call's real result still wins", secondResult?.status === "connected" && secondResult?.connection?.provider_username === "carol#0003");
+        }
+
+        // --- Case 6: the tracker never fetches on its own — it only ever
+        // calls the underlying function when run() is explicitly invoked.
+        // This is what makes "wait for auth initialization before the
+        // lookup" possible: the real app only ever constructs the tracker's
+        // fetch function (which closes over user.id) and calls run() after
+        // requireAuth() has already resolved — the tracker itself adds no
+        // eager fetch that could race ahead of that. -----------------------
+        {
+            let fetchCalled = false;
+            createDiscordConnectionTracker(() => { fetchCalled = true; return Promise.resolve(null); });
+            await new Promise(resolve => setTimeout(resolve, 20));
+            test("constructing a tracker does not fetch anything on its own", fetchCalled === false);
+        }
+
+        // --- Case 7: a tracker remains usable for repeated calls (Refresh
+        // clicked more than once) — each run() still returns a real result
+        // when nothing supersedes it. ------------------------------------
+        {
+            const tracker = createDiscordConnectionTracker(() => Promise.resolve({ provider_username: "dave#0004", is_public: true }));
+            const r1 = await tracker.run();
+            const r2 = await tracker.run();
+            test("a tracker can be run repeatedly, each call getting a real result when uncontested", r1?.status === "connected" && r2?.status === "connected");
+        }
+
+        // --- Render + report --------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`discordConnectionTracker.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

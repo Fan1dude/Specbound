@@ -148,8 +148,21 @@
         transition: max-height var(--duration-normal) var(--ease-standard);
     }
 
+    /* Was a flat 400px — didn't account for the builder-dropdown's own
+       mobile-expanded content (dropdown.css's @media override renders it
+       inline, adding its full height to .nav-links' own) on top of the
+       existing links + notification bell + builder button. A longer
+       username, the bell's unread badge, or the dropdown being open at
+       all could push real content past 400px, silently clipping
+       whatever came last (Settings/Log Out) behind overflow: hidden —
+       present in the DOM, un-clickable, invisible. calc(100vh - 96px)
+       is generous for any realistic content height; overflow-y: auto is
+       the actual guarantee — if content is ever taller than that, it
+       becomes reachable by scrolling the menu itself instead of quietly
+       disappearing off the bottom. */
     .nav-links.show-nav-links {
-        max-height: 400px;
+        max-height: calc(100vh - 96px);
+        overflow-y: auto;
     }
 
     .nav-links > a {

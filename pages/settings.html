@@ -146,7 +146,17 @@
 
             <h2>Connected Accounts</h2>
 
-            <div class="connected-account-row" id="discordConnectEmpty">
+            <!-- Visible by default (before JS resolves anything) so a
+                 slow or in-flight lookup never looks like a confirmed
+                 "not connected" state — see js/pages/settings/app.js's
+                 initDiscordConnection(). -->
+            <div class="connected-account-row" id="discordConnectLoading">
+                <p class="text-muted">Loading connection status…</p>
+            </div>
+
+            <div class="connected-account-row" id="discordConnectError" hidden></div>
+
+            <div class="connected-account-row" id="discordConnectEmpty" hidden>
                 <p class="text-muted">Connect your Discord account to display it on your profile.</p>
                 <button type="button" class="btn btn-secondary" id="connectDiscordBtn">
                     Connect Discord
