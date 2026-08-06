@@ -21,18 +21,46 @@ export async function loadProfile() {
 
     showLoadingSkeletons();
 
+    // Every read below only ever needs userId — none of them actually
+    // depend on each other's result, so firing them one at a time (the
+    // original shape: profile, THEN builds, THEN comment count, THEN
+    // currentUser, THEN discordConnection, THEN roles, THEN revisions)
+    // paid for 6+ sequential network round-trips where one parallel
+    // batch does. getCurrentUser() is already memoized per page load
+    // (core/auth.js), so this doesn't add a second real request even
+    // though loadNavbar() also calls it concurrently.
+    const [
+        profileResult,
+        rawBuildsResult,
+        currentUserResult,
+        discordConnectionResult,
+        manualRolesResult,
+        revisionsResult
+    ] = await Promise.allSettled([
+        getBuilderPortfolioProfile(userId),
+        getProfileBuilds(userId),
+        getCurrentUser(),
+        getPublicDiscordConnection(userId),
+        getProfileRoles(userId),
+        getRecentBuilderRevisions(userId)
+    ]);
+
     // Primary: the profile itself and its published projects — this IS
-    // the page. A failure here means there's nothing real to show.
-    let profile;
+    // the page. A failure in either means there's nothing real to show.
+    if (profileResult.status === "rejected" || rawBuildsResult.status === "rejected") {
+        console.error("Profile load error:", profileResult.reason || rawBuildsResult.reason);
+        renderProfileError();
+        return;
+    }
+
+    const profile = profileResult.value;
     let builds;
 
     try {
-        profile = await getBuilderPortfolioProfile(userId);
-        const rawBuilds = await getProfileBuilds(userId);
-
         // Every card on this page is this same profile's own project —
-        // attach it once here rather than a per-build lookup.
-        builds = (await resolveBuildImageUrls(rawBuilds)).map(build => ({
+        // attach it once here rather than a per-build lookup. Genuinely
+        // sequential: needs the raw builds' storage paths resolved first.
+        builds = (await resolveBuildImageUrls(rawBuildsResult.value)).map(build => ({
             ...build,
             profiles: profile
         }));
@@ -45,7 +73,8 @@ export async function loadProfile() {
     // Secondary: pure cosmetic/supplementary data. A failure in any of
     // these shouldn't take down an otherwise-successfully-loaded profile
     // — each falls back to an empty/default value, same as the
-    // trigger-maintained counters elsewhere in this app.
+    // trigger-maintained counters elsewhere in this app. commentCount
+    // stays genuinely sequential (needs the resolved builds' ids).
     let commentCount = 0;
 
     try {
@@ -56,10 +85,10 @@ export async function loadProfile() {
 
     let currentUser = null;
 
-    try {
-        currentUser = await getCurrentUser();
-    } catch (error) {
-        console.error("Current user load error:", error);
+    if (currentUserResult.status === "fulfilled") {
+        currentUser = currentUserResult.value;
+    } else {
+        console.error("Current user load error:", currentUserResult.reason);
     }
 
     // Milestone 22 §4.8 — omitted (not an empty error state) if the
@@ -68,10 +97,10 @@ export async function loadProfile() {
     // optional profile field.
     let discordConnection = null;
 
-    try {
-        discordConnection = await getPublicDiscordConnection(userId);
-    } catch (error) {
-        console.error("Discord connection load error:", error);
+    if (discordConnectionResult.status === "fulfilled") {
+        discordConnection = discordConnectionResult.value;
+    } else {
+        console.error("Discord connection load error:", discordConnectionResult.reason);
     }
 
     // Milestone 22 §5 — the automatic role is always computable (pure
@@ -81,10 +110,10 @@ export async function loadProfile() {
     // broken page — the automatic role still renders regardless.
     const roles = [getAutomaticRole(profile, builds)];
 
-    try {
-        roles.push(...await getProfileRoles(userId));
-    } catch (error) {
-        console.error("Profile roles load error:", error);
+    if (manualRolesResult.status === "fulfilled") {
+        roles.push(...manualRolesResult.value);
+    } else {
+        console.error("Profile roles load error:", manualRolesResult.reason);
     }
 
     // The viewer's own roles — only ever used to decide whether to show
@@ -93,6 +122,8 @@ export async function loadProfile() {
     // revoke_profile_role() re-check this server-side regardless). Only
     // fetched for a signed-in viewer who isn't looking at their own
     // profile — a moderator managing their own roles isn't a real flow.
+    // Genuinely sequential: the query target (currentUser.id) isn't
+    // known until currentUser itself resolves.
     let viewerRoles = [];
 
     if (currentUser && currentUser.id !== userId) {
@@ -104,17 +135,21 @@ export async function loadProfile() {
     }
 
     // Builder Journey (spec §17.3/§17.4) — a capped recent-revisions
-    // fetch, synthesized into a curated top-10 timeline. Only worth
-    // fetching when there's at least one public build; a failure here
-    // just means the Journey section is omitted, not a broken page.
+    // fetch, synthesized into a curated top-10 timeline. The fetch
+    // itself only needs userId (already run above, in parallel with
+    // everything else); only worth *using* when there's at least one
+    // public build.
     let journeyEvents = [];
 
     if (builds.length) {
-        try {
-            const revisions = await getRecentBuilderRevisions(userId);
-            journeyEvents = buildBuilderJourney(builds, revisions);
-        } catch (error) {
-            console.error("Builder journey load error:", error);
+        if (revisionsResult.status === "fulfilled") {
+            try {
+                journeyEvents = buildBuilderJourney(builds, revisionsResult.value);
+            } catch (error) {
+                console.error("Builder journey load error:", error);
+            }
+        } else {
+            console.error("Builder journey load error:", revisionsResult.reason);
         }
     }
 

@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Production stabilization — mobile account menu</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Production stabilization — mobile account menu</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="navbar"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function waitFor(predicate, timeoutMs = 2000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                const check = () => {
+                    if (predicate()) return resolve();
+                    if (Date.now() - start > timeoutMs) return reject(new Error("timed out: " + predicate.toString()));
+                    setTimeout(check, 10);
+                };
+                check();
+            });
+        }
+
+        // --- Mocks for loadNavbar()'s dependencies -------------------------
+        // supabase/auth/notificationBell/onboarding all touch the network or
+        // a real session — mocked. escapeHtml.js and icons.js have no
+        // imports of their own, so the real files are used as-is (same
+        // convention as tests/componentAutocomplete.test.html).
+        const supabaseMockSrc = `
+            export const supabase = {
+                auth: { signOut: async () => ({ error: null }) },
+                from() {
+                    return {
+                        select() {
+                            return {
+                                eq() {
+                                    return { single: async () => ({ data: { username: "tester", onboarding_welcomed_at: "2026-01-01T00:00:00Z" } }) };
+                                }
+                            };
+                        }
+                    };
+                }
+            };
+        `;
+        const authMockSrc = `
+            export function getCurrentUser() { return Promise.resolve({ id: "u1" }); }
+            export function clearCurrentUserCache() {}
+        `;
+        const notificationBellMockSrc = `export async function initNotificationBell() {}`;
+        const onboardingMockSrc = `export function maybeShowWelcome() {}`;
+
+        const escapeHtmlUrl = new URL("../js/utils/escapeHtml.js", location.href).href;
+        const iconsUrl = new URL("../js/utils/icons.js", location.href).href;
+
+        const rewrites = {
+            '"./supabase.js"': blobUrl(supabaseMockSrc),
+            '"./auth.js"': blobUrl(authMockSrc),
+            '"./notificationBell.js"': blobUrl(notificationBellMockSrc),
+            '"./onboarding.js"': blobUrl(onboardingMockSrc),
+            '"../utils/escapeHtml.js"': escapeHtmlUrl,
+            '"../utils/icons.js"': iconsUrl
+        };
+
+        const realSrc = await (await fetch("../js/core/layout.js")).text();
+        let rewritten = realSrc;
+        for (const [from, to] of Object.entries(rewrites)) {
+            rewritten = rewritten.replaceAll(from, `"${to}"`);
+        }
+
+        const { loadNavbar } = await import(blobUrl(rewritten));
+
+        await loadNavbar("");
+        await waitFor(() => document.getElementById("navToggle") !== null);
+
+        const navToggle = document.getElementById("navToggle");
+        const navLinks = document.getElementById("navLinks");
+        const builderButton = document.getElementById("builderMenuButton");
+        const builderDropdown = document.getElementById("builderDropdown");
+
+        // --- Case 1: hamburger open/close, aria-expanded stays in sync ------
+        navToggle.click();
+        test("tapping the hamburger opens nav-links", navLinks.classList.contains("show-nav-links"));
+        test("navToggle aria-expanded syncs to true when open", navToggle.getAttribute("aria-expanded") === "true");
+
+        navToggle.click();
+        test("tapping the hamburger again closes nav-links", !navLinks.classList.contains("show-nav-links"));
+        test("navToggle aria-expanded syncs back to false", navToggle.getAttribute("aria-expanded") === "false");
+
+        // --- Case 2: the account button opens the SAME dropdown/attributes
+        // regardless of viewport — one implementation, not separate mobile
+        // vs. desktop state. ------------------------------------------------
+        builderButton.click();
+        test("tapping the account button opens the builder dropdown", builderDropdown.classList.contains("show-dropdown"));
+        test("builderButton aria-expanded syncs to true when open", builderButton.getAttribute("aria-expanded") === "true");
+
+        // --- Case 3: Profile and Settings are real, tappable links inside
+        // the open dropdown -------------------------------------------------
+        const dropdownLinks = [...builderDropdown.querySelectorAll("a")];
+        const profileLink = dropdownLinks.find(a => a.textContent.trim() === "View My Profile");
+        const settingsLink = dropdownLinks.find(a => a.textContent.trim() === "Settings");
+
+        test("a 'View My Profile' link exists inside the open dropdown", Boolean(profileLink));
+        test("a 'Settings' link exists inside the open dropdown", Boolean(settingsLink));
+        test(
+            "the Profile link is a real anchor with a real href, not disabled/inert",
+            profileLink?.tagName === "A" && Boolean(profileLink.getAttribute("href"))
+        );
+        test(
+            "the Settings link is a real anchor with a real href, not disabled/inert",
+            settingsLink?.tagName === "A" && Boolean(settingsLink.getAttribute("href"))
+        );
+
+        // --- Case 4: tapping the account button again closes it -------------
+        builderButton.click();
+        test("tapping the account button again closes the dropdown", !builderDropdown.classList.contains("show-dropdown"));
+        test("builderButton aria-expanded syncs back to false", builderButton.getAttribute("aria-expanded") === "false");
+
+        // --- Case 5: tapping outside closes the dropdown ---------------------
+        builderButton.click();
+        document.body.click();
+        test("clicking outside the dropdown closes it", !builderDropdown.classList.contains("show-dropdown"));
+
+        // --- Case 6: Escape closes the dropdown and returns focus -----------
+        builderButton.click();
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+        test("Escape closes the open dropdown", !builderDropdown.classList.contains("show-dropdown"));
+        test("Escape returns focus to the account button", document.activeElement === builderButton);
+
+        // --- Case 7: the hamburger menu (desktop-vs-mobile top-level nav)
+        // uses the identical outside-click/Escape mechanism, confirming this
+        // is one consistent open/close implementation, not two conflicting
+        // ones. ----------------------------------------------------------
+        navToggle.click();
+        test("nav-links reopens via the hamburger", navLinks.classList.contains("show-nav-links"));
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+        test("Escape also closes nav-links", !navLinks.classList.contains("show-nav-links"));
+
+        // --- Case 8: the actual bug — at a real mobile viewport, opening
+        // both menus must not clip Profile/Settings behind nav-links' own
+        // overflow. Verified in a same-origin iframe sized to a phone width,
+        // since the top-level test document runs at whatever width the test
+        // runner's browser window is (not necessarily mobile) — the
+        // @media (max-width: 700px) rules in navbar.css/dropdown.css only
+        // apply once the iframe's own viewport is actually narrow. ---------
+        const iframe = document.createElement("iframe");
+        iframe.style.width = "375px";
+        iframe.style.height = "812px";
+        iframe.style.border = "1px solid #333";
+        document.body.appendChild(iframe);
+
+        const idoc = iframe.contentDocument;
+        idoc.open();
+        idoc.write(`<!DOCTYPE html><html><head>
+            <link rel='stylesheet' href='${new URL("../css/base/tokens.css", location.href).href}'>
+            <link rel='stylesheet' href='${new URL("../css/base/reset.css", location.href).href}'>
+            <link rel='stylesheet' href='${new URL("../css/layout/navbar.css", location.href).href}'>
+            <link rel='stylesheet' href='${new URL("../css/components/dropdown.css", location.href).href}'>
+        </head><body><div id="navbar"></div></body></html>`);
+        idoc.close();
+
+        // Let stylesheets load before measuring computed styles.
+        await new Promise(resolve => {
+            const links = idoc.querySelectorAll("link[rel=stylesheet]");
+            let loaded = 0;
+            links.forEach(link => link.addEventListener("load", () => { loaded++; if (loaded === links.length) resolve(); }));
+            setTimeout(resolve, 500);
+        });
+
+        const inavbar = idoc.getElementById("navbar");
+        inavbar.innerHTML = `
+            <div class="navbar-inner">
+                <button class="nav-toggle" id="navToggle" aria-expanded="false"></button>
+                <div class="nav-links show-nav-links" id="navLinks">
+                    <a href='explore.html'>Explore</a>
+                    <a href='workshop.html'>Workshop</a>
+                    <a href='upload.html'>Publish</a>
+                    <div class="builder-menu">
+                        <button class="builder-button" id="builderMenuButton">A Reasonably Long Username</button>
+                        <div class="builder-dropdown show-dropdown" id="builderDropdown">
+                            <a href='workshop.html'>Workshop</a>
+                            <a href='profile.html'>View My Profile</a>
+                            <a href='settings.html'>Settings</a>
+                            <hr>
+                            <a href='#'>Log Out</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const inavLinks = idoc.getElementById("navLinks");
+        const inavLinksStyle = iframe.contentWindow.getComputedStyle(inavLinks);
+
+        test(
+            "at mobile width, the open nav-links max-height is no longer the old fixed 400px",
+            inavLinksStyle.maxHeight !== "400px"
+        );
+        test(
+            "at mobile width, the open nav-links max-height leaves generous room (derived from the viewport, not a small flat guess)",
+            parseFloat(inavLinksStyle.maxHeight) >= 700
+        );
+        test(
+            "at mobile width, the open nav-links has a scroll fallback (overflow-y: auto) instead of silently clipping",
+            inavLinksStyle.overflowY === "auto"
+        );
+
+        const iSettingsLink = [...idoc.querySelectorAll("a")].find(a => a.textContent.trim() === "Settings");
+        const iProfileLink = [...idoc.querySelectorAll("a")].find(a => a.textContent.trim() === "View My Profile");
+        const navLinksRect = inavLinks.getBoundingClientRect();
+        const settingsRect = iSettingsLink.getBoundingClientRect();
+        const profileRect = iProfileLink.getBoundingClientRect();
+
+        test(
+            "Settings is not visually clipped by nav-links' own bottom edge at mobile width",
+            settingsRect.bottom <= navLinksRect.bottom
+        );
+        test(
+            "View My Profile is not visually clipped by nav-links' own bottom edge at mobile width",
+            profileRect.bottom <= navLinksRect.bottom
+        );
+
+        document.body.removeChild(iframe);
+
+        // --- Render + report --------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`mobileAccountMenu.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

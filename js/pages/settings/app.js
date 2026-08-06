@@ -6,6 +6,7 @@ import { updateAvatarPath, getProfileBuilds } from "../../repositories/profileRe
 import { resolveAvatarUrl } from "../../repositories/mediaRepository.js";
 import { uploadAvatar } from "../../services/imageService.js";
 import { renderErrorState } from "../../utils/listState.js";
+import { createDiscordConnectionTracker } from "./discordConnectionTracker.js";
 import { escapeAttribute, escapeHtml } from "../../utils/escapeHtml.js";
 import { avatarInitial } from "../../utils/avatarInitial.js";
 import { icon } from "../../utils/icons.js";
@@ -29,9 +30,18 @@ loadFooter("../");
 const user = await requireAuth("login.html");
 
 if (user) {
-    await loadSettings(user);
     initPasswordForm(user);
-    initDiscordConnection(user);
+
+    // Independent of each other — profile/avatar/featured-builds and the
+    // Discord connection check don't share any data, so running them
+    // sequentially (the original shape: fully finish loadSettings, only
+    // *then* start the Discord check) just made the Discord section wait
+    // out however long the rest of the page took to load before its own
+    // fetch even began.
+    await Promise.all([
+        loadSettings(user),
+        initDiscordConnection(user)
+    ]);
 }
 
 async function loadSettings(user) {
@@ -89,13 +99,16 @@ async function loadSettings(user) {
 
     initHeadlineCounter();
 
+    // Independent of each other (avatar preview only needs profile;
+    // featured-build options only need user/profile to query builds) —
+    // running them one after another added a full extra round-trip of
+    // wait with nothing gained from the ordering.
     const avatarPreview = document.getElementById("avatarPreview");
 
-    if (avatarPreview) {
-        await renderAvatarPreview(avatarPreview, profile);
-    }
-
-    await loadFeaturedBuildOptions(user, profile);
+    await Promise.all([
+        avatarPreview ? renderAvatarPreview(avatarPreview, profile) : Promise.resolve(),
+        loadFeaturedBuildOptions(user, profile)
+    ]);
 
     const avatarInput = document.getElementById("avatar");
 
@@ -274,11 +287,23 @@ function initPasswordForm(user) {
     });
 }
 
-// Milestone 22 §4. reconcileDiscordConnection() is called unconditionally
-// on every load (not just right after an OAuth redirect) — cheap, and it
-// self-heals a linked-but-unsynced or disconnected-but-stale state
-// either way (see the repository's own comment).
+// Milestone 22 §4, hardened for production stabilization (see
+// discordConnectionTracker.js). reconcileDiscordConnection() is called
+// unconditionally on every load (not just right after an OAuth
+// redirect) — cheap, and it self-heals a linked-but-unsynced or
+// disconnected-but-stale state either way (see the repository's own
+// comment). What changed: this used to collapse "the check failed" and
+// "the check succeeded and found nothing" into the exact same rendered
+// state (the static "Connect Discord" markup, which was also the
+// pre-JS default — so a slow-but-successful load looked identically
+// disconnected for the entire time it was loading). Settings and the
+// public profile disagreeing was traceable to this: a transient failure
+// here rendered as "Not connected" even though the durable
+// social_connections row Settings itself treats as the real answer
+// hadn't changed at all.
 async function initDiscordConnection(user) {
+    const loadingState = document.getElementById("discordConnectLoading");
+    const errorState = document.getElementById("discordConnectError");
     const emptyState = document.getElementById("discordConnectEmpty");
     const activeState = document.getElementById("discordConnectActive");
     const iconEl = document.getElementById("discordIcon");
@@ -319,17 +344,78 @@ async function initDiscordConnection(user) {
         menuTrigger?.focus();
     });
 
-    function render(connection) {
-        if (connection) {
-            emptyState.hidden = true;
-            activeState.hidden = false;
-            usernameEl.textContent = connection.provider_username;
-            visibilityToggle.checked = connection.is_public;
-        } else {
-            emptyState.hidden = false;
-            activeState.hidden = true;
-            closeMenu();
+    // Four distinct, mutually exclusive states — loading and error each
+    // get their own container so neither can ever be mistaken for a
+    // confirmed "disconnected" read (see the four-state requirement this
+    // pass introduced). Only ever called with a result this tracker
+    // confirmed is still current — see loadConnection() below.
+    function renderState(status, payload) {
+        loadingState.hidden = true;
+        emptyState.hidden = true;
+        activeState.hidden = true;
+
+        if (status !== "error") {
+            // Clears out a previous attempt's error markup (including
+            // its now-stale retry button) rather than just hiding it —
+            // renderErrorState()'s own retry handler looks for a
+            // lingering ".list-state-error h3" to decide whether a
+            // retry actually succeeded, and would find one here forever
+            // otherwise, even after a real success.
+            errorState.hidden = true;
+            errorState.innerHTML = "";
         }
+
+        if (status === "loading") {
+            loadingState.hidden = false;
+            return;
+        }
+
+        if (status === "error") {
+            errorState.hidden = false;
+            renderErrorState(errorState, {
+                message: "Couldn't load connection status.",
+                onRetry: loadConnection,
+                retryFocusTarget: () =>
+                    (emptyState.hidden ? activeState : emptyState).querySelector("button, a, input")
+            });
+            return;
+        }
+
+        if (status === "connected") {
+            activeState.hidden = false;
+            usernameEl.textContent = payload.provider_username;
+            visibilityToggle.checked = payload.is_public;
+            return;
+        }
+
+        // "disconnected" — a definitive, successful lookup found no
+        // connection. The only status allowed to render this container.
+        emptyState.hidden = false;
+        closeMenu();
+    }
+
+    // Shared across the initial load and every Refresh click, so the
+    // request-id guard inside actually spans both — a Refresh started
+    // while the initial load is still in flight can't be clobbered by
+    // that older call resolving after it, and vice versa.
+    const tracker = createDiscordConnectionTracker(() => reconcileDiscordConnection(user.id));
+
+    async function loadConnection() {
+        renderState("loading");
+
+        const result = await tracker.run();
+
+        // null means a newer call through this same tracker has already
+        // taken over — this call's result is stale, discard it rather
+        // than render over whatever that newer call decided.
+        if (!result) return null;
+
+        if (result.status === "error") {
+            console.error("Discord connection load error:", result.error);
+        }
+
+        renderState(result.status, result.status === "connected" ? result.connection : undefined);
+        return result;
     }
 
     // Read (and clear) any OAuth error Discord's own redirect back may
@@ -340,35 +426,23 @@ async function initDiscordConnection(user) {
     // below.
     const redirectError = readDiscordOAuthRedirectError();
 
-    let connection = null;
-
-    try {
-        connection = await reconcileDiscordConnection(user.id);
-    } catch (error) {
-        console.error("Discord connection load error:", error);
-        // Fails soft: the "Connect Discord" empty state is already the
-        // page's default, so a failed check just means the connect
-        // button is offered even if a connection secretly already
-        // exists — the next successful load corrects it, never a broken
-        // page.
-    }
+    const initialResult = await loadConnection();
 
     if (redirectError) {
         const described = describeDiscordRedirectError(redirectError);
+        const connected = initialResult?.status === "connected";
 
         if (described.type === "already_exists") {
             showToast(
-                connection
+                connected
                     ? "Discord is already connected."
                     : "This Discord account is already linked to a different Specbound account.",
-                connection ? "info" : "error"
+                connected ? "info" : "error"
             );
         } else {
             showToast(described.message, described.type === "cancelled" ? "info" : "error");
         }
     }
-
-    render(connection);
 
     connectBtn?.addEventListener("click", async () => {
         connectBtn.disabled = true;
@@ -393,15 +467,15 @@ async function initDiscordConnection(user) {
         closeMenu();
         refreshBtn.disabled = true;
 
-        try {
-            render(await reconcileDiscordConnection(user.id));
-            showToast("Discord connection refreshed.", "success");
-        } catch (error) {
-            console.error("Discord refresh error:", error);
+        const result = await loadConnection();
+
+        if (result?.status === "error") {
             showToast("Could not refresh Discord connection.", "error");
-        } finally {
-            refreshBtn.disabled = false;
+        } else if (result) {
+            showToast("Discord connection refreshed.", "success");
         }
+
+        refreshBtn.disabled = false;
     });
 
     visibilityToggle?.addEventListener("change", async () => {
@@ -436,7 +510,7 @@ async function initDiscordConnection(user) {
 
         try {
             await disconnectDiscord();
-            render(null);
+            renderState("disconnected");
             showToast("Discord disconnected.", "success");
         } catch (error) {
             console.error("Discord disconnect error:", error);
