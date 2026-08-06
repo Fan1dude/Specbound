@@ -697,33 +697,91 @@ Every other migration still only ever moves forward from `0001`.
 - **Status**: Proposed — not yet applied. Depends on 0001-0019.
 - **File**: `migrations/0020_components_catalog.sql`
 - **Rollback**: `rollbacks/0020_components_catalog_rollback.sql`
+- **REWRITTEN for production compatibility** (2026-08-05): a real `db
+  push` against production stopped safely at this exact migration —
+  production already has a populated, differently-shaped
+  `public.components` (9 rows; columns `id`, `technology_id`,
+  `component_type`, `canonical_name`, `manufacturer`, `metadata`,
+  `created_at`, `updated_at`, `canonical_key`; RLS; a public SELECT
+  policy; its own indexes/constraints; a live
+  `search_components(text,text,text,integer)` RPC with no migration file
+  anywhere in this repo), which the original unconditional `CREATE
+  TABLE` version of this file could never coexist with. The file is now
+  fully additive/idempotent (`CREATE TABLE IF NOT EXISTS` →
+  `ADD COLUMN IF NOT EXISTS` → null-guarded backfill → constraints added
+  only after backfill → `IF NOT EXISTS` indexes → `DROP IF
+  EXISTS`/`CREATE` trigger and policy) so it produces the identical
+  final schema on a fresh database and on production's legacy one, and
+  it **never drops or redefines** `component_type`, `canonical_key`, or
+  `search_components()`. `field_key`/`normalized_name`/`created_by` are
+  the new columns, backfilled from `component_type`/`canonical_name` and
+  kept in sync with them going forward by a new
+  `sync_component_legacy_fields` trigger — deliberately a plain column
+  kept in sync by trigger, not `GENERATED ALWAYS AS`, since Postgres
+  cannot convert `canonical_key`'s existing populated plain column into
+  a generated one. See the file's own header comment for the full
+  compatibility strategy and the paired rewritten rollback (which,
+  unlike its original version, never drops `public.components` either).
 - **Adds**: `catalog_moderators` (the app's first admin-role concept,
   scoped to this one subsystem) and `is_catalog_moderator(uid)` (a
   `SECURITY DEFINER` helper other tables' RLS policies reference), then
-  `components` — the canonical parts catalog, with a generated
-  `normalized_name` column (punctuation/spacing-insensitive) backing the
-  uniqueness constraint. Only a `catalog_moderators`-flagged user may
-  insert directly; ordinary users contribute via `component_submissions`
-  (0022) instead.
-- **Touches no existing table.**
+  `components` — the canonical parts catalog. Only a
+  `catalog_moderators`-flagged user may insert directly; ordinary users
+  contribute via `component_submissions` (0022) instead.
+- **Touches no existing table** — see above for what "touches" means
+  now that a legacy install path exists (adds columns/constraints to a
+  pre-existing table, never renames or drops any of its columns).
+- **Grant parity confirmed, not assumed** (read-only production audit,
+  2026-08-06): this file adds no explicit `GRANT` statements on
+  `components`/`component_aliases`/`catalog_moderators` themselves,
+  relying instead on production's own `postgres`-owned default
+  privileges (confirmed to already grant table/sequence privileges and
+  function `EXECUTE` to `anon`/`authenticated`/`service_role` in
+  `public`) applying automatically to these new objects the same way
+  they already do to every existing table. This only works because
+  every object this migration creates is created as `postgres` — no
+  migration file in this repo ever switches role/owner — matching how
+  production's existing `components`/`component_aliases` are
+  themselves `postgres`-owned. RLS remains the actual row-level access
+  control on top of this; the default privileges only establish that
+  the tables are reachable at all. The local test harness (see
+  `supabase/tests/` and `supabase/config.toml`'s
+  `auto_expose_new_tables`) is deliberately configured to reproduce
+  this confirmed behavior rather than the local CLI's newer, stricter
+  default, so it accurately exercises what production will actually do.
 - **Context**: Milestone 19 (Structured Parts Catalog). See
   `docs/milestones/MILESTONE_19_PARTS_CATALOG_ARCHITECTURE.md` for the
   full design and `docs/milestones/MILESTONE_19_SQL_SECURITY_AUDIT.md`
   for a follow-up audit pass (non-empty checks, explicit execute grants)
-  applied to this file before it was considered ready.
+  applied to this file before it was considered ready. Automated
+  fresh-install and legacy-upgrade tests for this file (through 0032)
+  live in `supabase/tests/migration_0020_0032_fresh_install.test.sql`
+  and `supabase/tests/migration_0020_0032_legacy_upgrade.test.sql`.
 
 ## 0021_component_aliases
 
 - **Status**: Proposed — not yet applied. Depends on 0020.
 - **File**: `migrations/0021_component_aliases.sql`
 - **Rollback**: `rollbacks/0021_component_aliases_rollback.sql`
+- **REWRITTEN for production compatibility**, same pass and same reason
+  as 0020: production already has a populated `public.component_aliases`
+  (6 rows; columns `id`, `component_id`, `alias`, `created_at`,
+  `alias_key`). Rewritten the same way — additive/idempotent, never
+  drops or redefines `alias`/`alias_key`, backfills the new
+  `technology_id`/`field_key`/`normalized_alias` columns from the
+  parent `components` row before adding constraints, and keeps
+  `alias_key` in sync with `normalized_alias` going forward via
+  `set_component_alias_technology_and_field` (extended, not replaced).
+  Paired rollback rewritten the same way (never drops
+  `public.component_aliases`).
 - **Adds**: `component_aliases` — shorthand/misspelling mappings onto an
   existing `components` row (e.g. "4080" → "NVIDIA GeForce RTX 4080"),
   moderator-curated, no client-facing write path. `technology_id`/
   `field_key` are denormalized onto this table by a trigger, purely so a
   unique index can enforce "one alias string resolves to exactly one
   component per technology/field slot."
-- **Touches no existing table.**
+- **Touches no existing table** — see 0020's entry for what that means
+  on the legacy-upgrade path.
 - **Context**: Milestone 19. Ships ahead of `0022` even though aliases
   are conceptually a moderation *output* — `0022`'s approval RPC needs
   this table to already exist. See
@@ -736,6 +794,16 @@ Every other migration still only ever moves forward from `0001`.
 - **Status**: Proposed — not yet applied. Depends on 0020, 0021.
 - **File**: `migrations/0022_component_submissions.sql`
 - **Rollback**: `rollbacks/0022_component_submissions_rollback.sql`
+- **Reviewed (not changed) for production compatibility**, same pass as
+  0020/0021: `component_submissions` is wholly new on every install
+  path, and `approve_component_submission()`/
+  `reject_component_submission()` need no functional changes — every
+  column they read or write is preserved unchanged by the corrected
+  0020/0021, and their INSERTs into `components`/`component_aliases`
+  transparently fire the new sync triggers, so legacy compatibility
+  fields are populated consistently without this file needing to know
+  those legacy columns exist. See the added header paragraph in the file
+  itself for the full review notes.
 - **Adds**: `component_submissions` — the only path an ordinary user has
   toward ever creating a canonical catalog entry, since `0020` locks
   direct inserts to moderators. `approve_component_submission(id,

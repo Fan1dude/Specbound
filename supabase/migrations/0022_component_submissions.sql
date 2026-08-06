@@ -46,6 +46,30 @@
 --   safeguard ahead of public beta. See
 --   docs/milestones/MILESTONE_19_SQL_SECURITY_AUDIT.md for the full audit.
 --
+-- Production-compatibility review (same pass that rewrote 0020/0021):
+-- component_submissions itself is a wholly new table on every install
+-- path — nothing in production predates it, so it needed no changes at
+-- all. approve_component_submission()/reject_component_submission()
+-- were reviewed line by line against the corrected components/
+-- component_aliases schema and also need NO functional changes:
+--   - Every column both functions read or write (technology_id,
+--     field_key, canonical_name, manufacturer, created_by, component_id,
+--     alias, normalized_name, normalized_alias) still exists, unchanged
+--     in name or meaning, on the compatible schema.
+--   - The new-component INSERT (technology_id, field_key,
+--     canonical_name, manufacturer, created_by) and the alias INSERT
+--     (component_id, alias) both fire 0020's/0021's sync triggers
+--     automatically — component_type/canonical_key (components) and
+--     alias_key (component_aliases) are populated transparently on
+--     every approval, on both a fresh database and production's legacy
+--     one, without this file needing to know those legacy columns
+--     exist at all. This is what "approval must populate both legacy
+--     compatibility fields and any newer fields consistently" means in
+--     practice here: the consistency guarantee lives in one place (the
+--     triggers), not duplicated into every INSERT statement that could
+--     ever write to these tables — including a future one this file
+--     doesn't anticipate.
+--
 -- Touches: none (one new table, three new functions — the two moderation
 -- RPCs plus the anti-spam trigger function). Depends on public.components,
 -- public.catalog_moderators, public.is_catalog_moderator() (0020) and
