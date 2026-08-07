@@ -3,3 +3,26 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), microphone=(), camera=()
   Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://xpxjqyraizntbtijzoyp.supabase.co; connect-src 'self' https://xpxjqyraizntbtijzoyp.supabase.co; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+
+# Cloudflare Pages applies its own default Cache-Control (public,
+# max-age=14400, must-revalidate — a 4-hour browser cache) to static
+# assets that this file doesn't otherwise cover. That default is what
+# let an already-open Safari tab keep rendering a pre-deploy CSS/JS
+# bundle for up to four hours after a new deploy went live (confirmed
+# on a real device: a fresh Private tab got the current navbar, an
+# existing regular tab didn't). Cloudflare's own per-deploy edge-cache
+# invalidation isn't the issue here — this is the BROWSER honoring the
+# max-age it was told, independent of that. Cloudflare Pages combines
+# ALL matching rules for a request rather than picking one "most
+# specific" match; when more than one matching rule sets the SAME
+# header, their values are joined with a comma. That only matters here
+# if /* also set Cache-Control — it doesn't, so /css/* and /js/* below
+# simply add Cache-Control (nothing to comma-join), while still
+# picking up every header /* DOES set (the security headers above) via
+# the same combining behavior, since those header names aren't
+# repeated here.
+/css/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+/js/*
+  Cache-Control: public, max-age=0, must-revalidate
