@@ -35,6 +35,21 @@ export async function loadNavbar(pathPrefix = "") {
             maybeShowWelcome(user, profile, pathPrefix);
         }
 
+        // .builder-menu (the desktop-style disclosure button + dropdown)
+        // and .mobile-account-link (three plain links) render the same
+        // three destinations two different ways — CSS picks exactly one
+        // per viewport (navbar.css), never both. Desktop keeps the
+        // existing click-to-open dropdown untouched. Mobile no longer
+        // requires that second tap at all: Profile/Settings/Log Out are
+        // just three more items in the same list as Explore/Workshop/
+        // Publish, always present the moment the hamburger opens — this
+        // is also what makes .builder-menu's own real height (and
+        // whatever a real device's Safari toolbar is doing to 100vh)
+        // irrelevant to reaching these three links on mobile: they don't
+        // live inside that nested, conditionally-revealed container at
+        // all there. logoutLink is duplicated with a shared class (not a
+        // duplicate id — see the listener wiring below) so both routes
+        // sign out identically.
         authLinks = `
             <div class="builder-menu">
                 <button class="builder-button" id="builderMenuButton">
@@ -46,9 +61,13 @@ export async function loadNavbar(pathPrefix = "") {
                     <a href="${pathPrefix}pages/profile.html?user=${user.id}">View My Profile</a>
                     <a href="${pathPrefix}pages/settings.html">Settings</a>
                     <hr>
-                    <a href="#" id="logoutLink">Log Out</a>
+                    <a href="#" class="logout-link">Log Out</a>
                 </div>
             </div>
+
+            <a href="${pathPrefix}pages/profile.html?user=${user.id}" class="mobile-account-link">View My Profile</a>
+            <a href="${pathPrefix}pages/settings.html" class="mobile-account-link">Settings</a>
+            <a href="#" class="mobile-account-link logout-link">Log Out</a>
         `;
     } else {
         authLinks = `
@@ -197,16 +216,17 @@ export async function loadNavbar(pathPrefix = "") {
         });
     }
 
-    const logoutLink = document.getElementById("logoutLink");
-
-    if (logoutLink) {
-        logoutLink.addEventListener("click", async (e) => {
+    // Two Log Out links exist now (the desktop dropdown's, and the flat
+    // mobile list's) — a shared class, not a shared id (ids must be
+    // unique per document), so both get the same handler here.
+    navbar.querySelectorAll(".logout-link").forEach(link => {
+        link.addEventListener("click", async (e) => {
             e.preventDefault();
             await supabase.auth.signOut();
             clearCurrentUserCache();
             window.location.href = `${pathPrefix}index.html`;
         });
-    }
+    });
 }
 
 export function loadFooter(pathPrefix = "") {

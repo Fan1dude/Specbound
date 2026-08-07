@@ -74,6 +74,15 @@
     color: var(--text);
 }
 
+/* Desktop keeps Profile/Settings/Log Out behind the .builder-menu
+   dropdown, same as always — these three plain links are the
+   mobile-only replacement for that (see the @media override below and
+   js/core/layout.js's loadNavbar() for why both exist in the DOM at
+   once). Hidden here so nothing doubles up above 700px. */
+.nav-links > a.mobile-account-link {
+    display: none;
+}
+
 /* No active-link indication existed before this — every nav link looked
    identical regardless of which page you were on. Set via
    aria-current="page" in js/core/layout.js (compares the current
@@ -148,20 +157,29 @@
         transition: max-height var(--duration-normal) var(--ease-standard);
     }
 
-    /* Was a flat 400px — didn't account for the builder-dropdown's own
-       mobile-expanded content (dropdown.css's @media override renders it
-       inline, adding its full height to .nav-links' own) on top of the
-       existing links + notification bell + builder button. A longer
-       username, the bell's unread badge, or the dropdown being open at
-       all could push real content past 400px, silently clipping
-       whatever came last (Settings/Log Out) behind overflow: hidden —
-       present in the DOM, un-clickable, invisible. calc(100vh - 96px)
-       is generous for any realistic content height; overflow-y: auto is
-       the actual guarantee — if content is ever taller than that, it
-       becomes reachable by scrolling the menu itself instead of quietly
-       disappearing off the bottom. */
+    /* Was a flat 400px — didn't account for real content height at all.
+       calc(100vh - 96px) is generous for any realistic content height;
+       overflow-y: auto is the actual guarantee — if content is ever
+       taller than that, it becomes reachable by scrolling the menu
+       itself instead of quietly disappearing off the bottom.
+
+       The second declaration is a deliberate override-by-cascade, not a
+       duplicate: on real iOS Safari, 100vh is the browser's *maximum*
+       (toolbar-collapsed) height, not what's actually visible with the
+       toolbar showing — the normal state on page load. Since .navbar is
+       position: sticky (in-flow, not an independent overlay), content
+       past the real visible edge was reachable by neither this
+       element's own scroll (its box "fit" its content by 100vh's
+       inflated accounting) nor the page's own scroll (blocked by the
+       sticky pin) — it just rendered as blank space past the bottom of
+       the physical screen. 100dvh tracks the real, currently-visible
+       viewport as Safari's toolbar shows/hides. A browser that doesn't
+       understand dvh ignores this line outright and keeps the 100vh
+       value above it — this is why the safe unit comes second, not
+       instead of the first. */
     .nav-links.show-nav-links {
         max-height: calc(100vh - 96px);
+        max-height: calc(100dvh - 96px);
         overflow-y: auto;
     }
 
@@ -169,6 +187,18 @@
         padding: var(--space-0-5) var(--space-0);
         border-top: 1px solid var(--border);
         font-size: .95rem;
+    }
+
+    /* The desktop click-to-open account menu is replaced by three plain
+       links on mobile (js/core/layout.js's loadNavbar()) — no second
+       tap needed to reach Profile/Settings/Log Out, and nothing here
+       depends on .builder-dropdown's own height/overflow at all anymore. */
+    .builder-menu {
+        display: none;
+    }
+
+    .nav-links > a.mobile-account-link {
+        display: block;
     }
 
     /* The active-link underline (::after, positioned via bottom: -6px)
@@ -179,20 +209,12 @@
         display: none;
     }
 
-    .builder-menu {
-        width: 100%;
-        padding-top: var(--space-0);
-    }
-
-    .builder-button {
-        width: 100%;
-        min-height: 44px;
-        text-align: left;
-    }
-
-    /* The mobile override for .builder-dropdown itself lives in
-       dropdown.css, not here — dropdown.css is @import-ed after this
-       file, so its own unconditional `position: absolute` rule would
-       silently win the cascade over a same-specificity override placed
-       in this earlier-loaded file. See dropdown.css for the real rule. */
+    /* No mobile sizing rules for .builder-menu/.builder-button/
+       .builder-dropdown here (there used to be) — the whole subtree is
+       display: none on mobile now (above), so nothing inside it ever
+       renders at this breakpoint to size. dropdown.css's own mobile
+       override for .builder-dropdown is untouched and still real — it's
+       shared with Settings' Connected Accounts three-dot menu
+       (.builder-dropdown.connected-account-menu-dropdown), which isn't
+       wrapped in .builder-menu and still needs it. */
 }
