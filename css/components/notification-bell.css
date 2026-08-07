@@ -181,7 +181,28 @@
 
 /* Breakpoint kept in lockstep with navbar.css's own collapse point
    (700px as of Milestone 10) — this dropdown lives inside the same
-   collapsible .nav-links container. */
+   collapsible .nav-links container.
+
+   Closed state on desktop relies on opacity: 0 + visibility: hidden
+   (never display: none) specifically so the opacity/transform reveal
+   can transition — but a visibility: hidden element still occupies its
+   own layout box. That's invisible-but-harmless on desktop, where
+   position: absolute takes it out of the surrounding flow entirely;
+   on mobile position: static puts it back INTO that flow, so its full
+   closed-but-still-laid-out box — header, mark-all-read row, and
+   however many skeleton/notification rows happen to be in the list —
+   sat there as dead space between the notification bell and whatever
+   came after it in .nav-links, exactly matching the "large blank area"
+   report. display: none removes it from layout entirely while closed;
+   .show-dropdown (already unconditionally opacity: 1 + visibility:
+   visible from the rule above, no media query) restores display:
+   block only once actually open, so it participates in .nav-links'
+   own flow — and shrinks back to zero height the instant it's closed
+   again, the same way it always could on desktop via position:
+   absolute. No mobile open/close transition (display can't animate)
+   — an accepted tradeoff for correct layout, not a regression:
+   desktop's own animated reveal is untouched, since none of this
+   touches the non-mobile rule above. */
 @media (max-width: 700px) {
     .notification-dropdown {
         position: static;
@@ -189,5 +210,10 @@
         margin-top: var(--space-0);
         box-shadow: none;
         transform: none;
+        display: none;
+    }
+
+    .notification-dropdown.show-dropdown {
+        display: block;
     }
 }

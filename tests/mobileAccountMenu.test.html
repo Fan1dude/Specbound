@@ -149,28 +149,31 @@
         test("three .mobile-account-link elements exist in the DOM regardless of viewport", mobileLinksAtDesktopWidth.length === 3);
 
         // --- Case 4 — the actual production bug: reproduced against the
-        // REAL loadNavbar() (not static test markup), with realistic async
-        // auth/profile/notification-bell timing (none of these resolve
+        // REAL loadNavbar() AND the REAL initNotificationBell() (neither
+        // is stubbed out here — only their network-touching dependencies
+        // are mocked, with realistic async delays, none of which resolve
         // synchronously in production), rendered inside a same-origin
         // iframe sized to a real mobile-Safari viewport so navbar.css's
-        // @media (max-width: 700px) rules genuinely apply. This is a
-        // fully separate render — its own fetch of layout.js, its own
-        // mocks, its own DOM — run entirely inside the iframe's own
-        // document/window so `document.getElementById(...)` etc. inside
-        // loadNavbar() resolve against the iframe, not this outer page. ---
-        const iframe = document.createElement("iframe");
-        iframe.style.width = "390px";
-        iframe.style.height = "844px";
-        iframe.style.border = "1px solid #333";
-        document.body.appendChild(iframe);
-
+        // and notification-bell.css's @media (max-width: 700px) rules
+        // genuinely apply. Run at three different viewport heights (a
+        // short iPhone SE-class screen, the iPhone 13's 844px, and a tall
+        // iPhone 14 Pro Max-class screen) — not just one emulated size —
+        // since the bug this guards against (the closed notification
+        // dropdown's reserved layout space pushing the account links
+        // down, potentially off the bottom of a shorter screen entirely)
+        // is viewport-height-sensitive by nature. -----------------------
         const layoutUrl = new URL("../js/core/layout.js", location.href).href;
+        const notificationBellUrl = new URL("../js/core/notificationBell.js", location.href).href;
         const escapeHtmlUrl2 = new URL("../js/utils/escapeHtml.js", location.href).href;
         const iconsUrl2 = new URL("../js/utils/icons.js", location.href).href;
+        const notificationFormatUrl = new URL("../js/utils/notificationFormat.js", location.href).href;
+        const toastUrl = new URL("../js/core/toast.js", location.href).href;
+        const skeletonsUrl = new URL("../js/utils/skeletons.js", location.href).href;
         const tokensUrl = new URL("../css/base/tokens.css", location.href).href;
         const resetUrl = new URL("../css/base/reset.css", location.href).href;
         const navbarCssUrl = new URL("../css/layout/navbar.css", location.href).href;
         const dropdownCssUrl = new URL("../css/components/dropdown.css", location.href).href;
+        const notificationBellCssUrl = new URL("../css/components/notification-bell.css", location.href).href;
 
         const delayedSupabaseMockSrc = `
             export const supabase = {
@@ -200,30 +203,76 @@
             }
             export function clearCurrentUserCache() {}
         `;
-        const delayedBellMockSrc = `
-            export async function initNotificationBell(container) {
-                await new Promise(r => setTimeout(r, 60));
-                container.innerHTML = '<button aria-label="Notifications">bell</button>';
+        const delayedOnboardingMockSrc = `export function maybeShowWelcome() {}`;
+
+        // Feeds the REAL initNotificationBell() — only its network layer
+        // is mocked. Two notifications (one unread, one read) so loadList()
+        // exercises its real rendering path rather than the empty
+        // "You're all caught up." branch.
+        const delayedNotificationRepoMockSrc = `
+            export async function getUnreadNotificationCount() {
+                await new Promise(r => setTimeout(r, 50));
+                return 2;
+            }
+            export async function getRecentNotifications(limit) {
+                await new Promise(r => setTimeout(r, 90));
+                return [
+                    { id: "n1", type: "comment", created_at: "2026-01-01T00:00:00Z", read_at: null, actor: { username: "alice" }, build: { title: "Test Build", slug: "test-build" } },
+                    { id: "n2", type: "like", created_at: "2026-01-01T00:00:00Z", read_at: "2026-01-02T00:00:00Z", actor: { username: "bob" }, build: { title: "Second Build", slug: "second-build" } }
+                ];
+            }
+            export async function markNotificationRead(id) {
+                await new Promise(r => setTimeout(r, 20));
+                return true;
+            }
+            export async function markAllNotificationsRead() {
+                await new Promise(r => setTimeout(r, 20));
+                return true;
+            }
+            export async function enrichNotifications(list) {
+                return list;
             }
         `;
-        const delayedOnboardingMockSrc = `export function maybeShowWelcome() {}`;
 
         // Built as a plain string (mock sources embedded via
         // JSON.stringify, not nested template-literal backticks) so it
         // can be assigned to a real <script type="module"> element's
-        // textContent and run natively inside the iframe.
+        // textContent and run natively inside the iframe. Reads
+        // window.__testShouldLogout (set by the host page before this
+        // script is injected) to decide whether to end with the real
+        // Log Out click — only exercised once (at the 844px run) since
+        // it navigates the iframe away, ending that document's script.
         const runnerScriptSrc = `
 (async () => {
   try {
     function blobUrl(src) { return URL.createObjectURL(new Blob([src], { type: "text/javascript" })); }
     const supabaseMockSrc = ${JSON.stringify(delayedSupabaseMockSrc)};
     const authMockSrc = ${JSON.stringify(delayedAuthMockSrc)};
-    const bellMockSrc = ${JSON.stringify(delayedBellMockSrc)};
     const onboardingMockSrc = ${JSON.stringify(delayedOnboardingMockSrc)};
+    const notificationRepoMockSrc = ${JSON.stringify(delayedNotificationRepoMockSrc)};
+
+    // notificationBell.js is the REAL file — only its own
+    // network-touching import (the repository) is rewritten to a mock;
+    // its other imports are dependency-free/pass-through real files
+    // referenced by real absolute URL, so once this rewritten source is
+    // blob-ified, none of its remaining import specifiers need further
+    // relative resolution (blob: URLs have no path to resolve against).
+    const notifBellRealSrc = await (await fetch(${JSON.stringify(notificationBellUrl)})).text();
+    let rewrittenBell = notifBellRealSrc;
+    const bellRewrites = {
+        '"../repositories/notificationRepository.js"': blobUrl(notificationRepoMockSrc),
+        '"../utils/notificationFormat.js"': ${JSON.stringify(notificationFormatUrl)},
+        '"./toast.js"': ${JSON.stringify(toastUrl)},
+        '"../utils/escapeHtml.js"': ${JSON.stringify(escapeHtmlUrl2)},
+        '"../utils/skeletons.js"': ${JSON.stringify(skeletonsUrl)}
+    };
+    for (const [from, to] of Object.entries(bellRewrites)) rewrittenBell = rewrittenBell.replaceAll(from, '"' + to + '"');
+    const notifBellBlobUrl = blobUrl(rewrittenBell);
+
     const rewrites = {
         '"./supabase.js"': blobUrl(supabaseMockSrc),
         '"./auth.js"': blobUrl(authMockSrc),
-        '"./notificationBell.js"': blobUrl(bellMockSrc),
+        '"./notificationBell.js"': notifBellBlobUrl,
         '"./onboarding.js"': blobUrl(onboardingMockSrc),
         '"../utils/escapeHtml.js"': ${JSON.stringify(escapeHtmlUrl2)},
         '"../utils/icons.js"': ${JSON.stringify(iconsUrl2)}
@@ -240,36 +289,100 @@
     const navToggle = document.getElementById("navToggle");
     navToggle.click();
 
+    // initNotificationBell() is deliberately NOT awaited by loadNavbar()
+    // itself (fire-and-forget, so a slow badge fetch never delays the
+    // rest of the navbar rendering/wiring) — so the bell button DOM node
+    // exists almost immediately, but its click listener isn't attached
+    // until refreshBadge() resolves inside initNotificationBell(), one
+    // await later. Waiting only for the button element to exist is not
+    // enough; waiting for the badge's [hidden] state to settle (the mock
+    // unread count is always 2, so it always ends up shown) is a
+    // reliable proxy for "the listener is now attached", since that
+    // attachment is the very next synchronous statement after the same
+    // await refreshBadge() that sets it.
+    await new Promise(resolve => {
+        const check = () => document.getElementById("notificationBellButton") ? resolve() : setTimeout(check, 10);
+        setTimeout(resolve, 3000);
+        check();
+    });
+    await new Promise(resolve => {
+        const check = () => {
+            const b = document.getElementById("notificationBadge");
+            return b && b.hidden === false ? resolve() : setTimeout(check, 10);
+        };
+        setTimeout(resolve, 3000);
+        check();
+    });
+
     const navLinks = document.getElementById("navLinks");
     const mobileLinks = [...document.querySelectorAll(".mobile-account-link")];
     const profileLink = mobileLinks.find(a => a.textContent.trim() === "View My Profile");
     const settingsLink = mobileLinks.find(a => a.textContent.trim() === "Settings");
     const logoutLink = mobileLinks.find(a => a.textContent.trim() === "Log Out");
     const builderMenu = document.querySelector(".builder-menu");
+    const bellButton = document.getElementById("notificationBellButton");
+    const notifDropdown = document.getElementById("notificationDropdown");
+    const notifList = document.getElementById("notificationDropdownList");
 
     function box(el) {
         if (!el) return null;
         const r = el.getBoundingClientRect();
         const cs = getComputedStyle(el);
-        return { top: r.top, bottom: r.bottom, height: r.height, display: cs.display, visibility: cs.visibility };
+        return { top: r.top, bottom: r.bottom, height: r.height, display: cs.display, visibility: cs.visibility, position: cs.position };
     }
 
+    // Captured NOW, before the notification dropdown is ever opened —
+    // this is what answers "Profile, Settings, and Log Out are visible
+    // without opening notifications" directly; measuring these later
+    // (after the open/close dance below) would conflate the two claims.
     const navLinksBox = navLinks.getBoundingClientRect();
+    const notifDropdownClosedBox = box(notifDropdown);
+    const profileBox = box(profileLink);
+    const settingsBox = box(settingsLink);
+    const logoutBox = box(logoutLink);
+    const builderMenuDisplay = builderMenu ? getComputedStyle(builderMenu).display : null;
 
-    // logoutLink's real click handler (attached by the real loadNavbar()
-    // itself) calls supabase.auth.signOut() then sets
-    // window.location.href — a genuine navigation, which would tear down
-    // this very script before it could report anything if we waited
-    // (via setTimeout/microtask) past it. The mock signOut() sets
-    // window.__signOutCalled synchronously as the first thing it does,
-    // and .click() runs the listener synchronously up to its first
-    // await — so the flag is already set by the time .click() returns,
-    // one full task before the pending navigation microtask actually
-    // fires. Everything is therefore read and reported in this same
-    // synchronous turn, deliberately with no await/setTimeout in
-    // between, so the report always wins the race against the real
-    // navigation it's confirming happened.
-    logoutLink?.click();
+    // Open the notification dropdown — this is the first time it's ever
+    // been opened in this render, so it also exercises loadList()'s lazy
+    // fetch (hasLoadedList flag inside notificationBell.js).
+    bellButton.click();
+
+    await new Promise(resolve => {
+        const check = () => (notifList.querySelector(".notification-item") || notifList.querySelector(".notification-dropdown-message")) ? resolve() : setTimeout(check, 10);
+        setTimeout(resolve, 3000);
+        check();
+    });
+
+    const notifDropdownOpenBox = box(notifDropdown);
+    const notifItemsRendered = notifList.querySelectorAll(".notification-item").length;
+    const bellAriaExpandedOpen = bellButton.getAttribute("aria-expanded");
+
+    // Close it again — the other half of the layout-height claim: it
+    // must shrink back to zero, not just have started at zero.
+    bellButton.click();
+    const notifDropdownReclosedBox = box(notifDropdown);
+    const bellAriaExpandedClosed = bellButton.getAttribute("aria-expanded");
+
+    const shouldLogout = window.__testShouldLogout === true;
+    let signOutCalledFromMobileLink = null;
+
+    if (shouldLogout) {
+        // logoutLink's real click handler (attached by the real
+        // loadNavbar() itself) calls supabase.auth.signOut() then sets
+        // window.location.href — a genuine navigation, which would tear
+        // down this very script before it could report anything if we
+        // waited (via setTimeout/microtask) past it. The mock signOut()
+        // sets window.__signOutCalled synchronously as the first thing
+        // it does, and .click() runs the listener synchronously up to
+        // its first await — so the flag is already set by the time
+        // .click() returns, one full task before the pending navigation
+        // microtask actually fires. Everything from here on is therefore
+        // read and reported in this same synchronous turn, deliberately
+        // with no await/setTimeout in between, so the report always wins
+        // the race against the real navigation it's confirming happened.
+        logoutLink?.click();
+        signOutCalledFromMobileLink = window.__signOutCalled === true;
+    }
 
     window.parent.__mobileAccountTestResult = {
         mobileLinksCount: mobileLinks.length,
@@ -278,13 +391,21 @@
         logoutLinkFound: Boolean(logoutLink),
         profileHref: profileLink ? profileLink.getAttribute("href") : null,
         settingsHref: settingsLink ? settingsLink.getAttribute("href") : null,
-        profileBox: box(profileLink),
-        settingsBox: box(settingsLink),
-        builderMenuDisplay: builderMenu ? getComputedStyle(builderMenu).display : null,
+        profileBox,
+        settingsBox,
+        logoutBox,
+        builderMenuDisplay,
         navLinksBottom: navLinksBox.bottom,
         navLinksTop: navLinksBox.top,
         innerHeight: window.innerHeight,
-        signOutCalledFromMobileLink: window.__signOutCalled === true
+        notifDropdownClosedBox,
+        notifDropdownOpenBox,
+        notifDropdownReclosedBox,
+        notifItemsRendered,
+        bellAriaExpandedOpen,
+        bellAriaExpandedClosed,
+        shouldLogout,
+        signOutCalledFromMobileLink
     };
   } catch (err) {
     window.parent.__mobileAccountTestResult = { error: String(err && err.stack || err) };
@@ -292,81 +413,147 @@
 })();
         `;
 
-        const idoc = iframe.contentDocument;
-        idoc.open();
-        idoc.write(`<!DOCTYPE html><html><head>
-            <link rel='stylesheet' href='${tokensUrl}'>
-            <link rel='stylesheet' href='${resetUrl}'>
-            <link rel='stylesheet' href='${navbarCssUrl}'>
-            <link rel='stylesheet' href='${dropdownCssUrl}'>
-        </head><body><div id="navbar"></div></body></html>`);
-        idoc.close();
+        async function runMobileScenario(height, shouldLogout) {
+            const iframe = document.createElement("iframe");
+            iframe.style.width = "390px";
+            iframe.style.height = height + "px";
+            iframe.style.border = "1px solid #333";
+            document.body.appendChild(iframe);
 
-        // A real <script type="module"> element, appended after parsing —
-        // this is the one reliable way to get executable module code
-        // running with the iframe's own document/window as its globals
-        // (a script string embedded via document.write's HTML text is
-        // inert; it never runs).
-        const scriptEl = idoc.createElement("script");
-        scriptEl.type = "module";
-        scriptEl.textContent = runnerScriptSrc;
-        idoc.body.appendChild(scriptEl);
+            const idoc = iframe.contentDocument;
+            idoc.open();
+            idoc.write(`<!DOCTYPE html><html><head>
+                <link rel='stylesheet' href='${tokensUrl}'>
+                <link rel='stylesheet' href='${resetUrl}'>
+                <link rel='stylesheet' href='${navbarCssUrl}'>
+                <link rel='stylesheet' href='${dropdownCssUrl}'>
+                <link rel='stylesheet' href='${notificationBellCssUrl}'>
+            </head><body><div id="navbar"></div></body></html>`);
+            idoc.close();
 
-        await waitFor(() => window.__mobileAccountTestResult !== undefined && window.__mobileAccountTestResult !== null);
-        const r = window.__mobileAccountTestResult;
+            iframe.contentWindow.__testShouldLogout = shouldLogout;
 
-        test(
-            "the real loadNavbar() (real async timing, real DOM, not static test markup) renders exactly 3 mobile-account-link elements",
-            r.mobileLinksCount === 3,
-            JSON.stringify(r)
-        );
-        test("View My Profile is rendered by the real render path", r.profileLinkFound);
-        test("Settings is rendered by the real render path", r.settingsLinkFound);
-        test("Log Out is rendered by the real render path", r.logoutLinkFound);
-        test("the Profile mobile link has a real href, not disabled/inert", Boolean(r.profileHref));
-        test("the Settings mobile link has a real href, not disabled/inert", Boolean(r.settingsHref));
-        test(
-            "the desktop .builder-menu (button + nested dropdown) is not displayed at this mobile viewport — no second control exists to find",
-            r.builderMenuDisplay === "none"
-        );
-        test(
-            "Profile has a real rendered box (not display:none, not zero height) inside the open menu",
-            r.profileBox && r.profileBox.display !== "none" && r.profileBox.height > 0
-        );
-        test(
-            "Settings has a real rendered box (not display:none, not zero height) inside the open menu",
-            r.settingsBox && r.settingsBox.display !== "none" && r.settingsBox.height > 0
-        );
-        test(
-            "Profile is within nav-links' own scrollable bottom edge, not clipped by it",
-            r.profileBox && r.profileBox.bottom <= r.navLinksBottom
-        );
-        test(
-            "Settings is within nav-links' own scrollable bottom edge, not clipped by it",
-            r.settingsBox && r.settingsBox.bottom <= r.navLinksBottom
-        );
-        test(
-            "Profile is within the actual visible mobile viewport (not just its own container's box), so it's really reachable on screen",
-            r.profileBox && r.profileBox.bottom <= r.innerHeight
-        );
-        test(
-            "Settings is within the actual visible mobile viewport (not just its own container's box), so it's really reachable on screen",
-            r.settingsBox && r.settingsBox.bottom <= r.innerHeight
-        );
-        test(
-            "tapping the mobile Log Out link fires the same sign-out flow as the desktop one",
-            r.signOutCalledFromMobileLink === true
-        );
+            // A real <script type="module"> element, appended after
+            // parsing — this is the one reliable way to get executable
+            // module code running with the iframe's own document/window
+            // as its globals (a script string embedded via
+            // document.write's HTML text is inert; it never runs).
+            const scriptEl = idoc.createElement("script");
+            scriptEl.type = "module";
+            scriptEl.textContent = runnerScriptSrc;
+            idoc.body.appendChild(scriptEl);
 
-        document.body.removeChild(iframe);
+            await waitFor(() => window.__mobileAccountTestResult !== undefined && window.__mobileAccountTestResult !== null);
+            const result = window.__mobileAccountTestResult;
+            window.__mobileAccountTestResult = undefined;
+
+            document.body.removeChild(iframe);
+            return result;
+        }
+
+        // iPhone SE-class (short), iPhone 13-class (mid, matches the
+        // physical device used for the original bug report), iPhone 14
+        // Pro Max-class (tall) — the account links, the closed-dropdown
+        // zero-height claim, and the open/close cycle all get the same
+        // full check at each height; only the Log Out click (which ends
+        // the iframe's script via real navigation) runs once, at the mid
+        // height, to keep this scenario reusable across all three.
+        const heights = [
+            { height: 667, label: "short (iPhone SE-class, 667px)", shouldLogout: false },
+            { height: 844, label: "mid (iPhone 13-class, 844px)", shouldLogout: true },
+            { height: 926, label: "tall (iPhone 14 Pro Max-class, 926px)", shouldLogout: false }
+        ];
+
+        for (const { height, label, shouldLogout } of heights) {
+            const r = await runMobileScenario(height, shouldLogout);
+
+            test(
+                `[${label}] the real loadNavbar() (real async timing, real DOM, not static test markup) renders exactly 3 mobile-account-link elements`,
+                r.mobileLinksCount === 3,
+                JSON.stringify(r)
+            );
+            test(`[${label}] View My Profile is rendered by the real render path`, r.profileLinkFound);
+            test(`[${label}] Settings is rendered by the real render path`, r.settingsLinkFound);
+            test(`[${label}] Log Out is rendered by the real render path`, r.logoutLinkFound);
+            test(`[${label}] the Profile mobile link has a real href, not disabled/inert`, Boolean(r.profileHref));
+            test(`[${label}] the Settings mobile link has a real href, not disabled/inert`, Boolean(r.settingsHref));
+            test(
+                `[${label}] the desktop .builder-menu (button + nested dropdown) is not displayed at this mobile viewport — no second control exists to find`,
+                r.builderMenuDisplay === "none"
+            );
+            test(
+                `[${label}] a CLOSED notification dropdown has display: none — zero layout height, no reserved space`,
+                r.notifDropdownClosedBox && r.notifDropdownClosedBox.display === "none" && r.notifDropdownClosedBox.height === 0
+            );
+            test(
+                `[${label}] Profile has a real rendered box (not display:none, not zero height) inside the open menu, with the closed notification dropdown contributing no blank space above it`,
+                r.profileBox && r.profileBox.display !== "none" && r.profileBox.height > 0
+            );
+            test(
+                `[${label}] Settings has a real rendered box (not display:none, not zero height) inside the open menu`,
+                r.settingsBox && r.settingsBox.display !== "none" && r.settingsBox.height > 0
+            );
+            test(
+                `[${label}] Log Out has a real rendered box (not display:none, not zero height) inside the open menu, without needing to open notifications first`,
+                r.logoutBox && r.logoutBox.display !== "none" && r.logoutBox.height > 0
+            );
+            test(
+                `[${label}] Profile is within nav-links' own scrollable bottom edge, not clipped by it`,
+                r.profileBox && r.profileBox.bottom <= r.navLinksBottom
+            );
+            test(
+                `[${label}] Settings is within nav-links' own scrollable bottom edge, not clipped by it`,
+                r.settingsBox && r.settingsBox.bottom <= r.navLinksBottom
+            );
+            test(
+                `[${label}] Profile is within the actual visible mobile viewport (not just its own container's box), so it's really reachable on screen without opening notifications first`,
+                r.profileBox && r.profileBox.bottom <= r.innerHeight
+            );
+            test(
+                `[${label}] Settings is within the actual visible mobile viewport, reachable without opening notifications first`,
+                r.settingsBox && r.settingsBox.bottom <= r.innerHeight
+            );
+            test(
+                `[${label}] Log Out is within the actual visible mobile viewport, reachable without opening notifications first`,
+                r.logoutBox && r.logoutBox.bottom <= r.innerHeight
+            );
+            test(
+                `[${label}] the open .nav-links menu itself does not extend past the visible viewport (would sit behind Safari's toolbar)`,
+                r.navLinksBottom <= r.innerHeight
+            );
+            test(
+                `[${label}] opening the notification bell sets aria-expanded="true" and displays the dropdown with a real rendered height`,
+                r.bellAriaExpandedOpen === "true" && r.notifDropdownOpenBox && r.notifDropdownOpenBox.display === "block" && r.notifDropdownOpenBox.height > 0
+            );
+            test(
+                `[${label}] opening the notification bell for the first time lazy-loads and renders real notification items (not left on the skeleton)`,
+                r.notifItemsRendered === 2
+            );
+            test(
+                `[${label}] closing the notification bell again sets aria-expanded="false" and returns the dropdown to display: none / zero height`,
+                r.bellAriaExpandedClosed === "false" && r.notifDropdownReclosedBox && r.notifDropdownReclosedBox.display === "none" && r.notifDropdownReclosedBox.height === 0
+            );
+
+            if (shouldLogout) {
+                test(
+                    `[${label}] tapping the mobile Log Out link fires the same sign-out flow as the desktop one`,
+                    r.signOutCalledFromMobileLink === true
+                );
+            }
+        }
 
         // --- Case 5: the inverse of Case 4, at a desktop width, with real
-        // navbar.css/dropdown.css loaded (unlike the outer document) — the
-        // three mobile-only links must stay hidden and .builder-menu must
-        // still be the visible, functional route to Profile/Settings/
-        // Log Out above the 700px breakpoint. Static markup is enough
-        // here since this is purely a CSS-cascade check, not a timing one
-        // (Cases 1-2 above already cover real desktop JS behavior). -------
+        // navbar.css/dropdown.css/notification-bell.css loaded (unlike the
+        // outer document) — the three mobile-only links must stay hidden
+        // and .builder-menu must still be the visible, functional route to
+        // Profile/Settings/Log Out above the 700px breakpoint. Also
+        // confirms the notification-bell.css mobile fix (display: none
+        // while closed) is scoped to its @media block only — desktop must
+        // keep its animated opacity/visibility/transform reveal, with
+        // position: absolute keeping the closed dropdown out of flow, none
+        // of it touched by this pass. Static markup is enough here since
+        // this is purely a CSS-cascade check, not a timing one (Cases 1-2
+        // above already cover real desktop JS behavior). -------------------
         const desktopIframe = document.createElement("iframe");
         desktopIframe.style.width = "1280px";
         desktopIframe.style.height = "300px";
@@ -380,6 +567,7 @@
             <link rel='stylesheet' href='${resetUrl}'>
             <link rel='stylesheet' href='${navbarCssUrl}'>
             <link rel='stylesheet' href='${dropdownCssUrl}'>
+            <link rel='stylesheet' href='${notificationBellCssUrl}'>
         </head><body><div id="navbar"></div></body></html>`);
         ddoc.close();
 
@@ -398,6 +586,20 @@
                     <a href='explore.html'>Explore</a>
                     <a href='workshop.html'>Workshop</a>
                     <a href='upload.html'>Publish</a>
+                    <div class="notification-bell" id="notificationBell">
+                        <button class="notification-bell-button" id="notificationBellButton" aria-expanded="false">bell</button>
+                        <div class="notification-dropdown" id="notificationDropdown">
+                            <div class="notification-dropdown-header"><p>Notifications</p></div>
+                            <div id="notificationDropdownList" class="notification-dropdown-list"></div>
+                        </div>
+                    </div>
+                    <div class="notification-bell" id="notificationBellAlreadyOpen">
+                        <button class="notification-bell-button" aria-expanded="true">bell</button>
+                        <div class="notification-dropdown show-dropdown" id="notificationDropdownAlreadyOpen">
+                            <div class="notification-dropdown-header"><p>Notifications</p></div>
+                            <div class="notification-dropdown-list"></div>
+                        </div>
+                    </div>
                     <div class="builder-menu">
                         <button class="builder-button" id="builderMenuButton">tester</button>
                         <div class="builder-dropdown" id="builderDropdown">
@@ -418,18 +620,46 @@
         const dMobileLinks = [...ddoc.querySelectorAll(".mobile-account-link")];
         const dBuilderMenu = ddoc.querySelector(".builder-menu");
         const dBuilderButton = ddoc.getElementById("builderMenuButton");
+        const dNotifDropdown = ddoc.getElementById("notificationDropdown");
+        const dwin = desktopIframe.contentWindow;
 
         test(
             "at a desktop width, the three mobile-only account links are hidden",
-            dMobileLinks.every(a => desktopIframe.contentWindow.getComputedStyle(a).display === "none")
+            dMobileLinks.every(a => dwin.getComputedStyle(a).display === "none")
         );
         test(
             "at a desktop width, .builder-menu (the click-to-open account button) is displayed",
-            desktopIframe.contentWindow.getComputedStyle(dBuilderMenu).display !== "none"
+            dwin.getComputedStyle(dBuilderMenu).display !== "none"
         );
         test(
             "at a desktop width, the account button itself has a real rendered box",
             dBuilderButton.getBoundingClientRect().height > 0
+        );
+
+        const dNotifClosedStyle = dwin.getComputedStyle(dNotifDropdown);
+        test(
+            "at a desktop width, a CLOSED notification dropdown is NOT display: none — it keeps its animated opacity/visibility reveal, unaffected by the mobile-only fix",
+            dNotifClosedStyle.display !== "none" && dNotifClosedStyle.opacity === "0" && dNotifClosedStyle.visibility === "hidden"
+        );
+        test(
+            "at a desktop width, the closed notification dropdown stays position: absolute — taken out of the surrounding flow, so its reserved layout box (still present, just off-screen via opacity/visibility) causes no visible gap",
+            dNotifClosedStyle.position === "absolute"
+        );
+
+        // A second, separate dropdown rendered with show-dropdown already
+        // present at first paint (rather than toggling the class on the
+        // element above and re-reading immediately) — CSS transitions
+        // only run on a style CHANGE, never on an element's very first
+        // computed style, so this reads the open state's true target
+        // values with no risk of catching a transition that a headless/
+        // backgrounded page tab can leave frozen at its starting frame
+        // (the same class of issue documented during this branch's
+        // Safari-viewport fix, in an unrelated earlier test run).
+        const dNotifOpenEl = ddoc.getElementById("notificationDropdownAlreadyOpen");
+        const dNotifOpenStyle = dwin.getComputedStyle(dNotifOpenEl);
+        test(
+            "at a desktop width, show-dropdown reveals the notification dropdown via opacity/visibility (the desktop animated-reveal transition is untouched by this pass)",
+            dNotifOpenStyle.opacity === "1" && dNotifOpenStyle.visibility === "visible"
         );
 
         document.body.removeChild(desktopIframe);
