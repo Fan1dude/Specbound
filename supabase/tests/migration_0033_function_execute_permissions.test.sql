@@ -11,7 +11,7 @@
 -- whatever access they already had, and that a brand-new
 -- `postgres`-owned function created AFTER 0033 does NOT automatically
 -- receive `public`/`anon`/`authenticated` EXECUTE the way it would have
--- before 0033's `alter default privileges` statement.
+-- before 0033's `alter default privileges` statements.
 --
 -- STATUS: executed against the local disposable Supabase/Docker stack
 -- (`supabase db reset --local`, Postgres 17.6, Supabase CLI 2.112.0) —
@@ -24,6 +24,27 @@
 -- posture as milestone_22_profile_roles_visibility.test.sql (fake
 -- auth.users rows, namespaced usernames, single outer transaction ending
 -- in ROLLBACK, each test in its own SAVEPOINT).
+--
+-- Fail-closed design: every assertion below is written so that a failed
+-- check raises an actual PostgreSQL ERROR, never just a WARNING. A
+-- WARNING does not change psql's exit code — `psql -v ON_ERROR_STOP=1`
+-- only stops and exits nonzero on a real ERROR. Every deliberate FAIL in
+-- this file is raised via `raise exception ... using errcode = 'M0033'`
+-- — 'M0033' is this file's own dedicated, made-up SQLSTATE (not a real
+-- PostgreSQL error code; chosen to be unmistakably ours and to never
+-- collide with a built-in code), used as a unique tag so a FAIL can
+-- always be told apart from any other error the tested functions might
+-- raise. The one place that matters (test 7's `when others` handler,
+-- which would otherwise catch and swallow a FAIL raised in its own
+-- `begin` body) explicitly checks `sqlstate = 'M0033'` and bare
+-- `raise;`s it through unchanged rather than converting it to a warning
+-- — see that test's own comment for why. Everywhere else, a FAIL is
+-- raised either in a block's main body (never matched by that same
+-- block's own narrower `when insufficient_privilege`/`when others`
+-- clauses — PL/pgSQL does not re-match a new error against sibling WHEN
+-- clauses of the block that raised it) or inside a handler with no
+-- sibling `when others` at all, so no extra rethrow logic is needed
+-- there.
 --
 -- Permission testing convention used throughout: a nested
 -- `begin ... exception when insufficient_privilege then ... end` block
@@ -61,7 +82,7 @@ do $$
 begin
     begin
         perform public.sync_component_legacy_fields();
-        raise warning 'FAIL (test 1a): sync_component_legacy_fields() was callable by anon';
+        raise exception 'FAIL (test 1a): sync_component_legacy_fields() was callable by anon' using errcode = 'M0033';
     exception
         when insufficient_privilege then
             raise notice 'PASS (test 1a): sync_component_legacy_fields() correctly denied to anon';
@@ -69,7 +90,7 @@ begin
 
     begin
         perform public.set_component_alias_technology_and_field();
-        raise warning 'FAIL (test 1b): set_component_alias_technology_and_field() was callable by anon';
+        raise exception 'FAIL (test 1b): set_component_alias_technology_and_field() was callable by anon' using errcode = 'M0033';
     exception
         when insufficient_privilege then
             raise notice 'PASS (test 1b): set_component_alias_technology_and_field() correctly denied to anon';
@@ -77,7 +98,7 @@ begin
 
     begin
         perform public.enforce_component_submission_pending_cap();
-        raise warning 'FAIL (test 1c): enforce_component_submission_pending_cap() was callable by anon';
+        raise exception 'FAIL (test 1c): enforce_component_submission_pending_cap() was callable by anon' using errcode = 'M0033';
     exception
         when insufficient_privilege then
             raise notice 'PASS (test 1c): enforce_component_submission_pending_cap() correctly denied to anon';
@@ -85,7 +106,7 @@ begin
 
     begin
         perform public.validate_featured_build();
-        raise warning 'FAIL (test 1d): validate_featured_build() was callable by anon';
+        raise exception 'FAIL (test 1d): validate_featured_build() was callable by anon' using errcode = 'M0033';
     exception
         when insufficient_privilege then
             raise notice 'PASS (test 1d): validate_featured_build() correctly denied to anon';
@@ -101,7 +122,7 @@ do $$
 begin
     begin
         perform public.sync_component_legacy_fields();
-        raise warning 'FAIL (test 1e): sync_component_legacy_fields() was callable by authenticated';
+        raise exception 'FAIL (test 1e): sync_component_legacy_fields() was callable by authenticated' using errcode = 'M0033';
     exception
         when insufficient_privilege then
             raise notice 'PASS (test 1e): sync_component_legacy_fields() correctly denied to authenticated';
@@ -109,7 +130,7 @@ begin
 
     begin
         perform public.set_component_alias_technology_and_field();
-        raise warning 'FAIL (test 1f): set_component_alias_technology_and_field() was callable by authenticated';
+        raise exception 'FAIL (test 1f): set_component_alias_technology_and_field() was callable by authenticated' using errcode = 'M0033';
     exception
         when insufficient_privilege then
             raise notice 'PASS (test 1f): set_component_alias_technology_and_field() correctly denied to authenticated';
@@ -117,7 +138,7 @@ begin
 
     begin
         perform public.enforce_component_submission_pending_cap();
-        raise warning 'FAIL (test 1g): enforce_component_submission_pending_cap() was callable by authenticated';
+        raise exception 'FAIL (test 1g): enforce_component_submission_pending_cap() was callable by authenticated' using errcode = 'M0033';
     exception
         when insufficient_privilege then
             raise notice 'PASS (test 1g): enforce_component_submission_pending_cap() correctly denied to authenticated';
@@ -125,7 +146,7 @@ begin
 
     begin
         perform public.validate_featured_build();
-        raise warning 'FAIL (test 1h): validate_featured_build() was callable by authenticated';
+        raise exception 'FAIL (test 1h): validate_featured_build() was callable by authenticated' using errcode = 'M0033';
     exception
         when insufficient_privilege then
             raise notice 'PASS (test 1h): validate_featured_build() correctly denied to authenticated';
@@ -151,7 +172,7 @@ begin
             '00000000-0000-0000-0000-000000000401'::uuid,
             'comment'
         );
-        raise warning 'FAIL (test 2a): create_notification() was callable by anon';
+        raise exception 'FAIL (test 2a): create_notification() was callable by anon' using errcode = 'M0033';
     exception
         when insufficient_privilege then
             raise notice 'PASS (test 2a): create_notification() correctly denied to anon';
@@ -171,7 +192,7 @@ begin
             '00000000-0000-0000-0000-000000000401'::uuid,
             'comment'
         );
-        raise warning 'FAIL (test 2b): create_notification() was callable by authenticated';
+        raise exception 'FAIL (test 2b): create_notification() was callable by authenticated' using errcode = 'M0033';
     exception
         when insufficient_privilege then
             raise notice 'PASS (test 2b): create_notification() correctly denied to authenticated';
@@ -194,81 +215,81 @@ begin
     begin perform public.is_catalog_moderator('00000000-0000-0000-0000-000000000401'::uuid);
         raise notice 'PASS (test 3a): is_catalog_moderator(uuid) executable by authenticated';
     exception when insufficient_privilege then
-        raise warning 'FAIL (test 3a): is_catalog_moderator(uuid) denied to authenticated';
+        raise exception 'FAIL (test 3a): is_catalog_moderator(uuid) denied to authenticated' using errcode = 'M0033';
     end;
 
     begin perform public.approve_component_submission('00000000-0000-0000-0000-000000000401'::uuid);
         raise notice 'PASS (test 3b): approve_component_submission(uuid,uuid) executable by authenticated (business-logic rejection expected/OK)';
     exception
-        when insufficient_privilege then raise warning 'FAIL (test 3b): approve_component_submission(uuid,uuid) denied to authenticated';
+        when insufficient_privilege then raise exception 'FAIL (test 3b): approve_component_submission(uuid,uuid) denied to authenticated' using errcode = 'M0033';
         when others then raise notice 'PASS (test 3b): approve_component_submission(uuid,uuid) reached its own logic (%), not a permission error', sqlerrm;
     end;
 
     begin perform public.reject_component_submission('00000000-0000-0000-0000-000000000401'::uuid, 'permission test');
         raise notice 'PASS (test 3c): reject_component_submission(uuid,text) executable by authenticated';
     exception
-        when insufficient_privilege then raise warning 'FAIL (test 3c): reject_component_submission(uuid,text) denied to authenticated';
+        when insufficient_privilege then raise exception 'FAIL (test 3c): reject_component_submission(uuid,text) denied to authenticated' using errcode = 'M0033';
         when others then raise notice 'PASS (test 3c): reject_component_submission(uuid,text) reached its own logic (%), not a permission error', sqlerrm;
     end;
 
     begin perform public.is_platform_moderator('00000000-0000-0000-0000-000000000401'::uuid);
         raise notice 'PASS (test 3d): is_platform_moderator(uuid) executable by authenticated';
     exception when insufficient_privilege then
-        raise warning 'FAIL (test 3d): is_platform_moderator(uuid) denied to authenticated';
+        raise exception 'FAIL (test 3d): is_platform_moderator(uuid) denied to authenticated' using errcode = 'M0033';
     end;
 
     begin perform public.is_platform_staff('00000000-0000-0000-0000-000000000401'::uuid);
         raise notice 'PASS (test 3e): is_platform_staff(uuid) executable by authenticated';
     exception when insufficient_privilege then
-        raise warning 'FAIL (test 3e): is_platform_staff(uuid) denied to authenticated';
+        raise exception 'FAIL (test 3e): is_platform_staff(uuid) denied to authenticated' using errcode = 'M0033';
     end;
 
     begin perform public.report_content('build', '00000000-0000-0000-0000-000000000401'::uuid, 'permission test');
         raise notice 'PASS (test 3f): report_content(text,uuid,text) executable by authenticated';
     exception
-        when insufficient_privilege then raise warning 'FAIL (test 3f): report_content(text,uuid,text) denied to authenticated';
+        when insufficient_privilege then raise exception 'FAIL (test 3f): report_content(text,uuid,text) denied to authenticated' using errcode = 'M0033';
         when others then raise notice 'PASS (test 3f): report_content(text,uuid,text) reached its own logic (%), not a permission error', sqlerrm;
     end;
 
     begin perform public.resolve_report('00000000-0000-0000-0000-000000000401'::uuid, 'dismissed');
         raise notice 'PASS (test 3g): resolve_report(uuid,text,text) executable by authenticated';
     exception
-        when insufficient_privilege then raise warning 'FAIL (test 3g): resolve_report(uuid,text,text) denied to authenticated';
+        when insufficient_privilege then raise exception 'FAIL (test 3g): resolve_report(uuid,text,text) denied to authenticated' using errcode = 'M0033';
         when others then raise notice 'PASS (test 3g): resolve_report(uuid,text,text) reached its own logic (%), not a permission error', sqlerrm;
     end;
 
     begin perform public.grant_profile_role('00000000-0000-0000-0000-000000000402'::uuid, 'community_builder', 'permission test');
         raise notice 'PASS (test 3h): grant_profile_role(uuid,text,text) executable by authenticated';
     exception
-        when insufficient_privilege then raise warning 'FAIL (test 3h): grant_profile_role(uuid,text,text) denied to authenticated';
+        when insufficient_privilege then raise exception 'FAIL (test 3h): grant_profile_role(uuid,text,text) denied to authenticated' using errcode = 'M0033';
         when others then raise notice 'PASS (test 3h): grant_profile_role(uuid,text,text) reached its own logic (%), not a permission error', sqlerrm;
     end;
 
     begin perform public.revoke_profile_role('00000000-0000-0000-0000-000000000402'::uuid, 'community_builder', 'permission test');
         raise notice 'PASS (test 3i): revoke_profile_role(uuid,text,text) executable by authenticated';
     exception
-        when insufficient_privilege then raise warning 'FAIL (test 3i): revoke_profile_role(uuid,text,text) denied to authenticated';
+        when insufficient_privilege then raise exception 'FAIL (test 3i): revoke_profile_role(uuid,text,text) denied to authenticated' using errcode = 'M0033';
         when others then raise notice 'PASS (test 3i): revoke_profile_role(uuid,text,text) reached its own logic (%), not a permission error', sqlerrm;
     end;
 
     begin perform public.submit_feedback('bug', 'permission test message');
         raise notice 'PASS (test 3j): submit_feedback(text,text,text) executable by authenticated';
     exception
-        when insufficient_privilege then raise warning 'FAIL (test 3j): submit_feedback(text,text,text) denied to authenticated';
+        when insufficient_privilege then raise exception 'FAIL (test 3j): submit_feedback(text,text,text) denied to authenticated' using errcode = 'M0033';
         when others then raise notice 'PASS (test 3j): submit_feedback(text,text,text) reached its own logic (%), not a permission error', sqlerrm;
     end;
 
     begin perform public.redeem_beta_invite('this-code-does-not-exist');
         raise notice 'PASS (test 3k): redeem_beta_invite(text) executable by authenticated';
     exception
-        when insufficient_privilege then raise warning 'FAIL (test 3k): redeem_beta_invite(text) denied to authenticated';
+        when insufficient_privilege then raise exception 'FAIL (test 3k): redeem_beta_invite(text) denied to authenticated' using errcode = 'M0033';
         when others then raise notice 'PASS (test 3k): redeem_beta_invite(text) reached its own logic (%), not a permission error', sqlerrm;
     end;
 
     begin perform public.sync_discord_identity();
         raise notice 'PASS (test 3l): sync_discord_identity() executable by authenticated';
     exception
-        when insufficient_privilege then raise warning 'FAIL (test 3l): sync_discord_identity() denied to authenticated';
+        when insufficient_privilege then raise exception 'FAIL (test 3l): sync_discord_identity() denied to authenticated' using errcode = 'M0033';
         when others then raise notice 'PASS (test 3l): sync_discord_identity() reached its own logic (%), not a permission error', sqlerrm;
     end;
 end $$;
@@ -280,73 +301,73 @@ set local role anon;
 do $$
 begin
     begin perform public.is_catalog_moderator('00000000-0000-0000-0000-000000000401'::uuid);
-        raise warning 'FAIL (test 3m): is_catalog_moderator(uuid) was callable by anon';
+        raise exception 'FAIL (test 3m): is_catalog_moderator(uuid) was callable by anon' using errcode = 'M0033';
     exception when insufficient_privilege then
         raise notice 'PASS (test 3m): is_catalog_moderator(uuid) correctly denied to anon';
     end;
 
     begin perform public.approve_component_submission('00000000-0000-0000-0000-000000000401'::uuid);
-        raise warning 'FAIL (test 3n): approve_component_submission(uuid,uuid) was callable by anon';
+        raise exception 'FAIL (test 3n): approve_component_submission(uuid,uuid) was callable by anon' using errcode = 'M0033';
     exception when insufficient_privilege then
         raise notice 'PASS (test 3n): approve_component_submission(uuid,uuid) correctly denied to anon';
     end;
 
     begin perform public.reject_component_submission('00000000-0000-0000-0000-000000000401'::uuid, 'x');
-        raise warning 'FAIL (test 3o): reject_component_submission(uuid,text) was callable by anon';
+        raise exception 'FAIL (test 3o): reject_component_submission(uuid,text) was callable by anon' using errcode = 'M0033';
     exception when insufficient_privilege then
         raise notice 'PASS (test 3o): reject_component_submission(uuid,text) correctly denied to anon';
     end;
 
     begin perform public.is_platform_moderator('00000000-0000-0000-0000-000000000401'::uuid);
-        raise warning 'FAIL (test 3p): is_platform_moderator(uuid) was callable by anon';
+        raise exception 'FAIL (test 3p): is_platform_moderator(uuid) was callable by anon' using errcode = 'M0033';
     exception when insufficient_privilege then
         raise notice 'PASS (test 3p): is_platform_moderator(uuid) correctly denied to anon';
     end;
 
     begin perform public.is_platform_staff('00000000-0000-0000-0000-000000000401'::uuid);
-        raise warning 'FAIL (test 3q): is_platform_staff(uuid) was callable by anon';
+        raise exception 'FAIL (test 3q): is_platform_staff(uuid) was callable by anon' using errcode = 'M0033';
     exception when insufficient_privilege then
         raise notice 'PASS (test 3q): is_platform_staff(uuid) correctly denied to anon';
     end;
 
     begin perform public.report_content('build', '00000000-0000-0000-0000-000000000401'::uuid, 'x');
-        raise warning 'FAIL (test 3r): report_content(text,uuid,text) was callable by anon';
+        raise exception 'FAIL (test 3r): report_content(text,uuid,text) was callable by anon' using errcode = 'M0033';
     exception when insufficient_privilege then
         raise notice 'PASS (test 3r): report_content(text,uuid,text) correctly denied to anon';
     end;
 
     begin perform public.resolve_report('00000000-0000-0000-0000-000000000401'::uuid, 'dismissed');
-        raise warning 'FAIL (test 3s): resolve_report(uuid,text,text) was callable by anon';
+        raise exception 'FAIL (test 3s): resolve_report(uuid,text,text) was callable by anon' using errcode = 'M0033';
     exception when insufficient_privilege then
         raise notice 'PASS (test 3s): resolve_report(uuid,text,text) correctly denied to anon';
     end;
 
     begin perform public.grant_profile_role('00000000-0000-0000-0000-000000000402'::uuid, 'community_builder', 'x');
-        raise warning 'FAIL (test 3t): grant_profile_role(uuid,text,text) was callable by anon';
+        raise exception 'FAIL (test 3t): grant_profile_role(uuid,text,text) was callable by anon' using errcode = 'M0033';
     exception when insufficient_privilege then
         raise notice 'PASS (test 3t): grant_profile_role(uuid,text,text) correctly denied to anon';
     end;
 
     begin perform public.revoke_profile_role('00000000-0000-0000-0000-000000000402'::uuid, 'community_builder', 'x');
-        raise warning 'FAIL (test 3u): revoke_profile_role(uuid,text,text) was callable by anon';
+        raise exception 'FAIL (test 3u): revoke_profile_role(uuid,text,text) was callable by anon' using errcode = 'M0033';
     exception when insufficient_privilege then
         raise notice 'PASS (test 3u): revoke_profile_role(uuid,text,text) correctly denied to anon';
     end;
 
     begin perform public.submit_feedback('bug', 'x');
-        raise warning 'FAIL (test 3v): submit_feedback(text,text,text) was callable by anon';
+        raise exception 'FAIL (test 3v): submit_feedback(text,text,text) was callable by anon' using errcode = 'M0033';
     exception when insufficient_privilege then
         raise notice 'PASS (test 3v): submit_feedback(text,text,text) correctly denied to anon';
     end;
 
     begin perform public.redeem_beta_invite('x');
-        raise warning 'FAIL (test 3w): redeem_beta_invite(text) was callable by anon';
+        raise exception 'FAIL (test 3w): redeem_beta_invite(text) was callable by anon' using errcode = 'M0033';
     exception when insufficient_privilege then
         raise notice 'PASS (test 3w): redeem_beta_invite(text) correctly denied to anon';
     end;
 
     begin perform public.sync_discord_identity();
-        raise warning 'FAIL (test 3x): sync_discord_identity() was callable by anon';
+        raise exception 'FAIL (test 3x): sync_discord_identity() was callable by anon' using errcode = 'M0033';
     exception when insufficient_privilege then
         raise notice 'PASS (test 3x): sync_discord_identity() correctly denied to anon';
     end;
@@ -370,7 +391,7 @@ begin
         perform public.get_public_profile_roles('00000000-0000-0000-0000-000000000401'::uuid);
         raise notice 'PASS (test 4a): get_public_profile_roles(uuid) still executable by anon after 0033';
     exception when insufficient_privilege then
-        raise warning 'FAIL (test 4a): get_public_profile_roles(uuid) unexpectedly denied to anon after 0033';
+        raise exception 'FAIL (test 4a): get_public_profile_roles(uuid) unexpectedly denied to anon after 0033' using errcode = 'M0033';
     end;
 end $$;
 reset role;
@@ -385,7 +406,7 @@ begin
         perform public.get_public_profile_roles('00000000-0000-0000-0000-000000000401'::uuid);
         raise notice 'PASS (test 4b): get_public_profile_roles(uuid) still executable by authenticated after 0033';
     exception when insufficient_privilege then
-        raise warning 'FAIL (test 4b): get_public_profile_roles(uuid) unexpectedly denied to authenticated after 0033';
+        raise exception 'FAIL (test 4b): get_public_profile_roles(uuid) unexpectedly denied to authenticated after 0033' using errcode = 'M0033';
     end;
 end $$;
 reset role;
@@ -410,7 +431,7 @@ begin
     if has_function_privilege('service_role', 'public.sync_component_legacy_fields()'::regprocedure, 'EXECUTE') then
         raise notice 'PASS (test 5a): service_role still holds EXECUTE on sync_component_legacy_fields()';
     else
-        raise warning 'FAIL (test 5a): service_role unexpectedly lost EXECUTE on sync_component_legacy_fields()';
+        raise exception 'FAIL (test 5a): service_role unexpectedly lost EXECUTE on sync_component_legacy_fields()' using errcode = 'M0033';
     end if;
 
     begin perform public.create_notification(
@@ -420,13 +441,13 @@ begin
         );
         raise notice 'PASS (test 5b): create_notification(...) still executable by service_role';
     exception when insufficient_privilege then
-        raise warning 'FAIL (test 5b): create_notification(...) unexpectedly denied to service_role';
+        raise exception 'FAIL (test 5b): create_notification(...) unexpectedly denied to service_role' using errcode = 'M0033';
     end;
 
     begin perform public.is_catalog_moderator('00000000-0000-0000-0000-000000000401'::uuid);
         raise notice 'PASS (test 5c): is_catalog_moderator(uuid) still executable by service_role';
     exception when insufficient_privilege then
-        raise warning 'FAIL (test 5c): is_catalog_moderator(uuid) unexpectedly denied to service_role';
+        raise exception 'FAIL (test 5c): is_catalog_moderator(uuid) unexpectedly denied to service_role' using errcode = 'M0033';
     end;
 end $$;
 reset role;
@@ -449,7 +470,7 @@ begin
     if has_function_privilege(current_user, 'public.sync_component_legacy_fields()'::regprocedure, 'EXECUTE') then
         raise notice 'PASS (test 6a): the connecting/owning role still holds EXECUTE on sync_component_legacy_fields()';
     else
-        raise warning 'FAIL (test 6a): the connecting/owning role unexpectedly lacks EXECUTE on sync_component_legacy_fields()';
+        raise exception 'FAIL (test 6a): the connecting/owning role unexpectedly lacks EXECUTE on sync_component_legacy_fields()' using errcode = 'M0033';
     end if;
 
     begin perform public.create_notification(
@@ -459,7 +480,7 @@ begin
         );
         raise notice 'PASS (test 6b): the connecting/owning role can still call create_notification(...)';
     exception when insufficient_privilege then
-        raise warning 'FAIL (test 6b): the connecting/owning role was unexpectedly denied create_notification(...)';
+        raise exception 'FAIL (test 6b): the connecting/owning role was unexpectedly denied create_notification(...)' using errcode = 'M0033';
     end;
 end $$;
 rollback to savepoint test_6;
@@ -498,6 +519,17 @@ rollback to savepoint test_6;
 -- affect the 17 functions 0033 already revokes directly (tests 1-6
 -- above confirm those are correctly locked down) — it only ever
 -- affected functions created AFTER 0033 runs.
+--
+-- Fail-closed note: this test's inner `begin ... exception when others`
+-- block is the one place in this file where a FAIL raised in the main
+-- body WOULD be caught by that same block's own `when others` clause if
+-- left unhandled — that handler exists to catch genuine unexpected
+-- errors from the ACL-check logic itself, but without the sqlstate
+-- check below it would also silently swallow a deliberately raised
+-- 'M0033' FAIL and downgrade it to a mere warning, defeating the whole
+-- fail-closed design. It checks `sqlstate = 'M0033'` first and bare
+-- `raise;`s it through unchanged in that case; only a genuinely
+-- different, unexpected error gets converted into its own FAIL.
 --
 -- Cleanup safety: CREATE FUNCTION is DDL and can't run as dynamic SQL
 -- inside a `do $$ ... $$` block without a second layer of dollar-quote
@@ -551,7 +583,7 @@ begin
         ) into v_schema_defacl_has_client_roles;
 
         if v_global_defacl_has_public or v_schema_defacl_has_client_roles then
-            raise warning 'FAIL (test 7a): pg_default_acl for role postgres/functions still grants public (global scope) or anon/authenticated (public schema scope) EXECUTE — 0033''s alter default privileges statements did not take full effect';
+            raise exception 'FAIL (test 7a): pg_default_acl for role postgres/functions still grants public (global scope) or anon/authenticated (public schema scope) EXECUTE — 0033''s alter default privileges statements did not take full effect' using errcode = 'M0033';
         else
             raise notice 'PASS (test 7a): pg_default_acl for role postgres/functions has no public (global) or anon/authenticated (public schema) EXECUTE entry, as 0033''s statements intend';
         end if;
@@ -576,12 +608,17 @@ begin
             or has_function_privilege('authenticated', v_probe_oid::regprocedure, 'EXECUTE')
             or v_public_has_execute
         then
-            raise warning 'FAIL (test 7b): a newly-created postgres-owned function is still reachable by public/anon/authenticated in practice — 0033''s default-privilege statements did not fully close the gap; future migrations must not rely on this alone and should keep explicitly revoking from public on any new non-public function';
+            raise exception 'FAIL (test 7b): a newly-created postgres-owned function is still reachable by public/anon/authenticated in practice — 0033''s default-privilege statements did not fully close the gap; future migrations must not rely on this alone and should keep explicitly revoking from public on any new non-public function' using errcode = 'M0033';
         else
             raise notice 'PASS (test 7b): a newly-created postgres-owned function has NO public/anon/authenticated EXECUTE in practice';
         end if;
     exception when others then
-        raise warning 'FAIL (test 7): the ACL check itself errored (%) — treat as a failure, not a pass', sqlerrm;
+        if sqlstate = 'M0033' then
+            -- A deliberate FAIL raised above — never swallow it as a
+            -- mere warning; let it propagate exactly as raised.
+            raise;
+        end if;
+        raise exception 'FAIL (test 7): the ACL check itself errored (%) — treat as a failure, not a pass', sqlerrm using errcode = 'M0033';
     end;
 end $$;
 

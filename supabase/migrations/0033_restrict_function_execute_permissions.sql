@@ -3,9 +3,9 @@
 -- Status: the 17 explicit per-function REVOKE/GRANT statements below
 -- (statement groups 2-4) were MANUALLY APPLIED to production via the
 -- Supabase SQL Editor (verified successful) BEFORE this file was
--- committed — see the PR description's Security & RLS section for the
--- full audit trail. Those statements secure the 17 existing functions
--- in production today.
+-- committed — see the PR description's "What was found" and
+-- "Production status" sections for the full audit trail. Those
+-- statements secure the 17 existing functions in production today.
 --
 -- The GLOBAL default-privilege statement in group 1 below
 -- (`alter default privileges for role postgres revoke execute on
