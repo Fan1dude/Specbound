@@ -754,9 +754,9 @@ Every other migration still only ever moves forward from `0001`.
   full design and `docs/milestones/MILESTONE_19_SQL_SECURITY_AUDIT.md`
   for a follow-up audit pass (non-empty checks, explicit execute grants)
   applied to this file before it was considered ready. Automated
-  fresh-install and legacy-upgrade tests for this file (through 0032)
-  live in `supabase/tests/migration_0020_0032_fresh_install.test.sql`
-  and `supabase/tests/migration_0020_0032_legacy_upgrade.test.sql`.
+  fresh-install and legacy-upgrade tests for this file (through 0033)
+  live in `supabase/tests/migration_0020_0033_fresh_install.test.sql`
+  and `supabase/tests/migration_0020_0033_legacy_upgrade.test.sql`.
 
 ## 0021_component_aliases
 
@@ -1012,3 +1012,63 @@ Every other migration still only ever moves forward from `0001`.
   signature is unchanged.
 - **Context**: post-merge-review hardening for Milestone 22 (Community
   Foundation).
+
+## 0033_restrict_function_execute_permissions
+
+- **Status**: The 17 explicit per-function REVOKE/GRANT statements (the
+  SQL manually applied through the Supabase SQL Editor, verified
+  successful) already secure the 17 existing functions in production
+  today. The GLOBAL default-privilege statement (`alter default
+  privileges for role postgres revoke execute on functions from
+  public;`) was added afterward, found and validated only in local
+  testing — it has **not** yet been applied to production, so
+  future-function protection is not yet complete there. Do not describe
+  it as complete until this file is deployed. Migration 0033 as a whole
+  is NOT recorded in production's migration-history table, since the
+  per-function statements were run before this file existed. A normal
+  `supabase db push`/deploy still needs to run this file so the global
+  default-privilege statement takes effect in production and the
+  history table catches up. Every statement is idempotent, so that
+  later run is safe even though most of production's grants already
+  match it. Depends on 0000-0032.
+- **File**: `migrations/0033_restrict_function_execute_permissions.sql`
+- **Rollback**: `rollbacks/0033_restrict_function_execute_permissions_rollback.sql`
+- **Fixes**: a read-only production audit (pg_catalog/information_schema
+  only) found that every function introduced by 0020-0032 had effective
+  EXECUTE access for both `anon` and `authenticated`, regardless of what
+  each migration's own `revoke ... from public` intended — that
+  statement only removes what PUBLIC (the pseudo-role) held, never a
+  privilege granted directly to `anon`/`authenticated` as their own
+  roles, which Supabase's own default-privilege configuration for the
+  public schema was doing on every new `postgres`-owned function.
+  `create_notification()` was the highest-severity instance: `SECURITY
+  DEFINER`, accepts caller-supplied `recipient_id`/`actor_id`/type/IDs,
+  and has no internal `auth.uid()` check of its own — its entire
+  protection was supposed to be the (broken) grant.
+- **Changes default privileges** so future `postgres`-owned functions in
+  `public` no longer automatically become callable by `public`/`anon`/
+  `authenticated`. **Revokes** unintended `anon`/`authenticated` access
+  from all 17 functions 0020-0032 introduced. **Re-grants**
+  `authenticated`-only access to the 12 that are genuine signed-in RPCs
+  or RLS helpers (`is_catalog_moderator`/`is_platform_moderator` are in
+  this list because `authenticated` needs EXECUTE for the RLS policies
+  that call them to evaluate at all — not because they're meant to be
+  called directly by most users). Leaves the 4 trigger-only functions
+  and `create_notification()` with no client-facing grant at all — none
+  of them are meant to be reachable by a client role, trigger or
+  internal-only. **Re-confirms** `get_public_profile_roles(uuid)` for
+  both `anon` and `authenticated` — unaffected, already correct by
+  design since 0032.
+- **Touches no table, no RLS policy, no schema.** `service_role` and
+  every function's owner are untouched — out of scope for this
+  migration (see the PR description for why).
+- **Local verification note**: local testing found that a schema-scoped
+  default-privilege revoke alone was not sufficient — PostgreSQL's
+  hardcoded global PUBLIC-EXECUTE default for new functions is only
+  overridden by a matching GLOBAL `pg_default_acl` entry, not a
+  schema-scoped one. 0033 now issues both a global and a schema-scoped
+  `alter default privileges` statement. See the migration file's own
+  header and `migration_0033_function_execute_permissions.test.sql`
+  test 7 for the full explanation and the confirmed fix.
+- **Context**: post-merge production security audit, Milestone 22
+  (Community Foundation) follow-up.
