@@ -17,7 +17,7 @@ The site is live, HTTPS is active, and Cloudflare preview deployments on pull re
 
 ## 2. Architecture and hosting model
 
-Every file in the repository (minus the exclusions in §5) is served exactly as committed — there is no build step transforming it. `tools/ci/package.json` exists only for CI's own tooling (Playwright, for the browser test suite) and is deliberately kept out of the repository root so Cloudflare Pages' root-directory build detection never sees it; see `docs/CI.md`.
+Cloudflare Pages serves the static files from its configured output directory without transforming them. The developer and CI directories intended for exclusion are currently still being published, as documented in §§3 and 5. `tools/ci/package.json` exists only for CI's own tooling (Playwright, for the browser test suite) and is deliberately kept out of the repository root so Cloudflare Pages' root-directory build detection never sees it; see `docs/CI.md`.
 
 Supabase provides everything server-side: Auth (including Discord's native OAuth identity-linking), the PostgreSQL database, Storage for images, RPC functions, and Row Level Security as the access-control layer on every table. The frontend talks to Supabase directly from the browser using a publishable client key — see §7.
 
@@ -35,7 +35,7 @@ The repository documents the following as the **expected** Cloudflare Pages proj
 | Root directory | `/` (repository root) |
 | Production branch | `main` |
 
-The build command isn't building anything — it's intended to prune developer/CI-only directories (`tests/`, `.claude/`, `tools/`, `.github/`) from the published output before Cloudflare serves it, since Cloudflare Pages has no `.pagesignore`-style file-exclusion mechanism for git-connected deployments (a known platform gap, not something this repo can configure around).
+The build command isn't building anything — it's intended to prune developer/CI-only directories (`tests/`, `.claude/`, `tools/`, `.github/`) from the published output before Cloudflare serves it. Cloudflare's build-watch exclusions control whether changes trigger a build; they do not remove files from the deployed output. The documented build command is therefore intended to remove these directories before the output is published.
 
 **Read-only production checks performed for this task show this pruning is not currently taking effect.** Fetching `https://specboundapp.com/tests/mobileAccountMenu.test.html`, `.../tools/ci/check-syntax.js`, and `.../.github/workflows/ci.yml` each returned real, live content, not a 404. None of the exposed files contain secrets — confirmed both by this repository's own no-secrets convention (no `.env`, no service-role key, no credentials anywhere in tracked files) and by `git ls-files .claude/`, which shows only `README.md`, `launch.json`, and `nocache_server.py` are actually tracked there (`.claude/settings.local.json` is git-ignored and was never pushed to GitHub, so Cloudflare never had it regardless of pruning). The practical impact today is low — dev/CI scaffolding and test pages are reachable but not secret-bearing — but the configured build command should be confirmed and corrected in the Cloudflare dashboard; see §13.
 
