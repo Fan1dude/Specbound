@@ -27,14 +27,67 @@ function fail(message) {
 // script. A <script type="module"> with no src attribute is exactly
 // the pattern CSP blocks; this is a repo-wide check, not just the 10
 // pages already known to have used it, so a future page can't
-// reintroduce the same defect unnoticed. -----------------------------
-const INLINE_MODULE_SCRIPT = /<script\s+type=["']module["']\s*>/i;
+// reintroduce the same defect unnoticed.
+//
+// Detection is attribute-order- and whitespace-independent: it parses
+// each <script ...> opening tag's full attribute list rather than
+// matching one fixed literal sequence, so `<script defer type="module">`,
+// `<script type="module" defer>`, extra whitespace, single quotes, etc.
+// are all still caught — CSP itself doesn't care what order the
+// attributes are in, so the check can't either. A script only escapes
+// the check by having a `src` attribute (i.e. actually being external).
+// ---------------------------------------------------------------------
+const SCRIPT_OPEN_TAG = /<script\b([^>]*)>/gi;
+
+function findBlockedInlineModuleScripts(html) {
+    const found = [];
+    SCRIPT_OPEN_TAG.lastIndex = 0;
+    let match;
+    while ((match = SCRIPT_OPEN_TAG.exec(html))) {
+        const attrs = match[1];
+        if (/(?:^|\s)src\s*=/i.test(attrs)) continue;
+        const typeMatch = attrs.match(/(?:^|\s)type\s*=\s*(?:["']([^"']*)["']|(\S+))/i);
+        const typeValue = typeMatch ? (typeMatch[1] ?? typeMatch[2]).trim().toLowerCase() : null;
+        if (typeValue === "module") {
+            found.push(match[0]);
+        }
+    }
+    return found;
+}
+
+// Self-test the detector itself against known attribute-order/whitespace
+// variants before relying on it below — so a future edit to the parsing
+// logic can't silently regress coverage without a visible failure here.
+const INLINE_MODULE_SCRIPT_FIXTURES = [
+    { html: '<script type="module"></script>', blocked: true },
+    { html: "<script type='module'></script>", blocked: true },
+    { html: '<script  type="module" ></script>', blocked: true },
+    { html: '<script defer type="module"></script>', blocked: true },
+    { html: '<script type="module" defer></script>', blocked: true },
+    { html: '<script async defer type="module" id="x"></script>', blocked: true },
+    { html: '<script\n    type="module"\n></script>', blocked: true },
+    { html: "<script type=module></script>", blocked: true },
+    { html: '<script type="module" src="./bootstrap.js"></script>', blocked: false },
+    { html: '<script defer src="./bootstrap.js" type="module"></script>', blocked: false },
+    { html: '<script src="./bootstrap.js"></script>', blocked: false },
+    { html: '<script data-type="module"></script>', blocked: false },
+    { html: '<script src="./data-src.js" type="module"></script>', blocked: false },
+    { html: "<script>console.log(1)</script>", blocked: false },
+    { html: '<script type="text/javascript"></script>', blocked: false }
+];
+
+for (const { html, blocked } of INLINE_MODULE_SCRIPT_FIXTURES) {
+    const isBlocked = findBlockedInlineModuleScripts(html).length > 0;
+    if (isBlocked !== blocked) {
+        fail(`inline-module-script detector self-test failed for ${JSON.stringify(html)} — expected blocked=${blocked}, got ${isBlocked}`);
+    }
+}
 
 const htmlFiles = walk(join(ROOT, "pages"), (name) => name.endsWith(".html")).sort();
 
 for (const file of htmlFiles) {
     const html = readFileSync(file, "utf8");
-    if (INLINE_MODULE_SCRIPT.test(html)) {
+    if (findBlockedInlineModuleScripts(html).length > 0) {
         fail(`${relative(ROOT, file)} bootstraps via a bare inline <script type="module"> — CSP's script-src blocks this; use <script type="module" src="..."> instead`);
     }
 }
