@@ -72,6 +72,8 @@ No RLS, storage policy, or schema change is needed for deployment — that work 
 
 Two further Supabase settings are real open items but belong to **Phase 9E's launch checklist**, not deployment itself: SMTP/email provider configuration (Supabase's default email service has strict rate limits, not recommended for production traffic) and confirming the project's backup/point-in-time-recovery tier. Not addressed here — tracked separately.
 
+**Discord account linking** (Settings → Connected Accounts) needs its own set of Supabase provider settings and a matching Discord Developer Portal redirect URI — see `docs/DISCORD_SETUP.md` for the full checklist and manual test procedure.
+
 ## 5. Custom domain and DNS setup
 
 1. In the Cloudflare Pages project, go to **Custom domains** and add the desired domain.
