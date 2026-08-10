@@ -1,138 +1,174 @@
 # Deployment
 
-**Status: current and accurate as of Phase 9D implementation, 2026-07-27.** Hosting platform: **Cloudflare Pages** (approved choice, see `docs/milestones/MILESTONE_9_PHASE_9D_ARCHITECTURE.md` §1.1 for the evaluated alternatives).
-
-This document describes how Specbound is deployed to production. Where a step can only be performed by a human with Cloudflare/DNS/domain-registrar access, it's written as an instruction, not a claim that it's already been done.
+This is Specbound's current production deployment and operations guide — how the site is hosted, how a change reaches production, and what to check before and after a deploy. It reflects the live site, not a milestone-in-progress snapshot.
 
 ---
 
-## 1. Cloudflare Pages setup
+## 1. Purpose and current production state
 
-Specbound is a static site with **no build step** — no bundler, no root-level `package.json`, every file in the repo (minus a couple of exclusions below) is served exactly as committed. (Milestone 17 added `tools/ci/package.json` for CI-only tooling — deliberately kept out of the repo root, and out of what Cloudflare Pages' root-directory build detection sees, so it changes nothing here. See `docs/CI.md`.)
+- **Production URL:** https://specboundapp.com
+- **Production branch:** `main`
+- **Hosting:** Cloudflare Pages, deploying directly from this GitHub repository
+- **Architecture:** static HTML/CSS/JavaScript — no framework, no bundler, no root-level application build step
 
-**One real "build command" is needed anyway**, not to build anything, but to keep two developer-only directories out of the live deployment. Cloudflare Pages has **no `.pagesignore`-style file-exclusion mechanism** for git-connected deployments (verified against Cloudflare's own documentation and community-confirmed as a known, longstanding gap — there is no built-in way to exclude files from what gets published). The workaround: a build command that deletes them before Pages publishes the directory.
+The site is live, HTTPS is active, and Cloudflare preview deployments on pull requests have been observed working. Supabase Auth's Site URL, Redirect URLs, and Discord provider are configured for this domain, and the Discord account-linking flow has been manually verified end-to-end in production (see §8). This document does not claim every operational item below is finished — §13 lists what's genuinely still open.
 
-### Project configuration (Cloudflare dashboard → Pages → Create a project → Connect to Git)
+---
 
-| Setting | Value |
+## 2. Architecture and hosting model
+
+Every file in the repository (minus the exclusions in §5) is served exactly as committed — there is no build step transforming it. `tools/ci/package.json` exists only for CI's own tooling (Playwright, for the browser test suite) and is deliberately kept out of the repository root so Cloudflare Pages' root-directory build detection never sees it; see `docs/CI.md`.
+
+Supabase provides everything server-side: Auth (including Discord's native OAuth identity-linking), the PostgreSQL database, Storage for images, RPC functions, and Row Level Security as the access-control layer on every table. The frontend talks to Supabase directly from the browser using a publishable client key — see §7.
+
+---
+
+## 3. Cloudflare Pages configuration
+
+The repository documents the following as the **expected** Cloudflare Pages project configuration. This task did not inspect the live Cloudflare dashboard directly — confirm these values there rather than treating this table as independently re-verified today:
+
+| Setting | Expected value |
 |---|---|
 | Framework preset | None |
 | Build command | `rm -rf tests .claude tools .github` |
 | Build output directory | `/` (repository root) |
 | Root directory | `/` (repository root) |
-| Production branch | `master` (or `main`, if renamed — see §2) |
+| Production branch | `main` |
 
-The build command isn't building anything — it's pruning developer-only directories from the published output before Cloudflare serves it: `tests/` (24 `*.test.html` files), `.claude/` (local dev tooling), `tools/` (Milestone 17's CI scripts and `tools/ci/package.json` — see `docs/CI.md`), and `.github/` (the CI workflow itself). None of these contain anything sensitive (already confirmed repo-wide — no `.env`, no service-role key, no credentials anywhere), so this is tidiness, not a security fix; it just keeps test/CI scaffolding off the public site and out of search-engine crawl budget.
+The build command isn't building anything — it's intended to prune developer/CI-only directories (`tests/`, `.claude/`, `tools/`, `.github/`) from the published output before Cloudflare serves it, since Cloudflare Pages has no `.pagesignore`-style file-exclusion mechanism for git-connected deployments (a known platform gap, not something this repo can configure around).
 
-`design-system.html` (an unlinked internal style-guide page) is **not** excluded from the deploy — it's harmless to publish (no sensitive content) and excluding it would need its own bespoke `rm` line for marginal benefit. It's already covered by `robots.txt`'s disallow list (§3 below) so it won't be crawled/indexed.
+**Read-only production checks performed for this task show this pruning is not currently taking effect.** Fetching `https://specboundapp.com/tests/mobileAccountMenu.test.html`, `.../tools/ci/check-syntax.js`, and `.../.github/workflows/ci.yml` each returned real, live content, not a 404. None of the exposed files contain secrets — confirmed both by this repository's own no-secrets convention (no `.env`, no service-role key, no credentials anywhere in tracked files) and by `git ls-files .claude/`, which shows only `README.md`, `launch.json`, and `nocache_server.py` are actually tracked there (`.claude/settings.local.json` is git-ignored and was never pushed to GitHub, so Cloudflare never had it regardless of pruning). The practical impact today is low — dev/CI scaffolding and test pages are reachable but not secret-bearing — but the configured build command should be confirmed and corrected in the Cloudflare dashboard; see §13.
 
-### What gets published
+`design-system.html` (an unlinked internal style-guide page) is deliberately **not** pruned — it's harmless to publish and is already covered by `robots.txt`'s disallow list (§10).
 
-Everything else: `index.html`, `404.html`, `robots.txt`, `sitemap.xml`, `manifest.webmanifest`, `_headers`, `pages/**`, `css/**`, `js/**`, `assets/**`, `supabase/**` (SQL migration files — not executable by a static host, harmless to publish, but not linked from anywhere either), `design-system.html`.
+---
 
-## 2. Git branch and deployment flow
+## 4. Branch, deployment, and preview flow
 
-- **Production branch**: whichever branch is set as the Pages project's production branch (recommend `master`, the repo's current single branch — renaming to `main` is a purely cosmetic option, your call, not required).
-- **Push to deploy**: every push to the production branch triggers an automatic Cloudflare Pages build+deploy. No manual "deploy" step exists or is needed.
-- **Preview deployments**: every other branch or pull request gets its own automatically-generated preview URL (`<hash>.specbound.pages.dev`-style), live before anything merges to production. Use this to sanity-check a change — especially anything touching Storage/auth — before it reaches the real domain.
-- **First deploy**: requires (a) a GitHub repository the local git history is pushed to, and (b) connecting that repository in the Cloudflare Pages dashboard. Both are actions you need to take — creating a remote repository and doing the first push are outside what this environment does unprompted (visible, shared-state actions), and connecting a Cloudflare account to a repo requires your own Cloudflare login.
+- **Production branch:** `main`. A push to `main` triggers an automatic Cloudflare Pages build and deploy — no manual "deploy" step exists or is needed.
+- **Preview deployments:** other branches and pull requests receive their own automatically-generated preview URL. This has been observed working in this repository. Use a preview deployment to sanity-check a change — especially anything touching Storage or auth — before it reaches production.
+- Both the initial GitHub repository connection and the initial Cloudflare Pages project connection have already been completed; this document doesn't re-describe them as pending setup.
 
-## 3. Required public configuration
+---
 
-**No environment variables are required or used.** `js/core/config.js` hardcodes `SUPABASE_URL` and the publishable `SUPABASE_KEY` directly in a committed file — this is intentional and safe: the key is the new-format `sb_publishable_...` key, meant for client-side exposure, not a service-role key (see `docs/STORAGE_ARCHITECTURE.md`/`docs/AUTH_ARCHITECTURE.md` for the full security model this rests on). There is nothing to configure in Cloudflare Pages' "Environment variables" panel for this project to function.
+## 5. Published and excluded content
 
-Production assets already committed at the repo root, all verified locally (§7):
+**Intended to be published:** `index.html`, `404.html`, `robots.txt`, `sitemap.xml`, `manifest.webmanifest`, `_headers`, `pages/**`, `css/**`, `js/**`, `assets/**`, `design-system.html`, and `supabase/**` (the SQL migration/rollback source). These SQL files are not executable by a static host and publishing them does not grant any database access — the live database is reachable only through Supabase's own API surface, governed by RLS, entirely independent of whether its schema source is publicly readable. They aren't secret; they simply document schema history.
 
-- `robots.txt` — disallows `/pages/settings.html`, `/pages/dashboard.html`, `/pages/workshop.html`, `/pages/notifications.html`, `/pages/login.html`, `/pages/signup.html`, `/pages/build/edit.html`, `/design-system.html`, `/tests/` (all account-specific/private or developer-only, zero public SEO value); references `sitemap.xml`.
-- `sitemap.xml` — 13 URLs: homepage, Explore, Search, the 6 category pages, and the 4 legal pages. Individual build/profile pages are deliberately excluded (dynamic, numerous, already reachable via internal links — see `docs/milestones/MILESTONE_9_PHASE_9D_ARCHITECTURE.md` §2.2 for the reasoning).
-- `manifest.webmanifest` — linked from every real page's `<head>`, referencing the two PNG icon sizes below. Not a full PWA (no service worker) — just closes the "missing manifest" gap cheaply.
-- `assets/brand/logo/favicon.svg`, `favicon-32.png`, `favicon-192.png`, `apple-touch-icon.png` — SVG favicon (Phase 9C) plus PNG fallbacks for browsers/platforms that don't reliably support SVG favicons (notably Safari/iOS).
-- `assets/brand/og/og-image.png` (1200×630) — the generic brand Open Graph/Twitter Card image used by every page, including dynamic ones (`build.html`, `profile.html`, `followers.html`, `following.html`, `pages/build/edit.html`). **This app has no server-side rendering**, so a single static HTML template cannot emit a different `og:image` per build — a real, disclosed limitation, not an oversight. See `docs/milestones/MILESTONE_9_PHASE_9D_ARCHITECTURE.md` §2.5.
-- `404.html` — custom branded 404 page, auto-detected by Cloudflare Pages (no configuration needed; Cloudflare looks for `404.html` at the deployment root and any matching subdirectory).
-- `_headers` — CSP and security headers (§5 below). **No 500 page exists or is planned** — this architecture has no server-side code path that could produce one; Supabase-layer failures are already handled by the app's own client-side toast/error UI.
+**Intended to be pruned before publishing:** `tests/` (the browser-based regression suite), `.claude/` (local dev tooling), `tools/` (CI scripts and CI-only `package.json`), `.github/` (the CI workflow definition). As documented in §3, live checks today show this pruning is not currently in effect — these directories are reachable in production, though none contain secrets.
 
-### The `https://specbound.app` placeholder
+---
 
-Every canonical URL, `og:url`, and the `Sitemap:`/URLs inside `sitemap.xml` use `https://specbound.app` as a placeholder domain, since no real production domain was confirmed at implementation time. **Before going live, replace every occurrence with the real domain** — a single find-and-replace across the repo:
+## 6. Production domain, DNS, and HTTPS
 
-```bash
-grep -rl "specbound.app" --include="*.html" --include="*.xml" --include="*.txt" . | xargs sed -i 's/specbound\.app/YOUR-REAL-DOMAIN/g'
-```
+The production domain, `specboundapp.com`, is live and already connected to this Cloudflare Pages project — this document doesn't re-describe domain selection or first connection as future work.
 
-Run this, review the diff, commit, and redeploy before announcing the site publicly. Everything else in this document and in the app itself is domain-agnostic.
+A read-only check today confirmed: `http://specboundapp.com/` redirects to `https://specboundapp.com/` (200 after redirect), and a direct HTTPS request to the homepage returns 200. SSL is auto-provisioned and auto-renewed by Cloudflare Pages for both the production domain and the `*.pages.dev` subdomain — no manual certificate management.
 
-## 4. Supabase production settings
+**HSTS (`Strict-Transport-Security`) is not currently present** in `_headers`, and a live header check today confirmed it's absent from the production response — consistent with the repository's own documented decision to add it only after the domain has run correctly on HTTPS for a burn-in period, since HSTS is hard to undo quickly once browsers cache it. See §13.
 
-No RLS, storage policy, or schema change is needed for deployment — that work is already complete (Migrations A/B/C; see `docs/STORAGE_ARCHITECTURE.md` and `docs/AUTH_ARCHITECTURE.md`). Two dashboard settings need updating once the real domain is known:
+---
 
-1. **Supabase dashboard → Authentication → URL Configuration → Site URL**: set to the real production domain.
-2. **Authentication → URL Configuration → Redirect URLs**: add the production domain's relevant paths (at minimum, wherever `login.html`/`index.html` resolve on the real domain — these are the post-auth redirect targets used by `js/pages/signup/app.js` and `js/pages/login/app.js`).
+## 7. Supabase and authentication configuration
 
-**This is the single highest-consequence item in this whole document if missed** — password-reset and signup-confirmation emails embed a link back to whatever URL is configured here. If it's still pointing at a dev/localhost value, those emails will silently send users to a broken link once the site goes live.
+**Public client configuration** (safe to commit, safe for client-side exposure): `js/core/config.js` hardcodes the Supabase project URL and a *publishable* client key (Supabase's `sb_publishable_...` format, not a service-role key). This document intentionally does not reproduce that key's literal value — see `docs/AUTH_ARCHITECTURE.md` and `docs/STORAGE_ARCHITECTURE.md` for the RLS model this configuration relies on. **Never commit a service-role key, a Discord Client Secret, an access token, or any other credential to this repository.**
 
-Two further Supabase settings are real open items but belong to **Phase 9E's launch checklist**, not deployment itself: SMTP/email provider configuration (Supabase's default email service has strict rate limits, not recommended for production traffic) and confirming the project's backup/point-in-time-recovery tier. Not addressed here — tracked separately.
+**Current Supabase Auth configuration** (per the verified starting state for this task — not re-inspected in the live dashboard during this documentation task):
 
-**Discord account linking** (Settings → Connected Accounts) needs its own set of Supabase provider settings and a matching Discord Developer Portal redirect URI — see `docs/DISCORD_SETUP.md` for the full checklist and manual test procedure.
+- **Site URL:** `https://specboundapp.com` — this is the single highest-consequence setting in this whole document if it's ever wrong. Password-reset and signup-confirmation emails embed a link back to whatever URL is configured here; the signup confirmation flow in particular has no explicit `redirectTo` in this repo's code, so it relies entirely on this setting.
+- **Redirect URLs** includes `https://specboundapp.com/pages/settings.html` — the exact URL `js/pages/settings/app.js` passes as `redirectTo` when a user links Discord (`window.location.href` at the moment "Connect Discord" is clicked). The password-reset flow (`js/pages/forgotPassword/app.js`) builds its own `redirectTo` dynamically from the current origin, so it doesn't require a separate allowlist entry beyond the Site URL itself.
+- **Discord provider:** enabled, with manual identity linking enabled (`GOTRUE_SECURITY_MANUAL_LINKING_ENABLED`) — required for `supabase.auth.linkIdentity()` to attach Discord to an already-signed-in account rather than only supporting first-time sign-in.
 
-## 5. Custom domain and DNS setup
+No RLS, storage policy, or schema change is required as part of deployment — those are managed through this repository's tracked migrations (`supabase/migrations/`, currently 34 files, `0000`–`0033`) and applied independently via the Supabase CLI, not through Cloudflare Pages. Repository presence of a migration file is not the same fact as production application; the most recent live preflight check (`supabase migration list --linked`) confirmed production's migration history matches local through `0033`.
 
-1. In the Cloudflare Pages project, go to **Custom domains** and add the desired domain.
-2. If the domain's DNS is already on Cloudflare: it auto-configures. If not: Cloudflare provides the exact CNAME/nameserver instructions for your registrar — follow them there (this step requires access to whatever registrar/DNS provider is used, which is outside this environment).
-3. Wait for DNS propagation and automatic SSL certificate provisioning (usually minutes, occasionally longer) — Cloudflare Pages handles both automatically once the domain is added and DNS points at it correctly.
-4. Confirm the domain resolves and serves the site (`https://<domain>/` returns 200) before doing the Supabase Auth redirect URL update in §4 — that update needs the final, real domain.
+---
 
-## 6. HTTPS expectations
+## 8. Discord production configuration
 
-SSL is auto-provisioned and auto-renewed by Cloudflare Pages for both the `*.pages.dev` subdomain and any custom domain — no manual certificate management. HTTPS redirect is enforced by default. Confirm as part of every deployment verification pass (§8): a plain `http://` request to the production domain should redirect to `https://`.
+Discord account linking (Settings → Connected Accounts) requires its own Supabase provider settings and a matching Discord Developer Portal redirect — the full checklist, troubleshooting table, and security notes live in **[`docs/DISCORD_SETUP.md`](DISCORD_SETUP.md)**; this section only records the current state, not the full procedure.
 
-Adding `Strict-Transport-Security` (HSTS) is deliberately **not** included in the initial `_headers` file — recommend adding it once the domain has run correctly on HTTPS for a short burn-in period, since HSTS is intentionally hard to undo quickly (browsers cache it aggressively) and it's safer to confirm DNS/domain setup is fully correct first.
+- **Discord hosted callback** (Discord Developer Portal → OAuth2 → Redirects): `https://xpxjqyraizntbtijzoyp.supabase.co/auth/v1/callback` — Supabase Auth's own fixed callback for this project, not the Specbound Settings page.
+- **Settings return URL:** `https://specboundapp.com/pages/settings.html` (see §7).
+- **Production verification:** the complete Discord flow has been manually tested successfully — connect and OAuth return, username synchronization, public visibility, the correct outbound Discord profile link, the privacy toggle, refresh, and disconnect with public removal. This documentation task did not repeat that test or modify either dashboard; it records the prior verified result.
 
-## 7. Rollback procedure
+---
 
-Cloudflare Pages keeps every deployment. To roll back:
+## 9. Security headers and caching
+
+Verified directly against `_headers` and a live response check today.
+
+`_headers` sets, for every path (`/*`): `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: geolocation=(), microphone=(), camera=()`, and a `Content-Security-Policy` with no `unsafe-inline` and no wildcard origins — `script-src` allows only `'self'`, `https://cdn.jsdelivr.net`, and `https://static.cloudflareinsights.com`; `connect-src` allows only `'self'`, the Supabase project origin, and `https://cloudflareinsights.com`. The two `cloudflareinsights.com` entries exist for Cloudflare Pages' own Web Analytics beacon, which Cloudflare injects into HTML responses at the edge — it is not present anywhere in this repo's own source. A live header check today found those two allowances present on the homepage's CSP but absent from CSS/JS response CSPs, consistent with the beacon only ever loading in an HTML document context.
+
+`/css/*` and `/js/*` additionally get `Cache-Control: public, max-age=0, must-revalidate`, forcing a conditional revalidation request on every load instead of relying on Cloudflare Pages' own default 4-hour browser cache — the default that previously caused an already-open browser tab to keep rendering pre-deploy CSS/JS for up to four hours after a new deploy went live. `must-revalidate` (not `no-store`) was chosen deliberately so an unchanged file can still return a cheap 304 instead of a full re-download; a live check today confirmed both CSS and JS responses carry a matching `ETag` and the expected `Cache-Control` value. Images and other static assets are intentionally left on Cloudflare's default caching — they change far less often. **HTML responses were also observed carrying the same `Cache-Control: public, max-age=0, must-revalidate` today**, even though `_headers` doesn't declare that for `/*` — likely a Cloudflare Pages platform default for document navigations rather than anything this repository configures; noted here as an observed fact, not independently diagnosed further.
+
+Cloudflare also adds its own operational headers on every response (`CF-RAY`, `Server: cloudflare`, `NEL`/`Report-To`, a permissive `Access-Control-Allow-Origin: *`, `Speculation-Rules`) — expected platform behavior, not something `_headers` or this repository controls.
+
+If a caching issue is ever suspected beyond what `_headers` already addresses, the Cloudflare dashboard exposes a manual **Purge Cache** action under Caching as a fallback.
+
+---
+
+## 10. SEO and public platform files
+
+Verified directly against the repository source and, where noted, a live fetch today.
+
+- **`robots.txt`:** disallows `/pages/settings.html`, `/pages/workshop.html`, `/pages/notifications.html`, `/pages/login.html`, `/pages/signup.html`, `/pages/build/edit.html`, `/design-system.html`, and `/tests/` (all account-specific, private, or developer-only — no public SEO value); references `sitemap.xml` at `https://specboundapp.com/sitemap.xml`. A live fetch today confirmed the repository's own rules are served intact, but Cloudflare additionally injects a "Managed content" block ahead of them — AI-crawler-specific `Disallow` rules (GPTBot, CCBot, Bytespider, etc.) and a `Content-Signal` directive — that isn't present in this repo's committed file. This is Cloudflare account/zone-level behavior, not something `robots.txt`'s source controls.
+- **`sitemap.xml`:** 13 URLs today — confirmed both from the repository file and a live fetch, all using `https://specboundapp.com`: the homepage, Explore, Search, the 6 category pages, and the 4 legal pages. Individual build/profile pages are deliberately excluded (dynamic, numerous, already reachable via internal links). This count isn't pinned as a permanent constant — verify it directly (`grep -c "<loc>" sitemap.xml`) rather than trusting a frozen number if this file changes later.
+- **`manifest.webmanifest`:** references three icon sizes (32×32, 192×192, 512×512), all present under `assets/brand/logo/`. Confirmed identical between the repository file and a live fetch. Not a full PWA (no service worker).
+- **Favicons:** `index.html` and `404.html` link PNG favicons at 16×16, 32×32, and 48×48, plus an `apple-touch-icon`. `assets/brand/logo/favicon.svg` exists in the repository but is **not** linked from any page `<head>` as an active favicon today — if a future page adds an SVG favicon link, update this section rather than assuming it already exists.
+- **`404.html`:** a custom branded page, correctly returned for a nonexistent path — confirmed live today (`404` status, the actual custom page content, not Cloudflare's generic default). It also sets `<meta name="robots" content="noindex">`. No custom 500 page exists or is needed — this architecture has no server-side code path that could produce one; Supabase-layer failures are handled by the app's own client-side error UI.
+- **Open Graph / Twitter Card image:** `assets/brand/og/og-image.png` (1200×630), the single generic image used by every page including dynamic ones. This app has no server-side rendering, so a static HTML template cannot emit a different image per build — a disclosed limitation, not an oversight.
+
+---
+
+## 11. Deployment verification
+
+Kept deliberately separated by who or what actually performs each check, so nothing gets assumed covered by a layer that doesn't actually cover it.
+
+**Automated, on every push and pull request (GitHub Actions, `.github/workflows/ci.yml`):** JavaScript syntax validation, local reference checking, accessibility regressions, CSP/bootstrap validation, production-domain validation, and the browser-based regression suite under `tests/*.test.html`. See `docs/CI.md` for exactly what each covers and its known limitations. **GitHub Actions does not run the SQL migration/RLS policy tests** — those live under `supabase/tests/` and require a separate, disposable local Supabase/Docker stack (`supabase db reset --local`); they are not part of this CI pipeline.
+
+**Safe public endpoint checks (no sign-in, no state change) — performed for this documentation task, results above:** homepage HTTPS/200, HTTP→HTTPS redirect, `robots.txt`, `sitemap.xml`, `manifest.webmanifest`, a nonexistent-path 404, and response headers on an HTML/CSS/JS sample. These are safe to repeat at any time.
+
+**Manual signed-in smoke tests — not performed by this documentation task, and not to be inferred as passing from the checks above:**
+- Homepage, Explore, a build page, Login, Signup, the editor, and Settings load with zero CSP violation console errors
+- View-source on a sample of pages shows `<title>`, `<meta name="description">`, and `og:*`/`twitter:*` tags in the raw HTML response
+- A real password-reset email test against production, confirming the emailed link points at `https://specboundapp.com`
+
+**Already completed, recorded here as verified (not re-performed today):** the full Discord production test in §8.
+
+**Human dashboard checks — cannot be performed from this environment:** confirming the live Cloudflare Pages build/output/pruning settings actually match §3; confirming Supabase's Site URL/Redirect URLs/Discord provider match §7 by looking at the dashboard directly rather than relying on the verified starting state.
+
+---
+
+## 12. Rollback procedure
+
+Cloudflare Pages retains every deployment. To roll back:
 
 1. Cloudflare dashboard → Pages project → **Deployments** tab.
-2. Find the last known-good deployment in the list.
-3. Click **Retry deployment** / use the "..." menu → **Rollback to this deployment** (exact label may vary slightly by dashboard version).
-4. This takes effect immediately — no rebuild, no waiting, no git operation required. Git history and Cloudflare's deployment history are independent; a bad deploy can be undone without touching the repository at all.
+2. Find the last known-good deployment.
+3. Use **Rollback to this deployment** (or "Retry deployment" — exact label may vary by dashboard version).
+4. Takes effect immediately — no rebuild, no waiting, no git operation required. Cloudflare's deployment history is independent of git history; a bad deploy can be undone without touching the repository.
 
-This directly closes the **L3 rollback plan** gap flagged in the original Milestone 9 audit (`docs/milestones/MILESTONE_9_ARCHITECTURE.md`).
+This describes Cloudflare Pages' documented rollback **capability**. **No live rollback drill has been performed and is not claimed here** — see §13. Reverting through git (reverting or resetting a commit on `main` and pushing) is a separate, slower path that triggers a brand-new build rather than instantly restoring a prior one; the dashboard rollback above is the faster option for an active incident.
 
-## 8. Cache invalidation
+---
 
-Cloudflare Pages automatically invalidates its own **edge** cache as part of every deployment — a new deploy's assets are live at Cloudflare's edge immediately, not gradually replacing a stale cached copy there.
+## 13. Remaining operational checks
 
-That's a separate layer from the **browser's** own cache, though, and the assumption this section originally made — that omitting `Cache-Control` from `_headers` avoids any staleness risk — turned out to be wrong in practice. Cloudflare Pages applies its own default `Cache-Control: public, max-age=14400, must-revalidate` (a 4-hour browser cache) to any static asset `_headers` doesn't otherwise cover, CSS/JS included, despite this app having no content-hashed/versioned filenames. Confirmed on a real device after a deploy: a fresh Safari Private tab got the current navbar; an already-open regular Safari tab kept rendering the pre-deploy CSS/JS for up to four hours, since the browser was honoring that max-age regardless of what Cloudflare's edge was already serving.
+Genuinely open items — nothing here is marked complete without evidence:
 
-`_headers` now adds a `Cache-Control: public, max-age=0, must-revalidate` rule for `/css/*` and `/js/*`. Cloudflare Pages doesn't pick a single "most specific" rule per request — it combines every matching rule, and if more than one matching rule sets the *same* header, the values are joined with a comma. That combining behavior is exactly why this works cleanly here: the existing `/*` rule doesn't set `Cache-Control` at all, so there's no value to comma-join — CSS/JS simply gain this one header while still picking up every header `/*` does set (the security headers), since those header names aren't repeated in the new rules. Every load now sends a conditional revalidation request instead of blindly reusing a browser-cached copy for up to four hours, so a new deploy becomes visible on a normal reload. Images and other static assets are deliberately left on Cloudflare's 14400s default (no `_headers` rule for them) — they change far less often, so the caching benefit outweighs the staleness risk there. `no-store` was deliberately avoided: `must-revalidate` still lets a conditional (304) response skip re-downloading the body when nothing changed, `no-store` would not.
+- **Confirm and, if needed, correct the live Cloudflare Pages build command.** §3's read-only checks today show `tests/`, `.claude/`, `tools/`, and `.github/` are currently reachable in production, contradicting the documented pruning behavior. No secrets are exposed by this, but the dashboard setting should be checked and fixed.
+- SMTP/email provider configuration for production traffic — Supabase's default email service has strict rate limits, not recommended at scale. Not verified in this task.
+- Confirming the Supabase project's backup/point-in-time-recovery tier. Not verified in this task.
+- A real production password-reset email test, confirming the emailed link resolves to `https://specboundapp.com`.
+- A real rollback drill (§12) — capability is documented, a live test is not.
+- Cross-browser/cross-device manual checks — not currently covered by any automated or manual process beyond ad hoc spot checks during development.
+- Revisiting HSTS (§6) once the domain has run stably on HTTPS for a burn-in period.
 
-If a caching issue is ever suspected beyond this (e.g. a Cloudflare-side incident), the dashboard exposes a manual **Purge Cache** action under Caching as a fallback — not expected to be needed in normal operation.
+---
 
-## 9. Post-deployment smoke tests
+## 14. Related documentation
 
-Run after the first production deploy, and after every deploy that touches anything listed:
-
-1. Homepage loads, no console errors beyond expected/unrelated ones.
-2. HTTPS enforced (`http://` → `https://` redirect).
-3. `/robots.txt` returns the expected disallow list.
-4. `/sitemap.xml` returns valid XML with the 13 expected URLs, each resolving 200.
-5. `/manifest.webmanifest` returns valid JSON; both icon URLs resolve 200.
-6. Favicon (SVG) and the PNG fallback both resolve with correct `Content-Type`.
-7. Request a nonexistent URL — confirm the custom `404.html` renders (not Cloudflare's generic default).
-8. Open browser console on: homepage, Explore, a build page, Login, Signup, the editor, Settings — confirm **zero CSP violation errors** on any of them (a CSP violation is silent in the UI but appears as a `Refused to ...` console error).
-9. View-source (not the rendered DOM) on a sample of pages — confirm `<title>`, `<meta name="description">`, and the `og:*`/`twitter:*` tags are present in the raw HTML response, since social/search crawlers generally don't execute this app's JS.
-10. Trigger a real password-reset email against the production domain (a real or test account) — confirm the emailed link points at the production domain, not a dev/localhost URL.
-11. Perform one real rollback test (§7): promote the previous deployment, confirm the site reverts, then re-promote forward again — proving the rollback plan works in practice, not just on paper.
-
-## 10. Production environment verification checklist
-
-One-time, before announcing the site publicly:
-
-- [ ] `https://specbound.app` placeholder replaced with the real domain everywhere (§3)
-- [ ] Cloudflare Pages project connected to the GitHub repo, build command/output directory set (§1)
-- [ ] Custom domain added, DNS configured, SSL active (§5)
-- [ ] Supabase Site URL and Redirect URLs updated to the real domain (§4)
-- [ ] All 11 smoke tests in §9 pass
-- [ ] Rollback tested once, live (§9.11)
-- [ ] `robots.txt`/`sitemap.xml` reference the real domain, not the placeholder
-- [ ] No secrets committed anywhere in the repo (already confirmed clean throughout this milestone; re-check `git log`/`git diff` for this deploy's changes specifically before pushing)
+- [`docs/CI.md`](CI.md) — what runs automatically, what still needs manual/browser verification, and how to run the same checks locally
+- [`docs/DISCORD_SETUP.md`](DISCORD_SETUP.md) — full Discord account-linking configuration, troubleshooting, and manual test procedure
+- [`docs/AUTH_ARCHITECTURE.md`](AUTH_ARCHITECTURE.md) — the auth/profile/RLS model referenced in §7
+- [`docs/STORAGE_ARCHITECTURE.md`](STORAGE_ARCHITECTURE.md) — Storage bucket layout and access policy referenced in §7
