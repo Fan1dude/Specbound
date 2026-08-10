@@ -17,6 +17,7 @@ jobs:
       - run: node tools/ci/check-syntax.js
       - run: node tools/ci/check-references.js
       - run: node tools/ci/check-a11y-regressions.js
+      - run: node tools/ci/check-csp-bootstrap.js
 
   browser-tests:
     name: Browser test suite (tests/*.test.html)

@@ -56,6 +56,17 @@
     max-width: 520px;
 }
 
+/* form.css's generic `input:focus-visible` rule (outline: none +
+   box-shadow: var(--focus-ring)) is meant to cover this element too,
+   but production testing found it not rendering a visible ring here —
+   an explicit rule scoped to .search-bar, matching the same pattern
+   already used for .nav-toggle:focus-visible directly below,
+   guarantees one regardless. */
+.search-bar:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
 .nav-links {
     display: flex;
     align-items: center;

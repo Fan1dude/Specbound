@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>renderTechnologyBreakdown — CSP-safe dynamic styling</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>renderTechnologyBreakdown — CSP-safe dynamic styling</h1>
+    <p>
+        Covers the fix for two <code>style="..."</code> HTML attributes
+        (segment width/color, swatch color) that this app's CSP
+        (style-src has no 'unsafe-inline') silently blocked. Confirmed
+        empirically, against the exact production CSP as a real HTTP
+        response header via Playwright/Chromium, that
+        <code>element.style.setProperty()</code> is NOT restricted the
+        same way <code>style=""</code> HTML attributes and
+        <code>setAttribute("style", ...)</code> are (both fall under
+        style-src's `style-src-attr` sub-directive; direct CSSOM
+        property assignment does not) — so the fix keeps using CSSOM,
+        it does not need generated CSS classes. This file proves the
+        runtime output is functionally correct (right width/color per
+        technology, via CSS custom properties) and that the style
+        attribute CSSOM assignment leaves behind never contains a
+        literal `width`/`background` declaration — only the intended
+        `--breakdown-*` custom properties, which is what
+        tools/ci/check-csp-bootstrap.js's static source scan can't see
+        (it only checks the source text, not the rendered DOM).
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="profileTechBreakdown" hidden></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        const { renderTechnologyBreakdown } = await import("../js/pages/profile/renderTechnologyBreakdown.js");
+
+        // pc_build (#4F7DFF) x3, arduino (#32D583) x1 — real ids/accents
+        // from js/config/technologies/*.js, not invented values.
+        const builds = [
+            { category: "pc_build" },
+            { category: "pc_build" },
+            { category: "pc_build" },
+            { category: "arduino" }
+        ];
+
+        renderTechnologyBreakdown(builds);
+
+        const el = document.getElementById("profileTechBreakdown");
+        test("the breakdown section is un-hidden once builds exist", el.hidden === false);
+
+        const segments = [...el.querySelectorAll(".tech-breakdown-segment")];
+        const swatches = [...el.querySelectorAll(".tech-breakdown-swatch")];
+
+        test("one segment rendered per represented technology (2)", segments.length === 2);
+        test("one legend swatch rendered per represented technology (2)", swatches.length === 2);
+
+        // --- Functional correctness: the right proportion/color landed on
+        // the right element, via the CSS custom properties the fix uses. ---
+        const pcSegment = segments[0];
+        const arduinoSegment = segments[1];
+
+        test(
+            "the majority (pc_build, 3/4 builds) segment gets --breakdown-width: 75.00%",
+            pcSegment.style.getPropertyValue("--breakdown-width").trim() === "75.00%"
+        );
+        test(
+            "the majority segment gets --breakdown-color set to pc_build's real accent (#4F7DFF)",
+            pcSegment.style.getPropertyValue("--breakdown-color").trim() === "#4F7DFF"
+        );
+        test(
+            "the minority (arduino, 1/4 builds) segment gets --breakdown-width: 25.00%",
+            arduinoSegment.style.getPropertyValue("--breakdown-width").trim() === "25.00%"
+        );
+        test(
+            "the minority segment gets --breakdown-color set to arduino's real accent (#32D583)",
+            arduinoSegment.style.getPropertyValue("--breakdown-color").trim() === "#32D583"
+        );
+        test(
+            "the matching legend swatch gets the same --breakdown-color as its segment (pc_build)",
+            swatches[0].style.getPropertyValue("--breakdown-color").trim() === "#4F7DFF"
+        );
+        test(
+            "the matching legend swatch gets the same --breakdown-color as its segment (arduino)",
+            swatches[1].style.getPropertyValue("--breakdown-color").trim() === "#32D583"
+        );
+
+        // --- CSP-safety regression guard on the RENDERED output: CSSOM
+        // property assignment does populate the style="" attribute (an
+        // empirically confirmed, CSP-permitted exception — see the note
+        // above) — so "no style attribute at all" is NOT the right
+        // invariant to assert. The right one is that every declaration
+        // in it is a custom property (--breakdown-*), never a literal
+        // `width:`/`background:` — that's exactly the pattern CSP
+        // actually blocks (style-src-attr), and exactly what the
+        // original bug looked like. ------------------------------------
+        function onlyCustomPropertyDeclarations(styleAttrValue) {
+            const declarations = (styleAttrValue || "")
+                .split(";")
+                .map((part) => part.trim())
+                .filter(Boolean);
+            return declarations.length > 0 && declarations.every((decl) => decl.startsWith("--"));
+        }
+
+        for (const [label, node] of [
+            ["pc_build segment", pcSegment],
+            ["arduino segment", arduinoSegment],
+            ["pc_build swatch", swatches[0]],
+            ["arduino swatch", swatches[1]]
+        ]) {
+            const styleAttr = node.getAttribute("style");
+            test(
+                `${label}'s style="" attribute (CSSOM-populated) contains only --breakdown-* custom properties, never a literal width/background declaration`,
+                onlyCustomPropertyDeclarations(styleAttr),
+                `style="${styleAttr}"`
+            );
+        }
+
+        // --- Empty/no-builds states still work and leave nothing stale ----
+        const elForEmpty = document.getElementById("profileTechBreakdown");
+        renderTechnologyBreakdown([]);
+        test("rendering with zero builds re-hides the section", elForEmpty.hidden === true);
+        test("rendering with zero builds clears prior markup", elForEmpty.innerHTML === "");
+
+        // --- Render + report --------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`technologyBreakdownCsp.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

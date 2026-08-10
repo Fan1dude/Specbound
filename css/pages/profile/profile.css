@@ -553,6 +553,11 @@
 
 .tech-breakdown-segment {
     height: 100%;
+    /* Set per-segment via CSSOM in renderTechnologyBreakdown.js, not an
+       inline style="" attribute — see that file's own CSP-compatibility
+       note. */
+    width: var(--breakdown-width, 0%);
+    background: var(--breakdown-color, var(--surface-card));
     transition: width var(--duration-slow) var(--ease-precise);
 }
 
@@ -592,6 +597,9 @@
     height: 10px;
     border-radius: var(--radius-pill);
     flex-shrink: 0;
+    /* Set per-swatch via CSSOM in renderTechnologyBreakdown.js — same
+       note as .tech-breakdown-segment above. */
+    background: var(--breakdown-color, var(--surface-card));
 }
 
 .tech-breakdown-title {
