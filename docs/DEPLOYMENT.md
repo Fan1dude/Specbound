@@ -145,10 +145,10 @@ Cloudflare Pages retains every deployment. To roll back:
 
 1. Cloudflare dashboard → Pages project → **Deployments** tab.
 2. Find the last known-good deployment.
-3. Use **Rollback to this deployment** (or "Retry deployment" — exact label may vary by dashboard version).
-4. Takes effect immediately — no rebuild, no waiting, no git operation required. Cloudflare's deployment history is independent of git history; a bad deploy can be undone without touching the repository.
+3. Open the three-dot actions menu for the desired previous production deployment, select **Rollback to this deployment**, and confirm.
+4. Once confirmed, the selected deployment becomes production immediately—no rebuild or git operation is required. Cloudflare's deployment history is independent of git history; a bad deploy can be undone without touching the repository.
 
-This describes Cloudflare Pages' documented rollback **capability**. **No live rollback drill has been performed and is not claimed here** — see §13. Reverting through git (reverting or resetting a commit on `main` and pushing) is a separate, slower path that triggers a brand-new build rather than instantly restoring a prior one; the dashboard rollback above is the faster option for an active incident.
+This describes Cloudflare Pages' documented rollback **capability**. **No live rollback drill has been performed and is not claimed here** — see §13. Reverting through git (`git revert` on the bad commit and pushing the resulting commit to `main`) is a separate, slower path that triggers a brand-new build rather than instantly restoring a prior one; the dashboard rollback above is the faster option for an active incident.
 
 ---
 
