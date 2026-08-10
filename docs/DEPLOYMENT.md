@@ -17,7 +17,7 @@ The site is live, HTTPS is active, and Cloudflare preview deployments on pull re
 
 ## 2. Architecture and hosting model
 
-Cloudflare Pages serves the static files from its configured output directory without transforming them. The developer and CI directories intended for exclusion are currently still being published, as documented in §§3 and 5. `tools/ci/package.json` exists only for CI's own tooling (Playwright, for the browser test suite) and is deliberately kept out of the repository root so Cloudflare Pages' root-directory build detection never sees it; see `docs/CI.md`.
+Cloudflare Pages serves the static files from its configured output directory without transforming them. The developer and CI directories are kept out of production through the build command and a WAF rule described in §§3 and 5. `tools/ci/package.json` exists only for CI's own tooling (Playwright, for the browser test suite) and is deliberately kept out of the repository root so Cloudflare Pages' root-directory build detection never sees it; see `docs/CI.md`.
 
 Supabase provides everything server-side: Auth (including Discord's native OAuth identity-linking), the PostgreSQL database, Storage for images, RPC functions, and Row Level Security as the access-control layer on every table. The frontend talks to Supabase directly from the browser using a publishable client key — see §7.
 
@@ -25,19 +25,19 @@ Supabase provides everything server-side: Auth (including Discord's native OAuth
 
 ## 3. Cloudflare Pages configuration
 
-The repository documents the following as the **expected** Cloudflare Pages project configuration. This task did not inspect the live Cloudflare dashboard directly — confirm these values there rather than treating this table as independently re-verified today:
-
-| Setting | Expected value |
+| Setting | Value |
 |---|---|
 | Framework preset | None |
-| Build command | `rm -rf tests .claude tools .github` |
+| Build command | `rm -rf tests tools .github .claude` |
 | Build output directory | `/` (repository root) |
 | Root directory | `/` (repository root) |
 | Production branch | `main` |
 
-The build command isn't building anything — it's intended to prune developer/CI-only directories (`tests/`, `.claude/`, `tools/`, `.github/`) from the published output before Cloudflare serves it. Cloudflare's build-watch exclusions control whether changes trigger a build; they do not remove files from the deployed output. The documented build command is therefore intended to remove these directories before the output is published.
+The build command isn't building anything — it removes the developer/CI-only directories (`tests/`, `tools/`, `.github/`, `.claude/`) from each new deployment's copy of the repository before Cloudflare Pages publishes it. This only affects Cloudflare's own temporary deployment copy — it doesn't delete anything from GitHub or from any local development environment. Cloudflare's build-watch exclusions are a separate setting that only controls whether a commit triggers a new build; they don't remove anything from what's already published, which is why the `rm -rf` build command above is the mechanism that actually performs the pruning.
 
-**Read-only production checks performed for this task show this pruning is not currently taking effect.** Fetching `https://specboundapp.com/tests/mobileAccountMenu.test.html`, `.../tools/ci/check-syntax.js`, and `.../.github/workflows/ci.yml` each returned real, live content, not a 404. None of the exposed files contain secrets — confirmed both by this repository's own no-secrets convention (no `.env`, no service-role key, no credentials anywhere in tracked files) and by `git ls-files .claude/`, which shows only `README.md`, `launch.json`, and `nocache_server.py` are actually tracked there (`.claude/settings.local.json` is git-ignored and was never pushed to GitHub, so Cloudflare never had it regardless of pruning). The practical impact today is low — dev/CI scaffolding and test pages are reachable but not secret-bearing — but the configured build command should be confirmed and corrected in the Cloudflare dashboard; see §13.
+A Cloudflare WAF custom rule, **"Block developer and CI paths,"** additionally blocks requests to the `tests/`, `tools/`, `.github/`, and `.claude/` path prefixes at the edge — a second, independent layer on top of the build command. This protects against legacy Pages assets that may remain distributed temporarily (for example, cached at a specific edge location from a deployment made before the build command was corrected), not just new deployments going forward.
+
+**Read-only production checks performed for this task confirm both layers are working.** Representative tracked files from all four directories — checked both by their plain URL and by a version with a unique cache-busting query parameter — consistently returned `403`, and the response body in every case was Cloudflare's own block page, not the original file content. The production homepage remained available at `200` throughout. This confirms the blocked paths return `403`, not `404` — the WAF rule intercepts the request before Cloudflare Pages would otherwise return a 404 for a genuinely missing file. This wasn't an exhaustive test of every file under every directory, only representative tracked files.
 
 `design-system.html` (an unlinked internal style-guide page) is deliberately **not** pruned — it's harmless to publish and is already covered by `robots.txt`'s disallow list (§10).
 
@@ -55,7 +55,7 @@ The build command isn't building anything — it's intended to prune developer/C
 
 **Intended to be published:** `index.html`, `404.html`, `robots.txt`, `sitemap.xml`, `manifest.webmanifest`, `_headers`, `pages/**`, `css/**`, `js/**`, `assets/**`, `design-system.html`, and `supabase/**` (the SQL migration/rollback source). These SQL files are not executable by a static host and publishing them does not grant any database access — the live database is reachable only through Supabase's own API surface, governed by RLS, entirely independent of whether its schema source is publicly readable. They aren't secret; they simply document schema history.
 
-**Intended to be pruned before publishing:** `tests/` (the browser-based regression suite), `.claude/` (local dev tooling), `tools/` (CI scripts and CI-only `package.json`), `.github/` (the CI workflow definition). As documented in §3, live checks today show this pruning is not currently in effect — these directories are reachable in production, though none contain secrets.
+**Pruned before publishing:** `tests/` (the browser-based regression suite), `.claude/` (local dev tooling), `tools/` (CI scripts and CI-only `package.json`), `.github/` (the CI workflow definition). Removed from each new deployment's published copy by the build command in §3, with a Cloudflare WAF rule additionally blocking those four path prefixes at the edge as a second, independent layer — see §3 for the read-only checks confirming both.
 
 ---
 
@@ -156,7 +156,6 @@ This describes Cloudflare Pages' documented rollback **capability**. **No live r
 
 Genuinely open items — nothing here is marked complete without evidence:
 
-- **Confirm and, if needed, correct the live Cloudflare Pages build command.** §3's read-only checks today show `tests/`, `.claude/`, `tools/`, and `.github/` are currently reachable in production, contradicting the documented pruning behavior. No secrets are exposed by this, but the dashboard setting should be checked and fixed.
 - SMTP/email provider configuration for production traffic — Supabase's default email service has strict rate limits, not recommended at scale. Not verified in this task.
 - Confirming the Supabase project's backup/point-in-time-recovery tier. Not verified in this task.
 - A real production password-reset email test, confirming the emailed link resolves to `https://specboundapp.com`.
