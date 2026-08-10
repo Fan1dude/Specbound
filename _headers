@@ -2,7 +2,29 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), microphone=(), camera=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://xpxjqyraizntbtijzoyp.supabase.co; connect-src 'self' https://xpxjqyraizntbtijzoyp.supabase.co; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://xpxjqyraizntbtijzoyp.supabase.co; connect-src 'self' https://xpxjqyraizntbtijzoyp.supabase.co https://cloudflareinsights.com; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+
+# script-src's https://static.cloudflareinsights.com and connect-src's
+# https://cloudflareinsights.com (deliberately different subdomains —
+# not a typo) allow exactly Cloudflare Pages' own "Web Analytics"
+# beacon, which Cloudflare injects into every page's HTML response at
+# the edge (it is NOT present in this repo's own page source — grep
+# won't find it here). It loads
+# https://static.cloudflareinsights.com/beacon.min.js (plus a
+# same-origin versioned sub-resource under that same path, e.g.
+# .../beacon.min.js/v<hash>) and, once loaded, reports each pageview to
+# https://cloudflareinsights.com/cdn-cgi/rum — a bare-domain endpoint
+# per Cloudflare's own documented Web Analytics CSP guidance, hence the
+# separate connect-src entry rather than reusing the static. origin.
+# Confirmed via production console CSP violations during the anonymous
+# smoke test that first found this whole defect: the beacon script tag
+# itself is external (`<script defer src="https://static.
+# cloudflareinsights.com/beacon.min.js" data-cf-beacon="...">`), so
+# these two narrow origin allowances are sufficient — no 'unsafe-inline'
+# needed for this. The SEPARATE inline-script violations seen in that
+# same console output were this app's own category/legal page bootstrap
+# blocks, fixed directly (see js/pages/categories/bootstrap.js and
+# js/pages/legal/bootstrap.js), not a CSP change.
 
 # Cloudflare Pages applies its own default Cache-Control (public,
 # max-age=14400, must-revalidate — a 4-hour browser cache) to static

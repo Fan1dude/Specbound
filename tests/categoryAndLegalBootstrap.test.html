@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CSP fix — category and legal page bootstrap</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>CSP fix — category and legal page bootstrap</h1>
+    <p>
+        Covers the production defect where all 6 category pages and all
+        4 static legal pages rendered completely blank: their bootstrap
+        was a bare inline <code>&lt;script type="module"&gt;</code>
+        block, which this app's own CSP (script-src has no
+        'unsafe-inline', no nonce, no hash) silently blocks. Proves the
+        replacement external entry points
+        (js/pages/categories/bootstrap.js,
+        js/pages/legal/bootstrap.js) actually call loadNavbar(),
+        loadFooter(), and (for category pages) renderCategoryPage()
+        with the expected path prefix against a real DOM — the
+        structural "no inline script anywhere" proof lives in
+        tools/ci/check-csp-bootstrap.js instead, since that's a static
+        source-scanning concern, not a runtime one.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        // --- Case 1: categories/bootstrap.js -------------------------------
+        // loadNavbar/loadFooter/renderCategoryPage are mocked (recording
+        // calls) rather than exercised for real — this test's job is to
+        // prove bootstrap.js imports and calls all three with the right
+        // pathPrefix, not to re-test loadNavbar()'s or
+        // renderCategoryPage()'s own internal behavior (covered
+        // elsewhere / by their own modules).
+        {
+            const calls = [];
+
+            const layoutMockSrc = `
+                export function loadNavbar(prefix) { self.__calls.push(["loadNavbar", prefix]); }
+                export function loadFooter(prefix) { self.__calls.push(["loadFooter", prefix]); }
+            `;
+            const renderCategoryPageMockSrc = `
+                export function renderCategoryPage(prefix) { self.__calls.push(["renderCategoryPage", prefix]); }
+            `;
+
+            self.__calls = calls;
+
+            const realSrc = await (await fetch("../js/pages/categories/bootstrap.js")).text();
+            const rewritten = realSrc
+                .replaceAll('"../../core/layout.js"', `"${blobUrl(layoutMockSrc)}"`)
+                .replaceAll('"./renderCategoryPage.js"', `"${blobUrl(renderCategoryPageMockSrc)}"`);
+
+            test(
+                "categories/bootstrap.js's imports were fully rewritten (no unmocked relative import left)",
+                !rewritten.includes('"../../core/layout.js"') && !rewritten.includes('"./renderCategoryPage.js"')
+            );
+
+            await import(blobUrl(rewritten));
+
+            test(
+                "categories/bootstrap.js calls loadNavbar, loadFooter, and renderCategoryPage exactly once each",
+                calls.length === 3
+            );
+            test(
+                "categories/bootstrap.js calls loadNavbar with the category-page path prefix",
+                calls.some(([fn, prefix]) => fn === "loadNavbar" && prefix === "../../")
+            );
+            test(
+                "categories/bootstrap.js calls loadFooter with the category-page path prefix",
+                calls.some(([fn, prefix]) => fn === "loadFooter" && prefix === "../../")
+            );
+            test(
+                "categories/bootstrap.js calls renderCategoryPage with the category-page path prefix",
+                calls.some(([fn, prefix]) => fn === "renderCategoryPage" && prefix === "../../")
+            );
+        }
+
+        // --- Case 2: legal/bootstrap.js -------------------------------------
+        // Shared by all 4 static legal pages (terms/privacy/community-
+        // guidelines/affiliate-disclosure) — none of them need per-page
+        // rendering logic, only navbar + footer.
+        {
+            const calls = [];
+
+            const layoutMockSrc = `
+                export function loadNavbar(prefix) { self.__legalCalls.push(["loadNavbar", prefix]); }
+                export function loadFooter(prefix) { self.__legalCalls.push(["loadFooter", prefix]); }
+            `;
+
+            self.__legalCalls = calls;
+
+            const realSrc = await (await fetch("../js/pages/legal/bootstrap.js")).text();
+            const rewritten = realSrc.replaceAll('"../../core/layout.js"', `"${blobUrl(layoutMockSrc)}"`);
+
+            test(
+                "legal/bootstrap.js's import was fully rewritten (no unmocked relative import left)",
+                !rewritten.includes('"../../core/layout.js"')
+            );
+
+            await import(blobUrl(rewritten));
+
+            test(
+                "legal/bootstrap.js calls loadNavbar and loadFooter exactly once each",
+                calls.length === 2
+            );
+            test(
+                "legal/bootstrap.js calls loadNavbar with the legal-page path prefix",
+                calls.some(([fn, prefix]) => fn === "loadNavbar" && prefix === "../../")
+            );
+            test(
+                "legal/bootstrap.js calls loadFooter with the legal-page path prefix",
+                calls.some(([fn, prefix]) => fn === "loadFooter" && prefix === "../../")
+            );
+        }
+
+        // --- Case 3: every category and legal HTML page actually loads the
+        // shared bootstrap file via an external <script src>, not an
+        // inline block — a live-DOM cross-check on top of
+        // tools/ci/check-csp-bootstrap.js's static source scan. -------------
+        {
+            const categoryPages = [
+                "pc-builds", "desk-setups", "arduino", "robotics", "3d-printing", "home-labs"
+            ];
+            const legalPages = [
+                "terms", "privacy", "community-guidelines", "affiliate-disclosure"
+            ];
+
+            for (const name of categoryPages) {
+                const html = await (await fetch(`../pages/categories/${name}.html`)).text();
+                const doc = new DOMParser().parseFromString(html, "text/html");
+                const script = doc.querySelector('script[type="module"]');
+
+                test(
+                    `pages/categories/${name}.html's module script has a src attribute (not an inline block)`,
+                    Boolean(script?.getAttribute("src"))
+                );
+                test(
+                    `pages/categories/${name}.html points at the shared categories bootstrap file`,
+                    script?.getAttribute("src") === "../../js/pages/categories/bootstrap.js"
+                );
+            }
+
+            for (const name of legalPages) {
+                const html = await (await fetch(`../pages/legal/${name}.html`)).text();
+                const doc = new DOMParser().parseFromString(html, "text/html");
+                const script = doc.querySelector('script[type="module"]');
+
+                test(
+                    `pages/legal/${name}.html's module script has a src attribute (not an inline block)`,
+                    Boolean(script?.getAttribute("src"))
+                );
+                test(
+                    `pages/legal/${name}.html points at the shared legal bootstrap file`,
+                    script?.getAttribute("src") === "../../js/pages/legal/bootstrap.js"
+                );
+            }
+        }
+
+        // --- Case 4: the navbar search input gets a visible focus ring -----
+        // :focus-visible itself depends on real keyboard-interaction/window-
+        // focus heuristics that aren't reliable in an automated harness (a
+        // real risk confirmed while diagnosing this exact bug), so this
+        // checks the CSS source directly rather than a live focus event —
+        // deterministic either way.
+        {
+            const css = await (await fetch("../css/layout/navbar.css")).text();
+            const match = css.match(/\.search-bar:focus-visible\s*\{([^}]*)\}/);
+
+            test(
+                "navbar.css defines a .search-bar:focus-visible rule",
+                Boolean(match)
+            );
+            test(
+                ".search-bar:focus-visible sets a visible box-shadow (var(--focus-ring))",
+                Boolean(match && /box-shadow\s*:\s*var\(--focus-ring\)/.test(match[1]))
+            );
+        }
+
+        // --- Render + report --------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`categoryAndLegalBootstrap.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>
