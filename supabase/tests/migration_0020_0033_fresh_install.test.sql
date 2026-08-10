@@ -1,25 +1,35 @@
 -- Fresh-install migration test —
--- supabase/tests/migration_0020_0032_fresh_install.test.sql
+-- supabase/tests/migration_0020_0033_fresh_install.test.sql
 --
 -- Verifies the parts-catalog portion (0020-0022) of the migration chain
 -- ends up in the shape this app's code expects, once the FULL chain
--- (0000-0032) has been applied to a database that never saw any of it
+-- (0000-0033) has been applied to a database that never saw any of it
 -- before. This is the "does the corrected chain still work on a brand
 -- new database" half of the production-compatibility fix for
--- 0020-0022 — see migration_0020_0032_legacy_upgrade.test.sql (plus its
+-- 0020-0022 — see migration_0020_0033_legacy_upgrade.test.sql (plus its
 -- companion fixtures/legacy_catalog_fixture.sql) for the other half.
 --
--- Harness: this file assumes migrations 0000-0032 are ALREADY applied —
+-- Renamed from migration_0020_0032_*.test.sql when 0033 (function
+-- EXECUTE permission hardening) was added — 0033 changes no schema or
+-- data, only grants, so none of the assertions below needed to change;
+-- only the harness range and this file's own name did. Function-level
+-- EXECUTE/permission assertions live in their own dedicated file,
+-- migration_0033_function_execute_permissions.test.sql, matching this
+-- repo's existing convention of one concern per test file (compare
+-- milestone_22_profile_roles_visibility.test.sql being separate from
+-- these two).
+--
+-- Harness: this file assumes migrations 0000-0033 are ALREADY applied —
 -- it does not apply them itself. Actually applying the chain is the
 -- Supabase CLI's job, not psql's:
 --
 --   npx supabase db reset --local --no-seed
 --   docker exec -i <local-db-container> psql -U postgres -d postgres \
---       -v ON_ERROR_STOP=1 -f - < supabase/tests/migration_0020_0032_fresh_install.test.sql
+--       -v ON_ERROR_STOP=1 -f - < supabase/tests/migration_0020_0033_fresh_install.test.sql
 --
 -- (`supabase db reset --local` re-applies every file in
 -- supabase/migrations/ in order against a freshly wiped local
--- database — this genuinely is "apply 0000-0032 to an empty disposable
+-- database — this genuinely is "apply 0000-0033 to an empty disposable
 -- database," just performed by the CLI instead of a hand-rolled \i
 -- loop. Find the local db container name with
 -- `docker ps --format "{{.Names}}"` — look for the one whose image is

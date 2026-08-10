@@ -1,14 +1,21 @@
 -- Legacy-upgrade migration test —
--- supabase/tests/migration_0020_0032_legacy_upgrade.test.sql
+-- supabase/tests/migration_0020_0033_legacy_upgrade.test.sql
 --
--- Verifies that migrations 0020-0032, applied on top of a
+-- Verifies that migrations 0020-0033, applied on top of a
 -- production-shaped legacy fixture (9 components + 6 aliases), leave
 -- every existing row byte-for-byte intact, converge legacy and new
 -- columns, keep RLS/policies working, and leave both the legacy
 -- search_components() RPC and the moderation RPCs functional. This is
 -- the "does the corrected chain safely upgrade a database that already
 -- has production's populated catalog" half of the compatibility fix —
--- see migration_0020_0032_fresh_install.test.sql for the other half.
+-- see migration_0020_0033_fresh_install.test.sql for the other half.
+--
+-- Renamed from migration_0020_0032_*.test.sql when 0033 (function
+-- EXECUTE permission hardening) was added — 0033 changes no schema or
+-- data, only grants, so none of the assertions below needed to change;
+-- only the harness range and this file's own name did. Function-level
+-- EXECUTE/permission assertions live in their own dedicated file,
+-- migration_0033_function_execute_permissions.test.sql.
 --
 -- Harness — three ordered steps, all against the LOCAL Docker stack
 -- only (never --linked, never a real project connection string):
@@ -22,7 +29,7 @@
 --        docker exec -i <local-db-container> psql -U postgres -d postgres \
 --            -v ON_ERROR_STOP=1 -f - < supabase/tests/fixtures/legacy_catalog_fixture.sql
 --
---   3. Apply the remaining pending migrations (0020-0032) WITHOUT
+--   3. Apply the remaining pending migrations (0020-0033) WITHOUT
 --      wiping the fixture data just inserted — this is exactly what
 --      `migration up` does differently from `db reset` (reset always
 --      wipes and replays from scratch; `up` applies only what the
@@ -32,7 +39,7 @@
 --
 --   4. Run this file's assertions:
 --        docker exec -i <local-db-container> psql -U postgres -d postgres \
---            -v ON_ERROR_STOP=1 -f - < supabase/tests/migration_0020_0032_legacy_upgrade.test.sql
+--            -v ON_ERROR_STOP=1 -f - < supabase/tests/migration_0020_0033_legacy_upgrade.test.sql
 --
 -- (Find the local db container name with
 -- `docker ps --format "{{.Names}}"` — look for the one whose image is
