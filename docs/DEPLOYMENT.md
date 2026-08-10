@@ -37,7 +37,13 @@ The build command isn't building anything — it removes the developer/CI-only d
 
 A Cloudflare WAF custom rule, **"Block developer and CI paths,"** additionally blocks requests to the `tests/`, `tools/`, `.github/`, and `.claude/` path prefixes at the edge — a second, independent layer on top of the build command. This protects against legacy Pages assets that may remain distributed temporarily (for example, cached at a specific edge location from a deployment made before the build command was corrected), not just new deployments going forward.
 
-**Read-only production checks performed for this task confirm both layers are working.** Representative tracked files from all four directories — checked both by their plain URL and by a version with a unique cache-busting query parameter — consistently returned `403`, and the response body in every case was Cloudflare's own block page, not the original file content. The production homepage remained available at `200` throughout. This confirms the blocked paths return `403`, not `404` — the WAF rule intercepts the request before Cloudflare Pages would otherwise return a 404 for a genuinely missing file. This wasn't an exhaustive test of every file under every directory, only representative tracked files.
+**Read-only production checks performed for this task confirm these two layers separately, since a 403 from the WAF rule alone can't prove anything about what the deployment copy itself contains — the WAF intercepts a request before Cloudflare Pages would ever get to answer it.**
+
+- **Pruning layer:** confirmed by the fresh production deployment's own build log, which showed `rm -rf tests tools .github .claude` executing successfully. Before the WAF rule below was enabled, cache-busted requests for representative tracked files from all four directories returned `404` — supporting that those files were genuinely absent from that deployment's published copy, not just cached-and-then-blocked.
+- **WAF layer:** confirmed afterward, once the rule was enabled — representative plain and cache-busted requests across all four path prefixes consistently returned `403`, with Cloudflare's own generic block page as the response body in every case, never the original file content.
+- The production homepage remained available at `200` throughout both rounds of checking.
+
+Together these are two independent pieces of evidence for two independent mechanisms, not one check standing in for both. Neither round tested every file under every directory — only representative tracked files.
 
 `design-system.html` (an unlinked internal style-guide page) is deliberately **not** pruned — it's harmless to publish and is already covered by `robots.txt`'s disallow list (§10).
 
@@ -55,7 +61,7 @@ A Cloudflare WAF custom rule, **"Block developer and CI paths,"** additionally b
 
 **Intended to be published:** `index.html`, `404.html`, `robots.txt`, `sitemap.xml`, `manifest.webmanifest`, `_headers`, `pages/**`, `css/**`, `js/**`, `assets/**`, `design-system.html`, and `supabase/**` (the SQL migration/rollback source). These SQL files are not executable by a static host and publishing them does not grant any database access — the live database is reachable only through Supabase's own API surface, governed by RLS, entirely independent of whether its schema source is publicly readable. They aren't secret; they simply document schema history.
 
-**Pruned before publishing:** `tests/` (the browser-based regression suite), `.claude/` (local dev tooling), `tools/` (CI scripts and CI-only `package.json`), `.github/` (the CI workflow definition). Removed from each new deployment's published copy by the build command in §3, with a Cloudflare WAF rule additionally blocking those four path prefixes at the edge as a second, independent layer — see §3 for the read-only checks confirming both.
+**Pruned before publishing:** `tests/` (the browser-based regression suite), `.claude/` (local dev tooling), `tools/` (CI scripts and CI-only `package.json`), `.github/` (the CI workflow definition). Removed from each new deployment's published copy by the build command in §3, with a Cloudflare WAF rule additionally blocking those four path prefixes at the edge as a second, independent layer — see §3 for the separate deployment-log and HTTP evidence behind each.
 
 ---
 
