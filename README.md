@@ -117,7 +117,7 @@ The SQL test suites under `supabase/tests/` are separate: they run against a dis
 
 ## Testing and verification
 
-This repository has automated coverage in several independent categories, all wired into GitHub Actions on every push and pull request:
+**Run automatically by GitHub Actions on every push and pull request:**
 
 - A browser-based regression suite (`tests/*.test.html`, driven headlessly via Playwright)
 - JavaScript syntax validation across every source file
@@ -125,9 +125,14 @@ This repository has automated coverage in several independent categories, all wi
 - Accessibility regression checks against known bug classes
 - CSP/bootstrap validation (no inline scripts or styles the production Content-Security-Policy would block)
 - Production-domain validation (no leftover placeholder domain in shipped pages or crawler config)
-- SQL migration and RLS policy tests, run separately against a disposable local database
 
 See `docs/CI.md` for exactly what each check covers and its known limitations.
+
+**Not part of CI — run separately, by hand, against disposable local Supabase/Docker infrastructure:**
+
+- SQL migration and Row Level Security policy tests (`supabase/tests/`), run against a local `supabase db reset --local` stack, never against production or as part of any automated pipeline
+
+This split is deliberate: the CI checks above need nothing but Node, while the SQL suite needs the Supabase CLI and Docker running locally — see [Local development](#local-development) above.
 
 ---
 
