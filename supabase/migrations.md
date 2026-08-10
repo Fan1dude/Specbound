@@ -1015,22 +1015,28 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0033_restrict_function_execute_permissions
 
-- **Status**: The 17 explicit per-function REVOKE/GRANT statements (the
-  SQL manually applied through the Supabase SQL Editor, verified
-  successful) already secure the 17 existing functions in production
-  today. The GLOBAL default-privilege statement (`alter default
-  privileges for role postgres revoke execute on functions from
-  public;`) was added afterward, found and validated only in local
-  testing — it has **not** yet been applied to production, so
-  future-function protection is not yet complete there. Do not describe
-  it as complete until this file is deployed. Migration 0033 as a whole
-  is NOT recorded in production's migration-history table, since the
-  per-function statements were run before this file existed. A normal
-  `supabase db push`/deploy still needs to run this file so the global
-  default-privilege statement takes effect in production and the
-  history table catches up. Every statement is idempotent, so that
-  later run is safe even though most of production's grants already
-  match it. Depends on 0000-0032.
+- **Status**: Applied to production. The 17 explicit per-function
+  REVOKE/GRANT statements (the SQL manually applied through the
+  Supabase SQL Editor, verified successful) had already secured the 17
+  existing functions in production before this migration file existed.
+  The GLOBAL default-privilege statement (`alter default privileges
+  for role postgres revoke execute on functions from public;`) was
+  added afterward and initially validated only in local testing; it
+  has since been applied to the linked Specbound production project
+  (ref `xpxjqyraizntbtijzoyp`) via `supabase db push --linked`, and
+  migration 0033 is now recorded in that project's migration-history
+  table. A later read-only preflight re-confirmed this: a fresh
+  `supabase migration list --linked` showed matching local and remote
+  entries through 0033, and a fresh `supabase db push --linked
+  --dry-run` showed zero pending migrations. No additional production
+  changes were made during that preflight or during this documentation
+  update, and the rollback was not run at any point in this work.
+  Every statement in this migration is idempotent, so a repeat run
+  would remain safe even though production's grants already match it.
+  Merging the pull request containing this file did not itself deploy
+  it — this repository's CI runs only static/browser-test checks and
+  does not apply database migrations; deployment required the manual
+  CLI step described above. Depends on 0000-0032.
 - **File**: `migrations/0033_restrict_function_execute_permissions.sql`
 - **Rollback**: `rollbacks/0033_restrict_function_execute_permissions_rollback.sql`
 - **Fixes**: a read-only production audit (pg_catalog/information_schema
