@@ -8,6 +8,7 @@ import { getMyPublishedBuildCount } from "../../repositories/dashboardRepository
 import { createAutosaveController } from "../../services/draftAutosave.js";
 import { renderOverviewSection } from "./renderOverviewSection.js";
 import { renderSpecificationsSection } from "./renderSpecificationsSection.js";
+import { renderSetupInventorySection } from "./renderSetupInventorySection.js";
 import { renderResourcesSection } from "./renderResourcesSection.js";
 import { renderGallerySection } from "./renderGallerySection.js";
 import { renderReadinessChecklist } from "./renderReadinessChecklist.js";
@@ -313,6 +314,7 @@ async function initEditor(id) {
     const overview = renderOverviewSection(draft, autosave);
     const specifications = renderSpecificationsSection(draft, autosave);
     const resources = renderResourcesSection(draft, autosave);
+    const setupInventory = renderSetupInventorySection(draft, autosave);
 
     // renderReadinessChecklist() ran its own one-time initial update()
     // before any of the three lines above — at that point fieldTitle/
@@ -362,6 +364,7 @@ async function initEditor(id) {
         overview.applyFields(fields);
         specifications.applyFields(fields);
         resources.applyFields(fields);
+        setupInventory.applyFields(fields);
         readiness.update();
     }
 

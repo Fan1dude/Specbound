@@ -1,0 +1,348 @@
+/* Milestone 23 — Setup Inventory editor. Lives inside the existing
+   .card.card-padding wrapper in #panel-specifications (see edit.html),
+   so no new card/border/background is defined here — only the
+   inventory-specific layout inside it. */
+
+.setup-inventory-total {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-1);
+    flex-wrap: wrap;
+    margin: var(--space-2) 0 var(--space-3);
+    padding: var(--space-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+}
+
+.setup-inventory-total-label {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+}
+
+.setup-inventory-total-value {
+    color: var(--text);
+    font-size: var(--font-size-xl);
+    font-weight: 800;
+}
+
+.setup-inventory-total-note {
+    flex-basis: 100%;
+    color: var(--color-warning);
+    font-size: var(--font-size-xs);
+}
+
+.setup-inventory-categories {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.setup-category {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2);
+}
+
+.setup-category-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-bottom: var(--space-2);
+}
+
+.setup-category-name-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-weight: 700;
+    font-size: var(--font-size-lg);
+}
+
+.setup-category-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-0);
+    flex: 0 0 auto;
+}
+
+/* Compact icon-only buttons for keyboard-accessible move controls —
+   explicit requirement: drag-and-drop must not be the only reordering
+   method, so every reorder action here is a real, focusable, labeled
+   <button>. */
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+
+.btn-icon:hover:not(:disabled) {
+    color: var(--text);
+    border-color: var(--color-border-strong);
+}
+
+.btn-icon:focus-visible {
+    outline: 2px solid transparent;
+    box-shadow: var(--focus-ring);
+}
+
+.btn-icon:disabled {
+    opacity: .35;
+    cursor: not-allowed;
+}
+
+.setup-items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.setup-item {
+    padding: var(--space-1) 0;
+    border-top: 1px solid var(--color-border);
+}
+
+.setup-item:first-child {
+    border-top: none;
+    padding-top: 0;
+}
+
+.setup-item-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-0-5);
+}
+
+.setup-item-title-input {
+    flex: 1 1 220px;
+    min-width: 0;
+    font-weight: 700;
+}
+
+.setup-item-move-controls {
+    display: flex;
+    gap: var(--space-0);
+    flex: 0 0 auto;
+}
+
+.setup-item-link-row .setup-item-url-input {
+    flex: 1 1 220px;
+    min-width: 0;
+}
+
+.setup-item-metadata-status {
+    margin: 0 0 var(--space-0-5);
+    color: var(--color-warning);
+    font-size: var(--font-size-xs);
+}
+
+.setup-item-metadata-status:empty {
+    display: none;
+}
+
+.setup-item-suggested {
+    margin: 0 0 var(--space-0-5);
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+}
+
+.setup-item-price-row {
+    align-items: flex-end;
+}
+
+.setup-item-price-label,
+.setup-item-source-type-label,
+.setup-item-move-category-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    color: var(--text-secondary);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    flex: 1 1 140px;
+    min-width: 0;
+}
+
+.setup-item-price-input {
+    max-width: 140px;
+}
+
+/* Overrides form.css's global `input { width: 100%; padding: ...; }` —
+   written for text inputs, never meant to reach a checkbox. Same fix,
+   same reasoning, as the Community Guidelines acceptance dialog's
+   checkbox (css/components/modal.css .guidelines-accept-row) —
+   independently rediscovered here for the Free toggle. */
+.setup-item-free-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-0);
+    flex: 0 0 auto;
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    align-self: flex-end;
+    padding-bottom: 6px;
+}
+
+.setup-item-free-toggle input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 0;
+    margin: 0;
+}
+
+.setup-item-source-row {
+    align-items: flex-end;
+}
+
+.setup-item-source-name-input {
+    flex: 1 1 200px;
+    min-width: 0;
+}
+
+.setup-category-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    margin-top: var(--space-2);
+}
+
+.setup-category-subtotal {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.setup-add-category-controls {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin-top: var(--space-3);
+}
+
+.setup-add-category-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-0-5);
+}
+
+.setup-add-category-chip {
+    cursor: pointer;
+    background: transparent;
+}
+
+.setup-add-category-chip:hover {
+    border-color: var(--color-primary-strong);
+    color: var(--text);
+}
+
+.setup-add-category-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+}
+
+.setup-add-category-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+}
+
+.setup-inventory-note {
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+}
+
+/* --- Public setup inventory display (build.html) ------------------------
+   Lives in the same #buildSetupInventorySection .build-section as every
+   other public build section — no card/border of its own beyond what
+   .setup-category already provides, and deliberately compact (no product
+   images, no oversized cards — Milestone 23 §4). */
+
+.setup-category-name {
+    margin: 0 0 var(--space-1);
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text);
+}
+
+.setup-items-public {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.setup-item-public {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+}
+
+.setup-item-public-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-weight: 600;
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+
+.setup-item-public-title a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--color-border-strong);
+    text-underline-offset: 2px;
+}
+
+.setup-item-public-title a:hover,
+.setup-item-public-title a:focus-visible {
+    text-decoration-color: currentColor;
+}
+
+.setup-item-public-price {
+    flex: 0 0 auto;
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+}
+
+.setup-item-public-source {
+    flex-basis: 100%;
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+}
+
+@media (max-width: 640px) {
+    .setup-category-name-input {
+        font-size: var(--font-size-md);
+    }
+
+    .setup-item-price-row,
+    .setup-item-source-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .setup-item-price-input {
+        max-width: none;
+    }
+
+    .setup-item-free-toggle {
+        align-self: flex-start;
+        padding-bottom: 0;
+    }
+}
