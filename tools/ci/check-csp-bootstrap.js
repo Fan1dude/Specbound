@@ -202,6 +202,30 @@ if (!cspLine) {
     if (styleSrc.some((v) => v.includes("unsafe-inline"))) {
         fail("style-src contains 'unsafe-inline' — the renderTechnologyBreakdown.js fix exists specifically to avoid needing this");
     }
+
+    // img-src must allow blob: (js/services/imageService.js's loadImage()
+    // decodes a locally-selected file via URL.createObjectURL(file), which
+    // is a blob: URL — without this, the browser blocks the local preview
+    // before either an avatar or a gallery upload ever reaches Supabase
+    // Storage, surfacing as "That file could not be read as an image."
+    // even for a genuinely valid file). Directive-scoped (checks the
+    // parsed img-src token list, not a raw string search across the whole
+    // header line) so this can't be satisfied by blob: appearing in some
+    // unrelated directive.
+    const imgSrc = directives["img-src"] ?? [];
+    if (!imgSrc.includes("blob:")) {
+        fail("img-src is missing blob: — local avatar/gallery image previews are blocked by CSP before they ever reach Storage");
+    }
+    if (!imgSrc.includes("'self'") || !imgSrc.includes("data:") || !imgSrc.includes("https://xpxjqyraizntbtijzoyp.supabase.co")) {
+        fail("img-src lost one of its existing allowances ('self', data:, or the Supabase origin) while blob: was added");
+    }
+
+    // blob: must NOT spread to script-src (or anywhere else) — this fix is
+    // scoped to letting the browser read locally-selected image bytes,
+    // never to what code can execute.
+    if (scriptSrc.includes("blob:")) {
+        fail("script-src must not include blob: — the image-preview fix is scoped to img-src only");
+    }
 }
 
 // --- 6. No JS file anywhere in js/ sets inline styles through any

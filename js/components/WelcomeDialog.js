@@ -47,7 +47,14 @@ export function showWelcomeDialog({ user, profile, pathPrefix = "" }) {
         // guard, already set before this dialog was even shown, handles
         // that) — it never blocks or reverses the fact that the user has
         // already exited it.
-        markOnboardingWelcomed(profile.id).catch(error => {
+        //
+        // user.id, not profile.id: layout.js's navbar query only selects
+        // `username, onboarding_welcomed_at` (it never needed the id for
+        // rendering), so profile has no `id` field here. user is the
+        // authenticated Supabase Auth user and is always the authoritative
+        // identity — the same one every other repository call in this app
+        // uses for owner-scoped writes.
+        markOnboardingWelcomed(user.id).catch(error => {
             console.error("Could not save onboarding_welcomed_at:", error);
         });
     }

@@ -2,7 +2,23 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), microphone=(), camera=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://xpxjqyraizntbtijzoyp.supabase.co; connect-src 'self' https://xpxjqyraizntbtijzoyp.supabase.co https://cloudflareinsights.com; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://xpxjqyraizntbtijzoyp.supabase.co; connect-src 'self' https://xpxjqyraizntbtijzoyp.supabase.co https://cloudflareinsights.com; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+
+# img-src's blob: (added alongside the pre-existing 'self'/data:/Supabase
+# origin, nothing else changed) — js/services/imageService.js's
+# loadImage() decodes a locally-selected file by setting an <img>'s src
+# to URL.createObjectURL(file), a blob: URL, purely to read the file's
+# real pixel dimensions/decode it into a canvas before ever uploading
+# anything. Without blob: here, the browser blocks that local preview
+# outright (this app never called it "unsafe" — the browser did, at the
+# CSP layer, before the image ever reached Supabase Storage), which
+# surfaced to users as "That file could not be read as an image." for
+# every avatar and gallery upload, valid files included. blob: is a
+# browser-generated, same-session, this-tab-only URL scheme (not a
+# remote origin an attacker can serve content from), so this does not
+# admit any new external image source — deliberately NOT added to
+# script-src or connect-src, which is what would actually broaden what
+# code can run or where data can be sent.
 
 # script-src's https://static.cloudflareinsights.com and connect-src's
 # https://cloudflareinsights.com (deliberately different subdomains —
