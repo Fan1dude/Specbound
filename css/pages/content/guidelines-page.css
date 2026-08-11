@@ -29,6 +29,12 @@
     color: var(--color-text-secondary);
 }
 
+.guidelines-updated {
+    margin-top: var(--space-1);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+}
+
 /* ---------- Principles summary ---------- */
 /* A short, additive summary of the sections below — not a replacement
    or a shortened rewrite of them. Every sentence here is drawn directly

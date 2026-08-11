@@ -1078,3 +1078,31 @@ Every other migration still only ever moves forward from `0001`.
   test 7 for the full explanation and the confirmed fix.
 - **Context**: post-merge production security audit, Milestone 22
   (Community Foundation) follow-up.
+
+## 0034_profile_guidelines_accepted_version
+
+- **Status**: Proposed — not yet applied. Depends on 0000-0033
+  (specifically 0031, which introduced `guidelines_accepted_at`).
+- **File**: `migrations/0034_profile_guidelines_accepted_version.sql`
+- **Rollback**:
+  `rollbacks/0034_profile_guidelines_accepted_version_rollback.sql`
+- **Adds**: one nullable `text` column on `profiles` —
+  `guidelines_accepted_version`, plus a CHECK constraint
+  (`profiles_guidelines_accepted_version_format_check`) requiring it to
+  be null or a `YYYY-MM-DD` date string. Records which specific revision
+  of the Community Guidelines a user last agreed to, distinct from
+  `guidelines_accepted_at` (when they agreed to it).
+- **No backfill, by design** — every existing row, including rows with a
+  pre-existing non-null `guidelines_accepted_at` from accepting the
+  earlier draft Guidelines page, is left with
+  `guidelines_accepted_version = null`. The application gate
+  (`js/repositories/communityRepository.js`) requires the stored version
+  to equal `CURRENT_GUIDELINES_VERSION`
+  (`js/config/guidelines.js`, currently `"2026-08-11"`) — a draft-era
+  timestamp with no matching version does not satisfy it, so those users
+  are correctly re-prompted to accept the finalized text.
+- **Touches no other table.**
+- **Context**: Community Guidelines finalization — the guidelines page
+  shipped as a draft in 0031/Milestone 22; this migration lets the
+  acceptance gate distinguish "accepted the draft" from "accepted the
+  final published text."
