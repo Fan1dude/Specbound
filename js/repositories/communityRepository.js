@@ -1,25 +1,33 @@
 import { supabase } from "../core/supabase.js";
+import { CURRENT_GUIDELINES_VERSION } from "../config/guidelines.js";
 
 // Milestone 22 §7 — checked lazily at the first community-facing action
 // (publish or comment), never at signup or in the Milestone 21 Welcome
 // dialog. Plain owner-scoped update, no RPC needed — the existing "Users
 // can update their own profile" policy (0000) already covers this
 // column, the same posture Milestone 21 used for onboarding_welcomed_at.
+//
+// Version-gated (migration 0034): guidelines_accepted_at alone is not
+// sufficient — a user may have accepted an earlier (e.g. draft) version
+// of the guidelines. Only a matching guidelines_accepted_version counts.
 export async function hasAcceptedGuidelines(userId) {
     const { data, error } = await supabase
         .from("profiles")
-        .select("guidelines_accepted_at")
+        .select("guidelines_accepted_version")
         .eq("id", userId)
         .single();
 
     if (error) throw error;
-    return Boolean(data?.guidelines_accepted_at);
+    return data?.guidelines_accepted_version === CURRENT_GUIDELINES_VERSION;
 }
 
 export async function acceptGuidelines(userId) {
     const { error } = await supabase
         .from("profiles")
-        .update({ guidelines_accepted_at: new Date().toISOString() })
+        .update({
+            guidelines_accepted_at: new Date().toISOString(),
+            guidelines_accepted_version: CURRENT_GUIDELINES_VERSION
+        })
         .eq("id", userId);
 
     if (error) throw error;

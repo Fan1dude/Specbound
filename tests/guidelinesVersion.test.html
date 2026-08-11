@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Community Guidelines — versioned acceptance (0034)</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Community Guidelines — versioned acceptance (0034)</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        // --- Mock supabase client -------------------------------------------
+        // Exercises communityRepository.js's REAL hasAcceptedGuidelines/
+        // acceptGuidelines logic (including the version comparison) against
+        // a fake profiles table — mocking at the supabase.js boundary, not
+        // the repository-function boundary, is required here because the
+        // version-comparison logic itself is what's under test. See
+        // searchBuilds.test.html for the origin of this mocking pattern.
+        const calls = [];
+        let selectResponse = { data: null, error: null };
+        let updateResponse = { data: null, error: null };
+
+        globalThis.__mock = {
+            calls,
+            get selectResponse() { return selectResponse; },
+            get updateResponse() { return updateResponse; }
+        };
+
+        function makeBuilder(table) {
+            const state = { table };
+
+            const builder = {
+                select(cols) {
+                    globalThis.__mock.calls.push([table, "select", cols]);
+                    state.mode = "select";
+                    return builder;
+                },
+                update(payload) {
+                    globalThis.__mock.calls.push([table, "update", payload]);
+                    state.mode = "update";
+                    return builder;
+                },
+                eq(col, value) {
+                    globalThis.__mock.calls.push([table, "eq", col, value]);
+                    return builder;
+                },
+                single() { return builder; },
+                then(resolve) {
+                    const response = state.mode === "update"
+                        ? globalThis.__mock.updateResponse
+                        : globalThis.__mock.selectResponse;
+                    resolve(response);
+                }
+            };
+
+            return builder;
+        }
+
+        const supabaseSrc = `
+            export const supabase = {
+                from(table) {
+                    return (${makeBuilder.toString()})(table);
+                }
+            };
+        `;
+
+        // guidelines.js has no imports of its own, so the real file is used
+        // as-is (via an absolute URL) rather than mocked — this is the
+        // exact constant the gate must be checked against.
+        const guidelinesConfigUrl = new URL("../js/config/guidelines.js", location.href).href;
+        const { CURRENT_GUIDELINES_VERSION } = await import(guidelinesConfigUrl);
+
+        const realSrc = await (await fetch("../js/repositories/communityRepository.js")).text();
+        const rewritten = realSrc
+            .replaceAll('"../core/supabase.js"', `"${blobUrl(supabaseSrc)}"`)
+            .replaceAll('"../config/guidelines.js"', `"${guidelinesConfigUrl}"`);
+        const { hasAcceptedGuidelines, acceptGuidelines } = await import(blobUrl(rewritten));
+
+        // --- Case 1: no acceptance timestamp or version — gated --------------
+        calls.length = 0;
+        selectResponse = { data: { guidelines_accepted_version: null }, error: null };
+        test("no acceptance at all: hasAcceptedGuidelines is false", (await hasAcceptedGuidelines("user-1")) === false);
+        test(
+            "no acceptance at all: only guidelines_accepted_version is selected, not guidelines_accepted_at",
+            calls.some(c => c[0] === "profiles" && c[1] === "select" && c[2] === "guidelines_accepted_version"),
+            JSON.stringify(calls)
+        );
+
+        // --- Case 2: draft-era timestamp present, but no version — gated -----
+        // Represents a real pre-migration-0034 row: guidelines_accepted_at is
+        // non-null from accepting the OLD draft page, but the select below
+        // only ever returns guidelines_accepted_version (which migration
+        // 0034 leaves null for every existing row, deliberately no backfill)
+        // — a non-null guidelines_accepted_at must never leak into this
+        // comparison.
+        calls.length = 0;
+        selectResponse = { data: { guidelines_accepted_version: null }, error: null };
+        test("draft-era acceptance (timestamp only, no version): hasAcceptedGuidelines is false", (await hasAcceptedGuidelines("user-2")) === false);
+
+        // --- Case 3: mismatched older version — gated -------------------------
+        calls.length = 0;
+        selectResponse = { data: { guidelines_accepted_version: "2026-01-01" }, error: null };
+        test("older accepted version: hasAcceptedGuidelines is false", (await hasAcceptedGuidelines("user-3")) === false);
+
+        // --- Case 4: current accepted version — not gated ---------------------
+        calls.length = 0;
+        selectResponse = { data: { guidelines_accepted_version: CURRENT_GUIDELINES_VERSION }, error: null };
+        test("current accepted version: hasAcceptedGuidelines is true", (await hasAcceptedGuidelines("user-4")) === true);
+
+        // --- Case 5: successful acceptance stores both timestamp and version --
+        calls.length = 0;
+        updateResponse = { data: null, error: null };
+        await acceptGuidelines("user-5");
+
+        const updateCall = calls.find(c => c[0] === "profiles" && c[1] === "update");
+        test("acceptGuidelines: an update() call was made against profiles", Boolean(updateCall), JSON.stringify(calls));
+        test(
+            "acceptGuidelines: writes guidelines_accepted_version = CURRENT_GUIDELINES_VERSION",
+            updateCall?.[2]?.guidelines_accepted_version === CURRENT_GUIDELINES_VERSION,
+            JSON.stringify(updateCall)
+        );
+        test(
+            "acceptGuidelines: also writes a fresh guidelines_accepted_at timestamp",
+            typeof updateCall?.[2]?.guidelines_accepted_at === "string" && !Number.isNaN(Date.parse(updateCall[2].guidelines_accepted_at)),
+            JSON.stringify(updateCall)
+        );
+        test(
+            "acceptGuidelines: update is scoped to the given user id",
+            calls.some(c => c[0] === "profiles" && c[1] === "eq" && c[2] === "id" && c[3] === "user-5"),
+            JSON.stringify(calls)
+        );
+
+        // --- Case: a select error propagates (surfaced to the caller) --------
+        calls.length = 0;
+        selectResponse = { data: null, error: { message: "profiles lookup failed" } };
+        let threw = false;
+        try {
+            await hasAcceptedGuidelines("user-6");
+        } catch (error) {
+            threw = error.message === "profiles lookup failed";
+        }
+        test("a profiles select error is thrown, not silently swallowed", threw);
+
+        // --- Case: an update error propagates (surfaced to the caller) -------
+        calls.length = 0;
+        updateResponse = { data: null, error: { message: "profiles update failed" } };
+        threw = false;
+        try {
+            await acceptGuidelines("user-7");
+        } catch (error) {
+            threw = error.message === "profiles update failed";
+        }
+        test("a profiles update error is thrown, not silently swallowed", threw);
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`guidelinesVersion.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

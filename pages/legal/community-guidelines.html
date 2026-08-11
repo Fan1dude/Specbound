@@ -13,23 +13,23 @@
     <link rel="manifest" href="../../manifest.webmanifest">
     <meta name="theme-color" content="#B79AE6">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Community Guidelines — Draft | Specbound</title>
+    <title>Community Guidelines | Specbound</title>
     <link rel="canonical" href="https://specboundapp.com/pages/legal/community-guidelines.html">
 
     <meta
         name="description"
-        content="Specbound's Community Guidelines. This is a structural draft — final wording is not yet published."
+        content="Specbound's Community Guidelines — what's encouraged, what's not tolerated, and how reporting and enforcement work."
     >
 
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Specbound">
-    <meta property="og:title" content="Community Guidelines — Draft | Specbound">
-    <meta property="og:description" content="Specbound's Community Guidelines. This is a structural draft — final wording is not yet published.">
+    <meta property="og:title" content="Community Guidelines | Specbound">
+    <meta property="og:description" content="Specbound's Community Guidelines — what's encouraged, what's not tolerated, and how reporting and enforcement work.">
     <meta property="og:url" content="https://specboundapp.com/pages/legal/community-guidelines.html">
     <meta property="og:image" content="https://specboundapp.com/assets/brand/og/og-image.png">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Community Guidelines — Draft | Specbound">
-    <meta name="twitter:description" content="Specbound's Community Guidelines. This is a structural draft — final wording is not yet published.">
+    <meta name="twitter:title" content="Community Guidelines | Specbound">
+    <meta name="twitter:description" content="Specbound's Community Guidelines — what's encouraged, what's not tolerated, and how reporting and enforcement work.">
     <meta name="twitter:image" content="https://specboundapp.com/assets/brand/og/og-image.png">
 
     <link rel="stylesheet" href="../../css/styles.css">
@@ -39,25 +39,33 @@
     <nav class="navbar" id="navbar"></nav>
 
     <!--
-        Milestone 22 §7, redesigned in the polish pass — same section
-        structure and placeholder copy as before (still not the final
-        published guidelines; the "DRAFT" badge and closing note are
-        deliberate, not an oversight), now with a real header, a table
-        of contents, a highlighted principles summary, and numbered
-        sections. This is the same page GuidelinesGate.js links to
-        before a builder's first publish or first comment (see
+        Milestone 22 §7, finalized. Same header/TOC/section layout as the
+        polish pass, now carrying the final published wording — the
+        earlier "DRAFT" badge and placeholder-copy note no longer apply.
+        Reporting (section 08) currently covers projects and comments
+        only; there is no profile Report control yet, so this page must
+        not claim one. Section 10 identifies the footer Feedback link as
+        the current way to question an enforcement decision, but is
+        explicit that it isn't a formal appeals process and doesn't
+        guarantee a response or changed outcome. Acceptance of this page
+        is versioned (see js/config/guidelines.js and migration 0034) —
+        bump CURRENT_GUIDELINES_VERSION and this page's "Last updated"
+        date together whenever the wording changes in a way that should
+        require re-acceptance. This is the same page GuidelinesGate.js
+        links to before a builder's first publish or first comment (see
         js/components/GuidelinesGate.js).
     -->
     <main class="content-page guidelines-page" id="main">
 
         <div class="guidelines-header">
-            <p class="hero-badge">DRAFT</p>
             <h1>Community Guidelines</h1>
             <p class="guidelines-lead">
-                This page states the real structure Specbound's Community
-                Guidelines will follow. The wording below is placeholder —
-                final language has not been written or approved yet.
+                Specbound is a place to document and share real technology
+                projects. These guidelines explain what's expected of
+                everyone who posts, comments, or otherwise participates
+                here.
             </p>
+            <p class="guidelines-updated">Last updated August 11, 2026</p>
         </div>
 
         <section class="guidelines-principles" aria-labelledby="guidelinesPrinciplesHeading">
@@ -66,7 +74,7 @@
                 <li>Specbound exists to help builders document and learn from real projects.</li>
                 <li>Document your work clearly and honestly, and give feedback that helps others improve.</li>
                 <li>Harassment, spam, plagiarism, and low-effort engagement-bait aren't tolerated.</li>
-                <li>Any builder can report content that violates these guidelines — a moderator reviews every report.</li>
+                <li>Use a project's or comment's Report button to flag content that breaks these guidelines.</li>
             </ul>
         </section>
 
@@ -75,58 +83,137 @@
             <nav class="guidelines-toc" aria-label="Guideline sections">
                 <p class="guidelines-toc-label" aria-hidden="true">On this page</p>
                 <ol>
-                    <li><a href="#why-we-have-guidelines">Why we have guidelines</a></li>
-                    <li><a href="#whats-encouraged">What's encouraged</a></li>
-                    <li><a href="#whats-not-tolerated">What's not tolerated</a></li>
-                    <li><a href="#how-reports-work">How reports work</a></li>
+                    <li><a href="#why-these-guidelines-exist">Why these guidelines exist</a></li>
+                    <li><a href="#sharing-and-giving-feedback">Sharing and giving feedback</a></li>
+                    <li><a href="#respectful-conduct">Respectful conduct</a></li>
+                    <li><a href="#content-boundaries">Content boundaries</a></li>
+                    <li><a href="#spam-scams-and-impersonation">Spam, scams, and impersonation</a></li>
+                    <li><a href="#project-authenticity-and-other-peoples-work">Project authenticity and other people's work</a></li>
+                    <li><a href="#dangerous-or-illegal-activity">Dangerous or illegal activity</a></li>
+                    <li><a href="#how-reporting-works">How reporting works</a></li>
                     <li><a href="#enforcement">Enforcement</a></li>
+                    <li><a href="#questions-or-disagreements">Questions or disagreements</a></li>
                 </ol>
             </nav>
 
             <div class="guidelines-sections">
 
-                <section class="guidelines-section" id="why-we-have-guidelines" aria-labelledby="why-we-have-guidelines-heading">
-                    <h2 id="why-we-have-guidelines-heading" data-section-number="01">Why we have guidelines</h2>
+                <section class="guidelines-section" id="why-these-guidelines-exist" aria-labelledby="why-these-guidelines-exist-heading">
+                    <h2 id="why-these-guidelines-exist-heading" data-section-number="01">Why these guidelines exist</h2>
                     <p>
-                        Specbound exists to help builders document and learn from real
-                        projects. These guidelines exist to keep that possible — not to
-                        police tone or personality.
+                        Specbound works because builders trust what they see here —
+                        real projects, honestly documented, from people who actually
+                        built them. These guidelines exist to protect that, not to
+                        police tone or personality. Most builders never think about
+                        them because they're already doing the right thing.
                     </p>
                 </section>
 
-                <section class="guidelines-section" id="whats-encouraged" aria-labelledby="whats-encouraged-heading">
-                    <h2 id="whats-encouraged-heading" data-section-number="02">What's encouraged</h2>
+                <section class="guidelines-section" id="sharing-and-giving-feedback" aria-labelledby="sharing-and-giving-feedback-heading">
+                    <h2 id="sharing-and-giving-feedback-heading" data-section-number="02">Sharing and giving feedback</h2>
                     <p>
-                        Clear, honest documentation of your own work. Constructive
-                        feedback that helps another builder improve. Sharing what you
-                        learned, including what didn't work.
+                        Document your own work clearly and honestly — what you built,
+                        what you used, what worked, and what didn't. When you comment
+                        on someone else's project, focus on the work: what could be
+                        improved, what you'd try differently, or what you liked.
+                        There's a real difference between "the cable routing on this
+                        could be cleaner" and criticizing the person who built it. The
+                        first helps. The second doesn't belong here.
                     </p>
                 </section>
 
-                <section class="guidelines-section" id="whats-not-tolerated" aria-labelledby="whats-not-tolerated-heading">
-                    <h2 id="whats-not-tolerated-heading" data-section-number="03">What's not tolerated</h2>
+                <section class="guidelines-section" id="respectful-conduct" aria-labelledby="respectful-conduct-heading">
+                    <h2 id="respectful-conduct-heading" data-section-number="03">Respectful conduct</h2>
                     <p>
-                        Harassment, spam, plagiarized project content, and low-effort
-                        posting aimed at engagement rather than sharing real work.
+                        Harassment, hate speech, and threats aren't allowed, whether
+                        they're aimed at another builder or at people generally. This
+                        includes targeting someone for their race, ethnicity,
+                        religion, gender, sexual orientation, disability, or another
+                        protected characteristic. It also includes encouraging or
+                        threatening violence. These rules apply in comments, profiles,
+                        project descriptions, and anywhere else on Specbound.
                     </p>
                 </section>
 
-                <section class="guidelines-section" id="how-reports-work" aria-labelledby="how-reports-work-heading">
-                    <h2 id="how-reports-work-heading" data-section-number="04">How reports work</h2>
+                <section class="guidelines-section" id="content-boundaries" aria-labelledby="content-boundaries-heading">
+                    <h2 id="content-boundaries-heading" data-section-number="04">Content boundaries</h2>
                     <p>
-                        Any builder can report a project, comment, or profile they
-                        believe violates these guidelines. A moderator reviews every
-                        report — see the Report control available on projects and
-                        comments.
+                        Keep content appropriate for a general audience that includes
+                        teenagers. Do not post sexual content or content primarily
+                        intended to shock or disturb. Do not share someone else's
+                        personal information — such as their address, phone number,
+                        workplace, or other private details — without permission, and
+                        do not use Specbound to track down or expose someone.
+                    </p>
+                </section>
+
+                <section class="guidelines-section" id="spam-scams-and-impersonation" aria-labelledby="spam-scams-and-impersonation-heading">
+                    <h2 id="spam-scams-and-impersonation-heading" data-section-number="05">Spam, scams, and impersonation</h2>
+                    <p>
+                        Do not use comments, profiles, or projects to spam, run
+                        scams, or push unrelated promotions. Do not pretend to be
+                        someone else, including another builder, a moderator, or
+                        Specbound itself.
+                    </p>
+                </section>
+
+                <section class="guidelines-section" id="project-authenticity-and-other-peoples-work" aria-labelledby="project-authenticity-and-other-peoples-work-heading">
+                    <h2 id="project-authenticity-and-other-peoples-work-heading" data-section-number="06">Project authenticity and other people's work</h2>
+                    <p>
+                        Post your own work. If a project builds on someone else's
+                        design, code, writing, or other material, say so and credit
+                        them. Do not present someone else's project as your own, and
+                        do not upload content you do not have the right to share.
+                    </p>
+                </section>
+
+                <section class="guidelines-section" id="dangerous-or-illegal-activity" aria-labelledby="dangerous-or-illegal-activity-heading">
+                    <h2 id="dangerous-or-illegal-activity-heading" data-section-number="07">Dangerous or illegal activity</h2>
+                    <p>
+                        Do not use Specbound to document or promote illegal activity
+                        or content whose primary purpose is causing harm to people,
+                        property, or systems. Projects involving electronics, power
+                        tools, 3D printing, and similar work can carry real risks.
+                        Builders share what worked for them, but nothing on Specbound
+                        is professional electrical, safety, legal, or engineering
+                        advice, and Specbound does not verify or endorse the safety
+                        of any project. Use your own judgment and follow the safety
+                        practices appropriate to what you are building.
+                    </p>
+                </section>
+
+                <section class="guidelines-section" id="how-reporting-works" aria-labelledby="how-reporting-works-heading">
+                    <h2 id="how-reporting-works-heading" data-section-number="08">How reporting works</h2>
+                    <p>
+                        If you see a project or comment that breaks these guidelines,
+                        use its Report button and describe what happened. Reports are
+                        recorded for moderation review. Submitting a report does not
+                        guarantee a particular outcome or response, and reports should
+                        not be used simply because you disagree with someone's opinion
+                        or criticism.
                     </p>
                 </section>
 
                 <section class="guidelines-section" id="enforcement" aria-labelledby="enforcement-heading">
-                    <h2 id="enforcement-heading" data-section-number="05">Enforcement</h2>
+                    <h2 id="enforcement-heading" data-section-number="09">Enforcement</h2>
                     <p>
-                        A moderator or staff member may take action on content that
-                        violates these guidelines. The exact range of actions isn't
-                        finalized yet.
+                        Specbound may remove content or restrict, suspend, or remove
+                        accounts when necessary. The response depends on the
+                        seriousness of the behavior, whether it has happened before,
+                        and the surrounding context. Not every report results in action
+                        because reported content does not always break these
+                        guidelines.
+                    </p>
+                </section>
+
+                <section class="guidelines-section" id="questions-or-disagreements" aria-labelledby="questions-or-disagreements-heading">
+                    <h2 id="questions-or-disagreements-heading" data-section-number="10">Questions or disagreements</h2>
+                    <p>
+                        If you have a question about these guidelines or believe an
+                        enforcement decision was made in error, use the Feedback link
+                        in the site footer. Specbound does not currently provide a
+                        formal appeals process, and submitting feedback does not
+                        guarantee a response or a different outcome.
                     </p>
                 </section>
 
