@@ -108,19 +108,91 @@
     font-size: var(--font-size-sm);
 }
 
-/* Milestone 22 §7 — GuidelinesGate.js's acceptance checkbox. */
-.guidelines-accept-checkbox {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-1);
-    margin: var(--space-2) 0;
-    font-weight: normal;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
+/* Milestone 22 §7 polish — GuidelinesGate.js's acceptance dialog.
+   Scoped to .modal-guidelines throughout rather than touching .modal's
+   own base rules, so Welcome/Feedback/Import (the other dialogs sharing
+   that base class) are completely unaffected. --surface-card, not the
+   base .modal's --color-surface: --color-surface (#57545D) is a flat
+   mid gray with no relation to the dark-workspace surfaces used
+   everywhere else in the app (cards, the Guidelines page's own
+   .guidelines-principles box, etc.) — --surface-card (#292631) is that
+   same deep, dark tone, so this dialog now actually matches the rest of
+   the app instead of reading as a different, lighter component.
+   Border/shadow are left as .modal's own existing values (already a
+   plain 1px border + --shadow-lg, no glow/gradient — nothing to fix
+   there). Slightly wider than the 420px base (docs/BRAND.md's shared
+   dialog width) so "Review the Community Guidelines before publishing
+   or commenting." doesn't wrap awkwardly at the narrower size. */
+.modal-guidelines {
+    max-width: min(460px, 92vw);
+    background: var(--surface-card);
 }
 
-.guidelines-accept-checkbox input {
-    margin-top: 3px;
+.guidelines-link {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.guidelines-link:hover {
+    color: var(--color-primary-hover);
+}
+
+.guidelines-link:focus-visible {
+    outline: 2px solid transparent;
+    box-shadow: var(--focus-ring);
+    border-radius: var(--radius-sm);
+}
+
+/* The acceptance control, restyled as one clean, full-width selectable
+   row rather than a bare checkbox + adjacent text — the <label> wrapper
+   already makes the whole row clickable natively; this only makes that
+   affordance visible (border, subtle fill, hover/focus-within states). */
+.guidelines-accept-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    width: 100%;
+    margin: var(--space-2) 0;
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--color-text-secondary);
+    font-weight: normal;
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-body);
+    cursor: pointer;
+    transition:
+        border-color var(--duration-fast) var(--ease-standard),
+        background var(--duration-fast) var(--ease-standard);
+}
+
+.guidelines-accept-row:hover {
+    border-color: var(--color-border-strong);
+    background: var(--color-surface-3);
+}
+
+/* :focus-within, not :focus-visible on the row itself — the row is a
+   <label>, not a focusable element; focus actually lands on the
+   checkbox inside it, and :focus-within is what lets the ring wrap the
+   whole row instead of just the small native checkbox box. */
+.guidelines-accept-row:focus-within {
+    border-color: var(--color-primary-strong);
+    box-shadow: var(--focus-ring);
+}
+
+/* Overrides form.css's global `input { width: 100%; padding: ...; }` —
+   that rule is written for text inputs/selects/textareas and was never
+   meant to reach a checkbox; applied unscoped, it stretched this
+   checkbox to the row's full flex width and pushed its label far to the
+   right. Scoped to this one row only — form.css itself is untouched, so
+   every real text input elsewhere keeps the exact behavior it has today. */
+.guidelines-accept-row input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 0;
+    margin: 0;
 }
 
 /* Mobile: full-screen edge-to-edge instead of a smaller centered box,
@@ -148,6 +220,36 @@
 
     .modal::backdrop {
         background: transparent;
+    }
+
+    /* Guidelines is a short confirmation dialog (title, two lines of
+       copy, one selectable row, two buttons) — going full-screen like
+       the rest of .modal above leaves most of the viewport visibly
+       empty, which reads as broken rather than intentional. Kept as a
+       small centered card instead, the same shape as desktop just
+       narrower. .modal.modal-guidelines (not .modal-guidelines alone)
+       so this reliably wins over the .modal rule above regardless of
+       source order. */
+    .modal.modal-guidelines {
+        top: 50%;
+        left: 50%;
+        width: min(360px, 92vw);
+        height: auto;
+        max-width: min(360px, 92vw);
+        max-height: 85vh;
+        margin: 0;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-xl);
+        transform: translate(-50%, -50%) scale(0.96);
+        overflow-y: auto;
+    }
+
+    .modal.modal-guidelines.is-open {
+        transform: translate(-50%, -50%) scale(1);
+    }
+
+    .modal.modal-guidelines::backdrop {
+        background: rgba(10, 11, 15, 0.72);
     }
 }
 

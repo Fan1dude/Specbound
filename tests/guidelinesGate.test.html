@@ -43,10 +43,10 @@
             return document.querySelector(".modal");
         }
 
-        async function freshGate({ alreadyAccepted = false, checkThrows = false, acceptThrows = false } = {}) {
+        async function freshGate({ alreadyAccepted = false, checkThrows = false, acceptThrows = false, acceptDelayMs = 0 } = {}) {
             const calls = [];
             const mockKey = `__mock_${Math.random().toString(36).slice(2)}`;
-            globalThis[mockKey] = { calls, alreadyAccepted, checkThrows, acceptThrows };
+            globalThis[mockKey] = { calls, alreadyAccepted, checkThrows, acceptThrows, acceptDelayMs };
 
             const repoSrc = `
                 export async function hasAcceptedGuidelines() {
@@ -56,6 +56,7 @@
                 }
                 export async function acceptGuidelines(userId) {
                     const m = globalThis["${mockKey}"];
+                    if (m.acceptDelayMs) await new Promise(r => setTimeout(r, m.acceptDelayMs));
                     if (m.acceptThrows) throw new Error("accept failed");
                     m.calls.push(["acceptGuidelines", userId]);
                 }
@@ -122,6 +123,78 @@
             test("the dialog closes after accepting", findDialog() === null);
         }
 
+        // --- Redesigned acceptance row: the checkbox must not inherit
+        // form.css's global `input { width: 100%; }` (the confirmed
+        // layout bug — an unscoped checkbox stretches to the row's full
+        // flex width and pushes its label far to the right), checkbox
+        // and label stay visually aligned as siblings in one flex row,
+        // the WHOLE row is clickable (not just the small checkbox box),
+        // and the Guidelines link opens safely in a new tab. Real
+        // computed styles from ../css/styles.css (linked in <head>), not
+        // just class-name presence, so a regression in form.css's global
+        // rule reaching this checkbox again would fail this file even if
+        // no class name changed. -------------------------------------------
+        {
+            const { requireGuidelinesAcceptance } = await freshGate({ alreadyAccepted: false });
+            const resultPromise = requireGuidelinesAcceptance("user-row", "../");
+
+            await waitFor(() => findDialog() !== null);
+            const dialog = findDialog();
+
+            const row = dialog.querySelector(".guidelines-accept-row");
+            const checkbox = dialog.querySelector("#guidelinesAcceptCheckbox");
+            const acceptBtn = dialog.querySelector('[data-action="accept"]');
+            const link = dialog.querySelector('a[href*="community-guidelines.html"]');
+
+            test("acceptance row exists and contains the checkbox", row?.contains(checkbox) === true);
+
+            const checkboxWidth = getComputedStyle(checkbox).width;
+            const rowWidth = row.getBoundingClientRect().width;
+            test(
+                "the checkbox does not inherit form.css's global full-width rule",
+                checkboxWidth !== "100%" && parseFloat(checkboxWidth) < 24,
+                `checkbox computed width: ${checkboxWidth}, row width: ${rowWidth}px`
+            );
+            test("the checkbox does not stretch to the row's own width", parseFloat(checkboxWidth) < rowWidth / 2, `${checkboxWidth} vs row ${rowWidth}px`);
+
+            test("the row lays out as a flex row (checkbox and label stay aligned)", getComputedStyle(row).display === "flex");
+
+            // Click on the row's own text (not the checkbox itself) — a
+            // <label> wrapping the <input> makes the WHOLE row a valid
+            // click target natively; this proves that's actually true in
+            // the real rendered DOM, not just assumed from the markup.
+            const labelSpan = row.querySelector("span");
+            test("the row's label text is a real clickable target inside the <label>", labelSpan !== null);
+            labelSpan.click();
+
+            test("clicking anywhere on the row toggles the checkbox", checkbox.checked === true);
+            test("clicking the row enables Continue, same as checking the box directly", acceptBtn.disabled === false);
+
+            test("the Guidelines link points at the real Community Guidelines page", link?.getAttribute("href")?.includes("community-guidelines.html"));
+            test("the Guidelines link opens in a new tab", link?.getAttribute("target") === "_blank");
+            test(
+                "the Guidelines link uses safe new-tab attributes (noopener + noreferrer)",
+                (link?.getAttribute("rel") || "").includes("noopener") && (link?.getAttribute("rel") || "").includes("noreferrer"),
+                link?.getAttribute("rel")
+            );
+
+            // Clicking the link must never close the dialog. preventDefault
+            // stops this test page from actually navigating/opening a tab
+            // (target="_blank" or not, a real .click() here would leave
+            // this test run) while still dispatching a real, bubbling
+            // click event — exactly what reaches the dialog's own
+            // backdrop-click listener in the real app, which only fires
+            // finish(false) when event.target === dialog, never on a
+            // click that bubbles up from a descendant like this link.
+            link.addEventListener("click", event => event.preventDefault(), { once: true });
+            link.click();
+            test("clicking the Guidelines link does not close the dialog", findDialog() !== null);
+
+            dialog.querySelector('[data-action="cancel"]').click();
+            await resultPromise;
+            await waitFor(() => findDialog() === null);
+        }
+
         // --- Cancel resolves false, does NOT call acceptGuidelines -------
         {
             const { requireGuidelinesAcceptance, calls } = await freshGate({ alreadyAccepted: false });
@@ -182,6 +255,7 @@
             await waitFor(() => acceptBtn.disabled === false);
 
             test("a failed accept call re-enables Continue instead of silently succeeding", acceptBtn.disabled === false);
+            test("a failed accept call resets the label back to Continue (not stuck on Saving...)", acceptBtn.textContent.trim() === "Continue");
             test("a failed accept call keeps the dialog open (never resolves the promise)", findDialog() !== null);
 
             // Clean up: cancel so the promise resolves and doesn't leak
@@ -189,6 +263,39 @@
             dialog.querySelector('[data-action="cancel"]').click();
             await resultPromise;
             await waitFor(() => findDialog() === null);
+        }
+
+        // --- Saving state: Continue shows a visible in-progress label
+        // while the write is in flight (not just disabled+inert), and a
+        // second click during that window can't fire a duplicate save ---------
+        {
+            const { requireGuidelinesAcceptance, calls } = await freshGate({ alreadyAccepted: false, acceptDelayMs: 200 });
+            const resultPromise = requireGuidelinesAcceptance("user-saving", "../");
+
+            await waitFor(() => findDialog() !== null);
+            const dialog = findDialog();
+            const checkbox = dialog.querySelector("#guidelinesAcceptCheckbox");
+            const acceptBtn = dialog.querySelector('[data-action="accept"]');
+
+            checkbox.checked = true;
+            checkbox.dispatchEvent(new Event("change"));
+            acceptBtn.click();
+
+            test("Continue shows a saving label immediately after clicking", acceptBtn.textContent.trim() === "Saving...");
+            test("Continue is disabled while saving (prevents a duplicate click)", acceptBtn.disabled === true);
+
+            // A second click while disabled must be a genuine no-op — the
+            // disabled attribute itself blocks the click event from ever
+            // firing the handler again, but assert the OUTCOME (call
+            // count), not just the attribute, so this would fail if that
+            // stopped being true for any reason.
+            acceptBtn.click();
+            acceptBtn.click();
+
+            const result = await resultPromise;
+
+            test("acceptance saved exactly once even with extra clicks during the saving state", calls.filter(c => c[0] === "acceptGuidelines").length === 1, JSON.stringify(calls));
+            test("saving eventually resolves true", result === true);
         }
 
         // --- Render + report ------------------------------------------------

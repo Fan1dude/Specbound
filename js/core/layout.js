@@ -237,32 +237,32 @@ export function loadFooter(pathPrefix = "") {
 
     footer.innerHTML = `
         <div class="footer-inner">
-            <div>
+            <div class="footer-brand">
                 <h2>SPECBOUND</h2>
                 <p>Document Every Build.</p>
-                <p>v0.9.0</p>
+                <p class="footer-version">v0.9.0</p>
             </div>
 
-            <div>
-                <h3>Platform</h3>
+            <nav class="footer-group" aria-labelledby="footerPlatformHeading">
+                <h3 id="footerPlatformHeading">Platform</h3>
                 <a href="${pathPrefix}pages/explore.html">Explore</a>
                 <a href="${pathPrefix}pages/upload.html">Publish</a>
-                <a href="${pathPrefix}index.html">Categories</a>
-            </div>
+                <a href="${pathPrefix}index.html#technologies">Categories</a>
+            </nav>
 
-            <div>
-                <h3>Builders</h3>
+            <nav class="footer-group" aria-labelledby="footerBuildersHeading">
+                <h3 id="footerBuildersHeading">Builders</h3>
                 <a href="${pathPrefix}pages/workshop.html">Workshop</a>
                 <a href="${pathPrefix}pages/explore.html">Profiles</a>
                 <button type="button" id="footerFeedbackBtn">Feedback</button>
-            </div>
+            </nav>
 
-            <div>
-                <h3>Legal</h3>
+            <nav class="footer-group" aria-labelledby="footerLegalHeading">
+                <h3 id="footerLegalHeading">Legal</h3>
                 <a href="${pathPrefix}pages/legal/privacy.html">Privacy</a>
                 <a href="${pathPrefix}pages/legal/terms.html">Terms</a>
                 <a href="${pathPrefix}pages/legal/community-guidelines.html">Community Guidelines</a>
-            </div>
+            </nav>
         </div>
     `;
 

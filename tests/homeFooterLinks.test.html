@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Homepage hero links + footer structure</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Homepage hero links + footer structure</h1>
+    <p>
+        Covers two confirmed production bugs: the homepage hero's Explore
+        Blueprints button pointed at #trending, an id that exists nowhere
+        in the page, so the button did nothing; and js/core/layout.js's
+        loadFooter() rendered its nav links as bare inline &lt;a&gt; tags
+        with no display/gap rule above 900px, so they ran together on one
+        line ("Explore Publish Categories") on desktop.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="footer"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        // --- Static homepage hero checks --------------------------------------
+        // Real, unmocked index.html source — proves the actual shipped
+        // markup, not just that some other file agrees with itself.
+        const homeHtml = await (await fetch("../index.html")).text();
+        const homeDoc = new DOMParser().parseFromString(homeHtml, "text/html");
+
+        const heroActions = homeDoc.querySelector(".hero-actions");
+        const heroLinks = [...(heroActions?.querySelectorAll("a") || [])];
+        const exploreLink = heroLinks.find(a => a.textContent.trim() === "Explore Blueprints");
+        const createLink = heroLinks.find(a => a.textContent.trim() === "Create Blueprint");
+
+        test("Explore Blueprints points at pages/explore.html", exploreLink?.getAttribute("href") === "pages/explore.html", exploreLink?.getAttribute("href"));
+        test("Create Blueprint still points at pages/upload.html (unchanged)", createLink?.getAttribute("href") === "pages/upload.html", createLink?.getAttribute("href"));
+        test("no #trending href remains anywhere on the homepage", !homeHtml.includes('href="#trending"'));
+        test("no unused #trending section id was added as a workaround", homeDoc.getElementById("trending") === null);
+        test("the homepage technology section has the stable #technologies id the footer now links to", homeDoc.getElementById("technologies") !== null);
+
+        // --- loadFooter(): real function, network/auth-touching imports
+        // mocked. escapeHtml/icons have no imports of their own and are
+        // used as-is, same convention as tests/mobileAccountMenu.test.html
+        // (the existing reference for mocking js/core/layout.js). --------------
+        const realFooterSrc = await (await fetch("../js/core/layout.js")).text();
+
+        async function freshFooter({ signedIn = true } = {}) {
+            const calls = [];
+            const mockKey = `__mock_${Math.random().toString(36).slice(2)}`;
+            globalThis[mockKey] = { calls, signedIn };
+
+            const authMockSrc = `
+                export function getCurrentUser() {
+                    const m = globalThis["${mockKey}"];
+                    return Promise.resolve(m.signedIn ? { id: "u1" } : null);
+                }
+                export function clearCurrentUserCache() {}
+            `;
+            const feedbackModalMockSrc = `
+                export function showFeedbackModal() {
+                    globalThis["${mockKey}"].calls.push(["showFeedbackModal"]);
+                }
+            `;
+
+            const escapeHtmlUrl = new URL("../js/utils/escapeHtml.js", location.href).href;
+            const iconsUrl = new URL("../js/utils/icons.js", location.href).href;
+
+            const rewrites = {
+                '"./supabase.js"': blobUrl("export const supabase = {};"),
+                '"./auth.js"': blobUrl(authMockSrc),
+                '"./notificationBell.js"': blobUrl("export async function initNotificationBell() {}"),
+                '"./onboarding.js"': blobUrl("export function maybeShowWelcome() {}"),
+                '"../components/FeedbackModal.js"': blobUrl(feedbackModalMockSrc),
+                '"../utils/escapeHtml.js"': escapeHtmlUrl,
+                '"../utils/icons.js"': iconsUrl
+            };
+
+            let rewritten = realFooterSrc;
+            for (const [from, to] of Object.entries(rewrites)) {
+                rewritten = rewritten.replaceAll(from, `"${to}"`);
+            }
+
+            const mod = await import(blobUrl(rewritten));
+            return { ...mod, calls };
+        }
+
+        const { loadFooter, calls } = await freshFooter({ signedIn: true });
+        loadFooter("");
+
+        const footer = document.getElementById("footer");
+        const linkEntries = [...footer.querySelectorAll("a")].map(a => [a.textContent.trim(), a.getAttribute("href")]);
+        const linkMap = Object.fromEntries(linkEntries);
+
+        test("Explore -> pages/explore.html", linkMap["Explore"] === "pages/explore.html", JSON.stringify(linkEntries));
+        test("Publish -> pages/upload.html", linkMap["Publish"] === "pages/upload.html");
+        test("Categories -> index.html#technologies (not the bare homepage)", linkMap["Categories"] === "index.html#technologies", linkMap["Categories"]);
+        test("Workshop -> pages/workshop.html", linkMap["Workshop"] === "pages/workshop.html");
+        // Profiles is documented, unfixed, existing behavior — no dedicated
+        // builder/profile-discovery route exists in this app, so this
+        // deliberately still matches Explore's own href rather than being
+        // "fixed" to point somewhere that doesn't exist.
+        test("Profiles remains an alias to Explore (no dedicated profile-discovery route exists)", linkMap["Profiles"] === "pages/explore.html", linkMap["Profiles"]);
+        test("Privacy -> pages/legal/privacy.html", linkMap["Privacy"] === "pages/legal/privacy.html");
+        test("Terms -> pages/legal/terms.html", linkMap["Terms"] === "pages/legal/terms.html");
+        test("Community Guidelines -> pages/legal/community-guidelines.html", linkMap["Community Guidelines"] === "pages/legal/community-guidelines.html");
+        test("no footer link is broken (empty/missing href)", linkEntries.every(([, href]) => !!href), JSON.stringify(linkEntries));
+
+        // --- Structure: semantic nav groups, not bare divs --------------------
+        const navGroups = footer.querySelectorAll("nav.footer-group");
+        test("footer renders 3 semantic nav groups (Platform/Builders/Legal)", navGroups.length === 3, String(navGroups.length));
+
+        navGroups.forEach(nav => {
+            const labelledBy = nav.getAttribute("aria-labelledby");
+            const heading = labelledBy ? document.getElementById(labelledBy) : null;
+            test(`nav group "${heading?.textContent}" is labelled by its own visible heading`, heading !== null && nav.contains(heading), labelledBy);
+        });
+
+        // --- No run-on links: every link/button in a group is its own flex
+        // row (display:flex + column direction on the group), the actual
+        // production bug — bare inline <a> tags with no separating rule at
+        // all above 900px. Computed style, not just a class-name check, so
+        // a regression in footer.css itself would fail this even if the
+        // markup's class names stayed the same. ---------------------------
+        const platformGroup = [...navGroups].find(nav => nav.textContent.includes("Explore"));
+        const groupStyle = getComputedStyle(platformGroup);
+        test("each nav group lays out as a column (one link per row, not inline)", groupStyle.display === "flex" && groupStyle.flexDirection === "column", `${groupStyle.display} / ${groupStyle.flexDirection}`);
+
+        // --- Hover/focus-visible highlight ---------------------------------
+        // :hover (and, to a lesser extent, :focus-visible) heuristics depend
+        // on real pointer/keyboard-interaction state that a same-page JS
+        // harness can't reliably force — same reasoning already established
+        // in tests/categoryAndLegalBootstrap.test.html for
+        // .search-bar:focus-visible. Checked against the real CSS source
+        // text instead of a live pseudo-class trigger: deterministic either
+        // way, and it fails if the rule, its selector scope, or its
+        // declared values regress, not just if a class name changes.
+        {
+            const footerCss = await (await fetch("../css/layout/footer.css")).text();
+
+            const baseMatch = footerCss.match(/\.footer-group a,\s*\n\s*\.footer-group button\s*\{([^}]*)\}/);
+            test("footer.css defines shared base styling for both links and the Feedback button", Boolean(baseMatch));
+            test("the base rule gives links/button rounded corners", Boolean(baseMatch && /border-radius\s*:\s*var\(--radius-sm\)/.test(baseMatch[1])), baseMatch?.[1]);
+            test(
+                "the base rule includes a short, smooth transition covering both color and background",
+                Boolean(baseMatch && /transition\s*:[^;]*color[^;]*var\(--duration-fast\)/s.test(baseMatch[1]) && /background[^;]*var\(--duration-fast\)/s.test(baseMatch[1])),
+                baseMatch?.[1]
+            );
+
+            const hoverMatch = footerCss.match(/\.footer-group a:hover,\s*\n\s*\.footer-group button:hover\s*\{([^}]*)\}/);
+            test("footer.css defines a :hover rule scoped to footer links and the Feedback button", Boolean(hoverMatch));
+            test(
+                "hover uses Specbound's existing primary accent color for the text (brightened, not just default text color)",
+                Boolean(hoverMatch && /color\s*:\s*var\(--color-primary\)/.test(hoverMatch[1])),
+                hoverMatch?.[1]
+            );
+            test(
+                "hover adds a subtle primary-tinted background highlight (the low-opacity --color-primary-soft wash, not a solid/neon fill)",
+                Boolean(hoverMatch && /background\s*:\s*var\(--color-primary-soft\)/.test(hoverMatch[1])),
+                hoverMatch?.[1]
+            );
+
+            const focusMatch = footerCss.match(/\.footer-group a:focus-visible,\s*\n\s*\.footer-group button:focus-visible\s*\{([^}]*)\}/);
+            test("footer.css defines an equivalent :focus-visible rule for keyboard users", Boolean(focusMatch));
+            test(
+                "focus-visible matches hover's brightened text color",
+                Boolean(focusMatch && /color\s*:\s*var\(--color-primary\)/.test(focusMatch[1])),
+                focusMatch?.[1]
+            );
+            test(
+                "focus-visible matches hover's background highlight",
+                Boolean(focusMatch && /background\s*:\s*var\(--color-primary-soft\)/.test(focusMatch[1])),
+                focusMatch?.[1]
+            );
+            test(
+                "focus-visible also sets a visible box-shadow ring (this app's standard keyboard-focus indicator)",
+                Boolean(focusMatch && /box-shadow\s*:\s*var\(--focus-ring\)/.test(focusMatch[1])),
+                focusMatch?.[1]
+            );
+        }
+
+        // Live computed styles confirm the highlight box actually fits
+        // closely around each link rather than filling the column: a real
+        // rendered link's own border-radius/transition come through, and
+        // (via .footer-group's pre-existing align-items: flex-start) its
+        // width is sized to its own content, not stretched to the column.
+        const platformLink = platformGroup.querySelector("a");
+        const platformLinkStyle = getComputedStyle(platformLink);
+        test("a real rendered footer link has a non-zero border-radius", parseFloat(platformLinkStyle.borderRadius) > 0, platformLinkStyle.borderRadius);
+        test("a real rendered footer link's transition includes background (not just color)", platformLinkStyle.transitionProperty.includes("background"), platformLinkStyle.transitionProperty);
+        test(
+            "a real rendered footer link is not stretched to the column's full width (highlight will hug the text, not the column)",
+            platformLink.getBoundingClientRect().width < platformGroup.getBoundingClientRect().width,
+            `link: ${platformLink.getBoundingClientRect().width}px, group: ${platformGroup.getBoundingClientRect().width}px`
+        );
+
+        // --- Feedback button: same JS behavior as before, restyled only ------
+        const feedbackBtn = document.getElementById("footerFeedbackBtn");
+        test("Feedback control still exists in the Builders group", feedbackBtn !== null);
+        test("Feedback is a <button>, not a link (it opens a dialog, not a navigation)", feedbackBtn?.tagName === "BUTTON");
+
+        const feedbackStyle = getComputedStyle(feedbackBtn);
+        const linkStyle = getComputedStyle(platformGroup.querySelector("a"));
+        test(
+            "Feedback renders visually identical to the adjacent footer links (same color)",
+            feedbackStyle.color === linkStyle.color,
+            `feedback: ${feedbackStyle.color}, link: ${linkStyle.color}`
+        );
+
+        feedbackBtn.click();
+        await new Promise(r => setTimeout(r, 30));
+        test("signed-in: clicking Feedback opens the existing feedback flow", calls.some(c => c[0] === "showFeedbackModal"), JSON.stringify(calls));
+
+        // Signed-out is NOT exercised via a real click: the real signed-
+        // out branch does `window.location.href = pathPrefix +
+        // "pages/login.html"` unconditionally (no event to
+        // preventDefault, unlike a link) — actually clicking it here
+        // would navigate this test page away for real, exactly the
+        // hazard documented in welcomeDialog.test.html for a different
+        // flow. Verified statically instead, against the real unrewritten
+        // source text fetched above: the login-redirect branch still
+        // exists ahead of the dynamic FeedbackModal import, proving the
+        // signed-out guard wasn't removed/reordered by this change
+        // without ever executing it.
+        const guardIndex = realFooterSrc.indexOf("window.location.href = `${pathPrefix}pages/login.html`");
+        const dynamicImportIndex = realFooterSrc.indexOf('import("../components/FeedbackModal.js")');
+        test("the signed-out login-redirect guard still exists in loadFooter()", guardIndex !== -1);
+        test("the login-redirect guard still runs before the feedback flow can open (signed-out never reaches it)", guardIndex !== -1 && dynamicImportIndex !== -1 && guardIndex < dynamicImportIndex);
+
+        // --- Brand area ---------------------------------------------------------
+        const brand = footer.querySelector(".footer-brand");
+        test("brand keeps SPECBOUND", brand?.querySelector("h2")?.textContent.trim() === "SPECBOUND");
+        test("brand keeps the 'Document Every Build.' tagline", [...brand.querySelectorAll("p")].some(p => p.textContent.trim() === "Document Every Build."));
+
+        const versionEl = footer.querySelector(".footer-version");
+        test("version is its own small muted metadata element, not a plain paragraph", versionEl?.textContent.trim() === "v0.9.0", versionEl?.textContent);
+        const versionStyle = getComputedStyle(versionEl);
+        const taglineStyle = getComputedStyle([...brand.querySelectorAll("p")].find(p => p.textContent.trim() === "Document Every Build."));
+        test(
+            "version metadata reads smaller than the tagline (not a primary paragraph)",
+            parseFloat(versionStyle.fontSize) < parseFloat(taglineStyle.fontSize),
+            `version: ${versionStyle.fontSize}, tagline: ${taglineStyle.fontSize}`
+        );
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`homeFooterLinks.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>
