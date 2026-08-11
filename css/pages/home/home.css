@@ -162,6 +162,15 @@
     align-items: center;
 }
 
+/* The footer's Categories link now jumps here (index.html#technologies)
+   instead of the homepage in general — offsets the anchor-jump target
+   past the sticky navbar (--navbar-height) so the section heading isn't
+   left hidden underneath it, same pattern as the Guidelines page's own
+   section anchors (css/pages/content/guidelines-page.css). */
+#technologies {
+    scroll-margin-top: calc(var(--navbar-height) + var(--space-2));
+}
+
 .built-for-grid,
 .project-grid {
     display: grid;

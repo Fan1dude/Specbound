@@ -24,7 +24,7 @@ export async function requireGuidelinesAcceptance(userId, pathPrefix = "") {
 
     return new Promise(resolve => {
         const dialog = document.createElement("dialog");
-        dialog.className = "modal";
+        dialog.className = "modal modal-guidelines";
 
         const previouslyFocused = document.activeElement;
 
@@ -32,16 +32,18 @@ export async function requireGuidelinesAcceptance(userId, pathPrefix = "") {
             <div class="modal-body">
                 <h2 class="modal-title">Community Guidelines</h2>
                 <p class="modal-message">
-                    Before you publish or comment, please review and accept our
+                    Review the
                     <a
+                        class="guidelines-link"
                         href="${pathPrefix}pages/legal/community-guidelines.html"
                         target="_blank"
                         rel="noopener noreferrer"
-                    >Community Guidelines</a>.
+                    >Community Guidelines</a>
+                    before publishing or commenting. You only need to accept them once.
                 </p>
-                <label class="guidelines-accept-checkbox">
+                <label class="guidelines-accept-row">
                     <input type="checkbox" id="guidelinesAcceptCheckbox">
-                    I have read and agree to the Community Guidelines.
+                    <span>I have read and agree to the Community Guidelines.</span>
                 </label>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" data-action="cancel">Cancel</button>
@@ -85,6 +87,12 @@ export async function requireGuidelinesAcceptance(userId, pathPrefix = "") {
 
         acceptBtn.addEventListener("click", async () => {
             acceptBtn.disabled = true;
+            // Same "swap to a verb+ing label while the write is in flight"
+            // convention as editorStatus.js/renderComments.js/editor
+            // Publish — makes the in-progress state visible, not just
+            // inert, and the disabled attribute above is what actually
+            // prevents a second click from firing a duplicate save.
+            acceptBtn.textContent = "Saving...";
 
             try {
                 await acceptGuidelines(userId);
@@ -93,6 +101,7 @@ export async function requireGuidelinesAcceptance(userId, pathPrefix = "") {
                 console.error("Accept guidelines error:", error);
                 showToast(error.message || "Could not save your acceptance. Try again.", "error");
                 acceptBtn.disabled = false;
+                acceptBtn.textContent = "Continue";
             }
         });
 
