@@ -8,7 +8,7 @@ This is a short current map of how the system is actually built, not a restateme
 
 # Stack
 
-Vanilla HTML, CSS, and JavaScript (ES modules), no bundler, no framework. Supabase for auth, Postgres, and Storage. Deployed as static files.
+Vanilla HTML, CSS, and JavaScript (ES modules), no bundler, no framework. Supabase for auth, Postgres, Storage, and (since Milestone 23) Edge Functions. Deployed as static files.
 
 This is a deliberate choice, not a gap — see `ENGINEERING_STANDARDS.md` and the master prompt's "existing implementation rule": preserve the current stack unless the owner explicitly approves a migration. Do not introduce a bundler or framework as a side effect of any other work.
 
@@ -21,7 +21,7 @@ assets/        static assets only
 css/           base/, components/, layout/, pages/, themes/
 js/            components/, config/, core/, features/, pages/, repositories/, services/, utils/
 pages/         HTML pages only
-supabase/      migrations/ (each with a paired rollback), policies.sql, schema.sql, triggers.sql
+supabase/      migrations/ (each with a paired rollback), functions/ (Edge Functions, since Milestone 23), policies.sql, schema.sql, triggers.sql
 docs/          this folder
 tests/         manual browser test harnesses (*.test.html)
 ```
@@ -58,3 +58,4 @@ RLS on every table, a real Content-Security-Policy with no `unsafe-inline` (see 
 - `DATABASE.md` — schema conventions (UUIDs, timestamps, migrations, RLS-by-default)
 - `DEPLOYMENT.md` / `OPERATIONS.md` — how this actually ships and runs
 - `milestones/MILESTONE_19_PARTS_CATALOG_ARCHITECTURE.md` — structured parts catalog, moderated submissions, import, and affiliate-link schema
+- `milestones/MILESTONE_23_SETUP_INVENTORY_SEARCH_SPECIFICATION.md` — Setup Inventory, the `product-metadata` Edge Function (this app's first) and its SSRF-defense design, scoped search, and builder join/history dates
