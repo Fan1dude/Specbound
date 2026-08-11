@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Milestone 6B — search page (debounce, stale-request, states)</title>
+    <title>Milestone 23 — scoped search page (debounce, stale-request, states, scopes)</title>
     <link rel="stylesheet" href="../css/styles.css">
     <style>
         body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
@@ -13,13 +13,11 @@
     </style>
 </head>
 <body>
-    <h1>Milestone 6B — search page (debounce, stale-request, states)</h1>
+    <h1>Milestone 23 — scoped search page (debounce, stale-request, states, scopes)</h1>
     <div id="results"></div>
     <div id="summary"></div>
 
     <nav id="navbar"></nav>
-    <input id="searchPageInput" type="search">
-    <section id="searchResults"></section>
     <footer id="footer"></footer>
 
     <script type="module">
@@ -40,51 +38,80 @@
         // results, which is exactly what stale-request protection exists for.
         const delaysByQuery = {};
         let resultsByQuery = {};
+        let profilesByQuery = {};
         let shouldFail = false;
 
         globalThis.__mock = {
             calls,
             get delaysByQuery() { return delaysByQuery; },
             get resultsByQuery() { return resultsByQuery; },
+            get profilesByQuery() { return profilesByQuery; },
             get shouldFail() { return shouldFail; }
         };
 
         const layoutSrc = `export function loadNavbar() {} export function loadFooter() {}`;
 
         const buildRepoSrc = `
-            export async function searchBuilds(query) {
-                globalThis.__mock.calls.push(["searchBuilds", query]);
+            async function delayFor(query) {
                 const delay = globalThis.__mock.delaysByQuery[query] ?? 0;
                 await new Promise(r => setTimeout(r, delay));
                 if (globalThis.__mock.shouldFail) throw new Error("search failed");
+            }
+
+            export async function searchBuilds(query) {
+                globalThis.__mock.calls.push(["searchBuilds", query]);
+                await delayFor(query);
                 return globalThis.__mock.resultsByQuery[query] || [];
+            }
+
+            export async function searchBuildsByTitle(query) {
+                globalThis.__mock.calls.push(["searchBuildsByTitle", query]);
+                await delayFor(query);
+                return globalThis.__mock.resultsByQuery[query] || [];
+            }
+
+            export async function searchBuildsByCategoryIds(ids) {
+                globalThis.__mock.calls.push(["searchBuildsByCategoryIds", ids.join(",")]);
+                return globalThis.__mock.resultsByQuery["category:" + ids.join(",")] || [];
             }
         `;
 
         const mediaRepoSrc = `
             export async function resolveBuildImageUrls(builds) { return builds; }
+            export async function resolveAvatarUrls(profiles) { return new Map(); }
         `;
 
         const profileRepoSrc = `
             export async function getProfilesByIds(ids) {
                 return ids.map(id => ({ id, username: "user-" + id }));
             }
+
+            export async function searchProfiles(query) {
+                globalThis.__mock.calls.push(["searchProfiles", query]);
+                if (globalThis.__mock.shouldFail) throw new Error("profile search failed");
+                return globalThis.__mock.profilesByQuery[query] || [];
+            }
         `;
 
-        // BlueprintFeed/BlueprintCard deliberately left real — actual card
-        // rendering is part of what this test verifies. They still need an
-        // absolute-URL rewrite though: blob: URLs have no meaningful
-        // directory for "../../components/..." to resolve against (the same
-        // bug hit and fixed twice already this project — see
-        // editorPublishUnpublish.test.html / restoreButton.test.html).
+        // BlueprintFeed/BlueprintCard/CreatorResult/technologies config are
+        // deliberately left real — actual rendering is part of what this
+        // test verifies. They still need an absolute-URL rewrite though:
+        // blob: URLs have no meaningful directory for a relative import to
+        // resolve against (the same bug hit and fixed twice already this
+        // project — see editorPublishUnpublish.test.html / restoreButton.test.html).
         const componentsOrigin = new URL("../js/components/", location.href).href;
+        const configOrigin = new URL("../js/config/technologies/", location.href).href;
+        const utilsOrigin = new URL("../js/utils/", location.href).href;
 
         const rewrites = {
             '"../../core/layout.js"': blobUrl(layoutSrc),
             '"../../repositories/buildRepository.js"': blobUrl(buildRepoSrc),
             '"../../repositories/mediaRepository.js"': blobUrl(mediaRepoSrc),
             '"../../repositories/profileRepository.js"': blobUrl(profileRepoSrc),
-            '"../../components/BlueprintFeed.js"': new URL("BlueprintFeed.js", componentsOrigin).href
+            '"../../components/BlueprintFeed.js"': new URL("BlueprintFeed.js", componentsOrigin).href,
+            '"../../components/CreatorResult.js"': new URL("CreatorResult.js", componentsOrigin).href,
+            '"../../config/technologies/index.js"': new URL("index.js", configOrigin).href,
+            '"../../utils/escapeHtml.js"': new URL("escapeHtml.js", utilsOrigin).href
         };
 
         const pageScriptPromise = (async () => {
@@ -96,34 +123,52 @@
             return rewritten;
         })();
 
-        // Only ever imported into a FRESH #searchPageInput/#searchResults
-        // pair, never the same persistent elements twice — the module
-        // attaches its "input" listener (and its own private debounceTimer)
-        // to whatever element has that id at import time. Re-importing
-        // against the same still-attached element would leave two
-        // independent listeners on it, corrupting the debounce test that
-        // follows (this is exactly what happened before this fix: two
-        // listeners, each with their own timer, each firing their own
-        // "final value" search).
+        // Only ever imported into a FRESH set of elements, never the same
+        // persistent ones twice — the module attaches its "input"/"change"
+        // listeners (and its own private debounceTimer/latestRequestId) to
+        // whatever elements have these ids at import time. Re-importing
+        // against the same still-attached elements would leave duplicate
+        // listeners on them, corrupting the debounce test that follows.
         async function loadPageScript(initialSearch) {
             history.replaceState(null, "", location.pathname + initialSearch);
 
-            document.getElementById("searchPageInput")?.remove();
-            document.getElementById("searchResults")?.remove();
+            for (const id of ["searchPageInput", "searchPageScope", "searchResultsBuilders", "searchResultsBlueprints"]) {
+                document.getElementById(id)?.remove();
+            }
 
             const freshInput = document.createElement("input");
             freshInput.id = "searchPageInput";
             freshInput.type = "search";
 
-            const freshResults = document.createElement("section");
-            freshResults.id = "searchResults";
+            const freshScope = document.createElement("select");
+            freshScope.id = "searchPageScope";
+            ["all", "build", "creator", "category"].forEach(value => {
+                const option = document.createElement("option");
+                option.value = value;
+                freshScope.appendChild(option);
+            });
+
+            const freshBuilders = document.createElement("div");
+            freshBuilders.id = "searchResultsBuilders";
+            freshBuilders.innerHTML = `<div id="searchResultsBuildersList"></div>`;
+
+            const freshBlueprints = document.createElement("div");
+            freshBlueprints.id = "searchResultsBlueprints";
+            freshBlueprints.innerHTML = `<div id="searchResultsBlueprintsList"></div>`;
 
             document.body.appendChild(freshInput);
-            document.body.appendChild(freshResults);
+            document.body.appendChild(freshScope);
+            document.body.appendChild(freshBuilders);
+            document.body.appendChild(freshBlueprints);
 
             await import(blobUrl(await pageScriptPromise));
 
-            return { input: freshInput, resultsEl: freshResults };
+            return {
+                input: freshInput,
+                scope: freshScope,
+                buildersEl: freshBuilders,
+                blueprintsEl: freshBlueprints
+            };
         }
 
         function waitFor(predicate, timeoutMs = 2000) {
@@ -138,43 +183,50 @@
             });
         }
 
-        let input;
-        let resultsEl;
+        let input, scope, buildersEl, blueprintsEl;
 
         function setInput(value) {
             input.value = value;
             input.dispatchEvent(new Event("input"));
         }
 
-        // --- Case 1: page loads with ?q= too short (1 char) — shows the
-        //     neutral prompt, makes zero calls ---------------------------
-        // Its own isolated load/elements — this scenario is done with after
-        // this block, so it doesn't need to share state with what follows.
+        function setScope(value) {
+            scope.value = value;
+            scope.dispatchEvent(new Event("change"));
+        }
+
+        // --- Case 1: page loads with ?q= too short (1 char), default scope
+        //     "all" — shows the neutral prompt in both sections, zero calls ---
         {
             const page1 = await loadPageScript("?q=a");
             await new Promise(r => setTimeout(r, 100));
 
             test("a 1-character initial ?q= does not trigger a search", calls.length === 0, JSON.stringify(calls));
-            test("shows the neutral prompt for a too-short query", page1.resultsEl.textContent.includes("Type something to search"), page1.resultsEl.textContent);
+            test("shows a prompt in the Blueprints section for a too-short query", page1.blueprintsEl.textContent.includes("Search Specbound"), page1.blueprintsEl.textContent);
+            test("shows a prompt in the Builders section for a too-short query", page1.buildersEl.textContent.includes("2 characters"), page1.buildersEl.textContent);
+            test("missing ?scope= defaults to \"all\" (both sections visible)", !page1.buildersEl.hidden && !page1.blueprintsEl.hidden);
         }
 
-        // --- Case 2: page loads with a valid ?q= — runs immediately, no
-        //     debounce delay. This load's elements are reused through the
-        //     rest of the cases below (one continuous "session"). ----------
+        // --- Case 2: page loads with a valid ?q= and default scope — runs
+        //     immediately (no debounce delay), queries both sections --------
         calls.length = 0;
         resultsByQuery = { arduino: [{ id: "b1", title: "Arduino Weather Station", slug: "b1", user_id: "u1", visibility: "public" }] };
+        profilesByQuery = { arduino: [] };
 
-        ({ input, resultsEl } = await loadPageScript("?q=arduino"));
+        ({ input, scope, buildersEl, blueprintsEl } = await loadPageScript("?q=arduino"));
         await waitFor(() => calls.some(c => c[0] === "searchBuilds"));
         await waitFor(() => document.querySelectorAll(".blueprint-card").length === 1);
 
-        test("initial load with a valid ?q= runs a search immediately (no debounce wait)", calls.some(c => c[1] === "arduino"));
+        test("initial load with a valid ?q= runs a blueprint search immediately (no debounce wait)", calls.some(c => c[0] === "searchBuilds" && c[1] === "arduino"));
+        test("\"all\" scope also runs a creator search", calls.some(c => c[0] === "searchProfiles" && c[1] === "arduino"));
         test("the input is pre-filled from ?q=", input.value === "arduino");
+        test("an invalid/missing ?scope= is normalized to \"all\" in the UI", scope.value === "all");
         test("a matching result renders as a real Blueprint card", document.querySelectorAll(".blueprint-card").length === 1);
 
         // --- Case 3: typing debounces — rapid keystrokes fire one search, not one per keystroke ---
         calls.length = 0;
-        resultsByQuery = { "raspberry pi": [] };
+        resultsByQuery["raspberry pi"] = [];
+        profilesByQuery["raspberry pi"] = [];
 
         setInput("r");
         setInput("ra");
@@ -185,83 +237,119 @@
         await new Promise(r => setTimeout(r, 100)); // well under the debounce window
         test("mid-typing (before the debounce window elapses), no search has fired yet", calls.length === 0, JSON.stringify(calls));
 
-        await waitFor(() => calls.length > 0, 1000);
+        await waitFor(() => calls.some(c => c[0] === "searchBuilds"), 1000);
         await new Promise(r => setTimeout(r, 50));
-        test("after the debounce window, exactly one search fires — for the final value, not each keystroke", calls.length === 1 && calls[0][1] === "raspberry pi", JSON.stringify(calls));
+        test(
+            "after the debounce window, exactly one blueprint search fires — for the final value, not each keystroke",
+            calls.filter(c => c[0] === "searchBuilds").length === 1 && calls.find(c => c[0] === "searchBuilds")[1] === "raspberry pi",
+            JSON.stringify(calls)
+        );
 
-        // --- Case 4: URL is kept in sync as the user types (debounced) -----
+        // --- Case 4: URL is kept in sync as the user types (debounced), scope included ---
         test("the URL's ?q= reflects the final typed value after debounce", new URL(location.href).searchParams.get("q") === "raspberry pi", location.href);
+        test("the URL's ?scope= is present after a search runs", new URL(location.href).searchParams.get("scope") === "all", location.href);
 
         // --- Case 5: sub-2-char input clears results back to the prompt and updates the URL ---
         calls.length = 0;
         setInput("x");
         await new Promise(r => setTimeout(r, 400));
 
-        test("typing back down to 1 character shows the prompt again", resultsEl.textContent.includes("Type something to search"), resultsEl.textContent);
+        test("typing back down to 1 character shows the prompt again", blueprintsEl.textContent.includes("Search Specbound"), blueprintsEl.textContent);
         test("a sub-minimum query still updates the URL (preserves what was typed)", new URL(location.href).searchParams.get("q") === "x", location.href);
         test("a sub-minimum query makes no search call", calls.length === 0, JSON.stringify(calls));
 
         // --- Case 6: stale-request protection — a slow old response must not
         //     overwrite a fast new one that was issued after it -------------
-        // Timing note: with a single shared debounce timer, two different
-        // search terms can only both reach "request in flight" if the first
-        // one's debounce has already fired (started its network call)
-        // before the second is typed — typing sooner would just cancel the
-        // first via clearTimeout, never issuing it at all. So: type "slow
-        // query", wait past its 300ms debounce (so its request actually
-        // starts), then type "fast query". For genuine overlap, "slow
-        // query"'s own artificial network delay has to still be pending
-        // when "fast query"'s debounce fires 300ms later — hence 600ms,
-        // comfortably longer than 300 (debounce) + 10 (fast query's delay).
         calls.length = 0;
         delaysByQuery["slow query"] = 600;
         delaysByQuery["fast query"] = 10;
         resultsByQuery["slow query"] = [{ id: "old", title: "OLD STALE RESULT", slug: "old", user_id: "u1", visibility: "public" }];
         resultsByQuery["fast query"] = [{ id: "new", title: "NEW RESULT", slug: "new", user_id: "u1", visibility: "public" }];
+        profilesByQuery["slow query"] = [];
+        profilesByQuery["fast query"] = [];
 
         setInput("slow query");
         await new Promise(r => setTimeout(r, 320)); // past the 300ms debounce — "slow query"'s network call has started
         setInput("fast query");
 
-        await waitFor(() => resultsEl.textContent.includes("NEW RESULT"), 1500);
+        await waitFor(() => blueprintsEl.textContent.includes("NEW RESULT"), 1500);
         // Give the slow, stale response every chance to land and (incorrectly) overwrite the UI.
         await new Promise(r => setTimeout(r, 600));
 
         test(
             "the newer, faster search's results are what's on screen",
-            resultsEl.textContent.includes("NEW RESULT"),
-            resultsEl.textContent
+            blueprintsEl.textContent.includes("NEW RESULT"),
+            blueprintsEl.textContent
         );
         test(
             "the older, slower search's results never appear, even though it resolved after the newer one started",
-            !resultsEl.textContent.includes("OLD STALE RESULT"),
-            resultsEl.textContent
+            !blueprintsEl.textContent.includes("OLD STALE RESULT"),
+            blueprintsEl.textContent
         );
 
         // --- Case 7: loading state is shown while a search is in flight -----
         calls.length = 0;
         delaysByQuery["loading test"] = 200;
         resultsByQuery["loading test"] = [];
+        profilesByQuery["loading test"] = [];
         setInput("loading test");
         await new Promise(r => setTimeout(r, 320)); // debounce elapses, request starts, not yet resolved
-        test("a \"Searching...\" state is visible while the request is in flight", resultsEl.textContent.includes("Searching"), resultsEl.textContent);
-        await waitFor(() => !resultsEl.textContent.includes("Searching"), 1000);
+        test("a \"Searching...\" state is visible in Blueprints while the request is in flight", blueprintsEl.textContent.includes("Searching"), blueprintsEl.textContent);
+        await waitFor(() => !blueprintsEl.textContent.includes("Searching"), 1000);
 
         // --- Case 8: zero results shows an empty state naming the query -----
         calls.length = 0;
         resultsByQuery["nothing here"] = [];
+        profilesByQuery["nothing here"] = [];
         setInput("nothing here");
-        await waitFor(() => calls.some(c => c[1] === "nothing here"));
-        await waitFor(() => resultsEl.textContent.includes("No Projects Found") || resultsEl.textContent.includes("nothing here"));
-        test("zero results shows an empty state naming the query", resultsEl.textContent.includes("nothing here"), resultsEl.textContent);
+        await waitFor(() => calls.some(c => c[0] === "searchBuilds" && c[1] === "nothing here"));
+        await waitFor(() => blueprintsEl.textContent.includes("nothing here"));
+        test("zero blueprint results shows an empty state naming the query", blueprintsEl.textContent.includes("nothing here"), blueprintsEl.textContent);
+        await waitFor(() => buildersEl.textContent.includes("No matching builders"));
+        test("zero creator results shows its own empty state, in the separate Builders section", buildersEl.textContent.includes("No matching builders"), buildersEl.textContent);
 
         // --- Case 9: a thrown search error shows a visible error state -----
         calls.length = 0;
         shouldFail = true;
         setInput("will error");
-        await waitFor(() => resultsEl.textContent.toLowerCase().includes("wrong") || resultsEl.textContent.toLowerCase().includes("unavailable"), 1000);
-        test("a search failure shows a visible error message, not a silent blank result", resultsEl.textContent.toLowerCase().includes("wrong") || resultsEl.textContent.toLowerCase().includes("unavailable"), resultsEl.textContent);
+        await waitFor(() => blueprintsEl.textContent.toLowerCase().includes("wrong") || blueprintsEl.textContent.toLowerCase().includes("unavailable"), 1000);
+        test("a search failure shows a visible error message, not a silent blank result", blueprintsEl.textContent.toLowerCase().includes("wrong") || blueprintsEl.textContent.toLowerCase().includes("unavailable"), blueprintsEl.textContent);
         shouldFail = false;
+
+        // --- Case 10: "Build Name" scope hides Builders, only calls searchBuildsByTitle ---
+        // setInput before setScope: input.value is read synchronously by the
+        // scope <select>'s own "change" handler (which also cancels any
+        // still-pending debounced search from setInput), so the scope
+        // change re-runs against the CURRENT query, not the previous case's.
+        resultsByQuery["desk setup"] = [];
+        setInput("desk setup");
+        calls.length = 0;
+        setScope("build");
+        await waitFor(() => calls.some(c => c[0] === "searchBuildsByTitle"));
+        test("\"build\" scope hides the Builders section", buildersEl.hidden === true);
+        test("\"build\" scope calls searchBuildsByTitle, not the combined searchBuilds", calls.some(c => c[0] === "searchBuildsByTitle" && c[1] === "desk setup") && !calls.some(c => c[0] === "searchBuilds"), JSON.stringify(calls));
+        test("\"build\" scope never calls searchProfiles", !calls.some(c => c[0] === "searchProfiles"), JSON.stringify(calls));
+
+        // --- Case 11: "Creator" scope hides Blueprints, only calls searchProfiles ---
+        profilesByQuery["jane"] = [{ id: "u1", username: "jane", display_name: "Jane" }];
+        setInput("jane");
+        calls.length = 0;
+        setScope("creator");
+        await waitFor(() => calls.some(c => c[0] === "searchProfiles"));
+        await waitFor(() => buildersEl.textContent.includes("jane"));
+        test("\"creator\" scope hides the Blueprints section", blueprintsEl.hidden === true);
+        test("\"creator\" scope calls searchProfiles and renders a creator result", calls.some(c => c[0] === "searchProfiles" && c[1] === "jane") && buildersEl.textContent.includes("jane"), buildersEl.innerHTML);
+        test("\"creator\" scope never calls a blueprint search function", !calls.some(c => c[0] === "searchBuilds" || c[0] === "searchBuildsByTitle" || c[0] === "searchBuildsByCategoryIds"), JSON.stringify(calls));
+
+        // --- Case 12: "Category" scope matches the technology config, then
+        //     queries builds by the matched category id(s) -------------------
+        resultsByQuery["category:setup"] = [{ id: "b2", title: "My Desk Setup", slug: "b2", user_id: "u2", visibility: "public" }];
+        setInput("desk setups"); // matches setup.js's title "Desk Setups"
+        calls.length = 0;
+        setScope("category");
+        await waitFor(() => calls.some(c => c[0] === "searchBuildsByCategoryIds"));
+        test("\"category\" scope hides the Builders section", buildersEl.hidden === true);
+        test("\"category\" scope matches the technology config and queries by its id", calls.some(c => c[0] === "searchBuildsByCategoryIds" && c[1] === "setup"), JSON.stringify(calls));
 
         // --- Render + report ------------------------------------------------
         const resultsListEl = document.getElementById("results");

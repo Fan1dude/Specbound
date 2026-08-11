@@ -1,4 +1,5 @@
 import { supabase } from "../core/supabase.js";
+import { escapeLikeSpecialChars, quoteForOrFilter } from "../utils/sqlEscaping.js";
 
 // Deliberately the SAME column list this had before Milestone 20 —
 // getPublicProfile()/getProfilesByIds() are used far beyond the profile
@@ -16,7 +17,11 @@ import { supabase } from "../core/supabase.js";
 const PUBLIC_PROFILE_COLUMNS =
     "id, username, display_name, bio, location, website, github, youtube, avatar_path, avatar_url, created_at, followers_count, following_count";
 
-const PORTFOLIO_PROFILE_COLUMNS = `${PUBLIC_PROFILE_COLUMNS}, headline, featured_build_id`;
+// building_since_year (Milestone 23) joins headline/featured_build_id
+// here for the exact same reason — only the Builder Portfolio page
+// renders it, so every other PUBLIC_PROFILE_COLUMNS caller stays
+// unaffected if this column doesn't exist yet on some environment.
+const PORTFOLIO_PROFILE_COLUMNS = `${PUBLIC_PROFILE_COLUMNS}, headline, featured_build_id, building_since_year`;
 
 export async function getProfile(id) {
     const { data, error } = await supabase
@@ -100,6 +105,42 @@ export async function attachBuildProfiles(builds) {
         ...build,
         profiles: profilesById.get(build.user_id) || null
     }));
+}
+
+const SEARCH_PROFILE_COLUMNS = "id, username, display_name, headline, avatar_path, avatar_url";
+const PROFILE_SEARCH_RESULT_LIMIT = 20;
+
+// Milestone 23 §5 — "Creator" scope (and the Builders section of "All").
+// There's no private-profile concept anywhere in this schema — every
+// profiles row is already publicly selectable (same RLS every other
+// function in this file already relies on) — so, unlike searchBuilds(),
+// there's no visibility filter to apply here. Deliberately a slim,
+// dedicated column list rather than PUBLIC_PROFILE_COLUMNS: a search
+// result card only needs enough to identify and link to the builder
+// (avatar, name, one-line headline), not their full bio/social
+// links/follower counts.
+export async function searchProfiles(query) {
+    const trimmed = query.trim();
+
+    if (!trimmed) return [];
+
+    const likePattern = `%${escapeLikeSpecialChars(trimmed)}%`;
+    const quotedPattern = quoteForOrFilter(likePattern);
+
+    const { data, error } = await supabase
+        .from("profiles")
+        .select(SEARCH_PROFILE_COLUMNS)
+        .or([
+            `username.ilike.${quotedPattern}`,
+            `display_name.ilike.${quotedPattern}`,
+            `headline.ilike.${quotedPattern}`
+        ].join(","))
+        .order("username", { ascending: true })
+        .limit(PROFILE_SEARCH_RESULT_LIMIT);
+
+    if (error) throw error;
+
+    return data || [];
 }
 
 // Confirms a profiles row exists for a signed-up user — created by an

@@ -98,12 +98,21 @@ export async function loadNavbar(pathPrefix = "") {
                 </svg>
             </button>
 
-            <input
-                class="search-bar"
-                type="text"
-                placeholder="Search builds, builders, parts..."
-                aria-label="Search builds, builders, parts"
-            >
+            <div class="navbar-search">
+                <input
+                    class="search-bar"
+                    type="text"
+                    placeholder="Search builds, builders, parts..."
+                    aria-label="Search builds, builders, parts"
+                >
+
+                <select class="search-scope" aria-label="Search scope">
+                    <option value="all">All</option>
+                    <option value="build">Build Name</option>
+                    <option value="creator">Creator</option>
+                    <option value="category">Category</option>
+                </select>
+            </div>
 
             <div class="nav-links" id="navLinks">
                 <a href="${pathPrefix}pages/explore.html">Explore</a>
@@ -132,6 +141,7 @@ export async function loadNavbar(pathPrefix = "") {
     }
 
     const search = navbar.querySelector(".search-bar");
+    const searchScope = navbar.querySelector(".search-scope");
 
     if (search) {
         search.addEventListener("keydown", (e) => {
@@ -140,8 +150,14 @@ export async function loadNavbar(pathPrefix = "") {
             const value = search.value.trim();
             if (!value) return;
 
+            // Milestone 23 §5 — the navbar search is the one shared entry
+            // point every page already had; this passes the chosen scope
+            // straight through to search.html rather than adding a second,
+            // duplicate hero search anywhere.
+            const scope = searchScope?.value || "all";
+
             window.location.href =
-                `${pathPrefix}pages/search.html?q=${encodeURIComponent(value)}`;
+                `${pathPrefix}pages/search.html?q=${encodeURIComponent(value)}&scope=${encodeURIComponent(scope)}`;
         });
     }
 

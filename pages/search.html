@@ -63,15 +63,31 @@
                     autocomplete="off"
                 >
             </div>
+
+            <div class="search-scope-wrap">
+                <label for="searchPageScope">Search in</label>
+                <select id="searchPageScope">
+                    <option value="all">All</option>
+                    <option value="build">Build Name</option>
+                    <option value="creator">Creator</option>
+                    <option value="category">Category</option>
+                </select>
+            </div>
         </header>
 
         <h2 class="sr-only">Search results</h2>
 
-        <section
-            id="searchResults"
-            class="search-results"
-            aria-live="polite"
-        ></section>
+        <section id="searchResults" class="search-results" aria-live="polite">
+            <div id="searchResultsBuilders" class="search-results-section" hidden>
+                <h3 class="search-results-section-heading">Builders</h3>
+                <div id="searchResultsBuildersList" class="creator-results-list"></div>
+            </div>
+
+            <div id="searchResultsBlueprints" class="search-results-section" hidden>
+                <h3 class="search-results-section-heading">Blueprints</h3>
+                <div id="searchResultsBlueprintsList"></div>
+            </div>
+        </section>
 
     </main>
 

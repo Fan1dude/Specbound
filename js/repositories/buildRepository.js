@@ -144,3 +144,49 @@ export async function searchBuilds(query) {
 
     return data || [];
 }
+
+// Milestone 23 §5 — "Build Name" scope: title only, never silently
+// falling back to description/category/username the way the combined
+// searchBuilds() above does. A builder who explicitly chose this scope
+// gets exactly what it promises.
+export async function searchBuildsByTitle(query) {
+    const trimmed = query.trim();
+
+    if (!trimmed) return [];
+
+    const likePattern = `%${escapeLikeSpecialChars(trimmed)}%`;
+
+    const { data, error } = await supabase
+        .from("builds")
+        .select("*")
+        .eq("visibility", "public")
+        .ilike("title", likePattern)
+        .order("created_at", { ascending: false })
+        .limit(SEARCH_RESULT_LIMIT);
+
+    if (error) throw error;
+
+    return data || [];
+}
+
+// Milestone 23 §5 — "Category" scope. categoryIds are technology.id
+// values already matched against js/config/technologies/index.js's
+// searchTechnologies() by the caller — this only ever filters
+// builds.category by exact membership in that set, never by a raw text
+// LIKE against the category column itself (which would incorrectly
+// treat a Setup-inventory group name or a partial id as a match).
+export async function searchBuildsByCategoryIds(categoryIds) {
+    if (!categoryIds.length) return [];
+
+    const { data, error } = await supabase
+        .from("builds")
+        .select("*")
+        .eq("visibility", "public")
+        .in("category", categoryIds)
+        .order("created_at", { ascending: false })
+        .limit(SEARCH_RESULT_LIMIT);
+
+    if (error) throw error;
+
+    return data || [];
+}
