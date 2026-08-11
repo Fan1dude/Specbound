@@ -13,6 +13,7 @@ import { listSkeleton } from "../../utils/skeletons.js";
 import { renderBuild, renderRevisionView } from "./renderBuild.js";
 import { renderSpecifications } from "./renderSpecifications.js";
 import { renderResources } from "./renderResources.js";
+import { renderSetupInventory } from "./renderSetupInventory.js";
 import { renderTimeline } from "./renderTimeline.js";
 import { renderComments } from "./renderComments.js";
 import { renderLike } from "./renderLike.js";
@@ -122,6 +123,11 @@ export async function loadBuild() {
             // builds has no column for them, so "current" resources are the
             // latest revision's snapshot, not something read off `build`.
             renderResources(latestRevision?.resources ?? []);
+            // setup_inventory, unlike resources, lives directly on `builds`
+            // (migration 0035) — publish_draft() keeps it in sync there on
+            // every publish, so the "current" view reads it straight off
+            // the build like specifications, not off the latest revision.
+            renderSetupInventory(build.setup_inventory ?? null);
         }
     } catch (error) {
         console.error("Build page error:", error);
@@ -270,6 +276,7 @@ async function loadRevisionView(build, revisionId, currentUser) {
 
     renderSpecifications(snapshot.specifications);
     renderResources(snapshot.resources);
+    renderSetupInventory(snapshot.setupInventory);
 
     if (canRestore) {
         setupRestoreButton(build, revision);
