@@ -141,6 +141,74 @@
         const groupStyle = getComputedStyle(platformGroup);
         test("each nav group lays out as a column (one link per row, not inline)", groupStyle.display === "flex" && groupStyle.flexDirection === "column", `${groupStyle.display} / ${groupStyle.flexDirection}`);
 
+        // --- Hover/focus-visible highlight ---------------------------------
+        // :hover (and, to a lesser extent, :focus-visible) heuristics depend
+        // on real pointer/keyboard-interaction state that a same-page JS
+        // harness can't reliably force — same reasoning already established
+        // in tests/categoryAndLegalBootstrap.test.html for
+        // .search-bar:focus-visible. Checked against the real CSS source
+        // text instead of a live pseudo-class trigger: deterministic either
+        // way, and it fails if the rule, its selector scope, or its
+        // declared values regress, not just if a class name changes.
+        {
+            const footerCss = await (await fetch("../css/layout/footer.css")).text();
+
+            const baseMatch = footerCss.match(/\.footer-group a,\s*\n\s*\.footer-group button\s*\{([^}]*)\}/);
+            test("footer.css defines shared base styling for both links and the Feedback button", Boolean(baseMatch));
+            test("the base rule gives links/button rounded corners", Boolean(baseMatch && /border-radius\s*:\s*var\(--radius-sm\)/.test(baseMatch[1])), baseMatch?.[1]);
+            test(
+                "the base rule includes a short, smooth transition covering both color and background",
+                Boolean(baseMatch && /transition\s*:[^;]*color[^;]*var\(--duration-fast\)/s.test(baseMatch[1]) && /background[^;]*var\(--duration-fast\)/s.test(baseMatch[1])),
+                baseMatch?.[1]
+            );
+
+            const hoverMatch = footerCss.match(/\.footer-group a:hover,\s*\n\s*\.footer-group button:hover\s*\{([^}]*)\}/);
+            test("footer.css defines a :hover rule scoped to footer links and the Feedback button", Boolean(hoverMatch));
+            test(
+                "hover uses Specbound's existing primary accent color for the text (brightened, not just default text color)",
+                Boolean(hoverMatch && /color\s*:\s*var\(--color-primary\)/.test(hoverMatch[1])),
+                hoverMatch?.[1]
+            );
+            test(
+                "hover adds a subtle primary-tinted background highlight (the low-opacity --color-primary-soft wash, not a solid/neon fill)",
+                Boolean(hoverMatch && /background\s*:\s*var\(--color-primary-soft\)/.test(hoverMatch[1])),
+                hoverMatch?.[1]
+            );
+
+            const focusMatch = footerCss.match(/\.footer-group a:focus-visible,\s*\n\s*\.footer-group button:focus-visible\s*\{([^}]*)\}/);
+            test("footer.css defines an equivalent :focus-visible rule for keyboard users", Boolean(focusMatch));
+            test(
+                "focus-visible matches hover's brightened text color",
+                Boolean(focusMatch && /color\s*:\s*var\(--color-primary\)/.test(focusMatch[1])),
+                focusMatch?.[1]
+            );
+            test(
+                "focus-visible matches hover's background highlight",
+                Boolean(focusMatch && /background\s*:\s*var\(--color-primary-soft\)/.test(focusMatch[1])),
+                focusMatch?.[1]
+            );
+            test(
+                "focus-visible also sets a visible box-shadow ring (this app's standard keyboard-focus indicator)",
+                Boolean(focusMatch && /box-shadow\s*:\s*var\(--focus-ring\)/.test(focusMatch[1])),
+                focusMatch?.[1]
+            );
+        }
+
+        // Live computed styles confirm the highlight box actually fits
+        // closely around each link rather than filling the column: a real
+        // rendered link's own border-radius/transition come through, and
+        // (via .footer-group's pre-existing align-items: flex-start) its
+        // width is sized to its own content, not stretched to the column.
+        const platformLink = platformGroup.querySelector("a");
+        const platformLinkStyle = getComputedStyle(platformLink);
+        test("a real rendered footer link has a non-zero border-radius", parseFloat(platformLinkStyle.borderRadius) > 0, platformLinkStyle.borderRadius);
+        test("a real rendered footer link's transition includes background (not just color)", platformLinkStyle.transitionProperty.includes("background"), platformLinkStyle.transitionProperty);
+        test(
+            "a real rendered footer link is not stretched to the column's full width (highlight will hug the text, not the column)",
+            platformLink.getBoundingClientRect().width < platformGroup.getBoundingClientRect().width,
+            `link: ${platformLink.getBoundingClientRect().width}px, group: ${platformGroup.getBoundingClientRect().width}px`
+        );
+
         // --- Feedback button: same JS behavior as before, restyled only ------
         const feedbackBtn = document.getElementById("footerFeedbackBtn");
         test("Feedback control still exists in the Builders group", feedbackBtn !== null);

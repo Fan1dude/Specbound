@@ -58,30 +58,54 @@
     gap: var(--space-0-5);
 }
 
+/* Hover/focus hit area is padded, then pulled back in with an equal
+   negative margin — the link's own flex-item margin box (what the
+   column's layout/gap actually measures) stays exactly the size it was,
+   so this can't shift the footer's existing spacing, only add a
+   background box that renders past the text's own edges. border-radius
+   on an inline-block box crops tightly to that same padded box, which
+   is what keeps the highlight hugging each individual link instead of
+   stretching to the column's full width (.footer-group's own
+   align-items: flex-start already sizes each item to its content, not a
+   stretched column width, so there's no extra sizing to fight here). */
 .footer-group a,
 .footer-group button {
+    display: inline-block;
+    margin: calc(var(--space-0) * -1);
+    padding: var(--space-0);
+    border-radius: var(--radius-sm);
     color: var(--text-secondary);
-    transition: color var(--duration-fast) var(--ease-standard);
+    transition:
+        color var(--duration-fast) var(--ease-standard),
+        background var(--duration-fast) var(--ease-standard);
 }
 
+/* --color-primary (a lightened text-safe derivative of Specbound's
+   Primary, not the fill-only -strong tier) for the brightened text, and
+   --color-primary-soft — the same restrained, low-opacity wash used
+   elsewhere in the app for a fill that never needs to double as a text
+   background — for the highlight. No glow/blur; matches this app's
+   existing "solid, zero-blur" treatment for hover/focus (see
+   --focus-ring's own comment in tokens.css). */
 .footer-group a:hover,
 .footer-group button:hover {
-    color: var(--text);
+    color: var(--color-primary);
+    background: var(--color-primary-soft);
 }
 
 .footer-group a:focus-visible,
 .footer-group button:focus-visible {
     outline: 2px solid transparent;
+    color: var(--color-primary);
+    background: var(--color-primary-soft);
     box-shadow: var(--focus-ring);
-    border-radius: var(--radius-sm);
 }
 
 /* Milestone 22 §9 — the Feedback trigger is a <button> (it opens a
-   dialog, not a navigation), reset to look identical to the plain <a>
-   links around it rather than a default browser button. */
+   dialog, not a navigation); strips native button chrome only. Sizing,
+   spacing, hover, and focus are shared with the plain <a> links above
+   via the rules already applied to both. */
 .footer-group button {
-    display: inline;
-    padding: 0;
     background: none;
     border: none;
     font: inherit;
