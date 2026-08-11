@@ -1106,3 +1106,65 @@ Every other migration still only ever moves forward from `0001`.
   shipped as a draft in 0031/Milestone 22; this migration lets the
   acceptance gate distinguish "accepted the draft" from "accepted the
   final published text."
+
+## 0035_setup_inventory_and_builder_dates
+
+- **Status**: Proposed — not yet applied to the shared/production
+  project (confirmed live: a real Builder Portfolio page load against it
+  currently fails with `42703 column profiles.building_since_year does
+  not exist`, exactly as expected pre-deployment). Depends on 0000-0034
+  (specifically 0002/0004/0006 for `publish_draft()`'s current body and
+  0005 for `restore_revision_to_draft()`'s).
+- **File**: `migrations/0035_setup_inventory_and_builder_dates.sql`
+- **Rollback**:
+  `rollbacks/0035_setup_inventory_and_builder_dates_rollback.sql`
+- **Adds**:
+  - `setup_inventory jsonb not null default
+    '{"schemaVersion":1,"currency":"USD","categories":[]}'::jsonb` on
+    `project_drafts`, `builds`, and `build_revisions` — the Setup
+    technology's (`technology.id === "setup"`) structured product
+    inventory. Deliberately a separate structure from the existing
+    per-technology `specifications` jsonb column — it does not replace
+    or touch `specifications` on any table, so PC-build/Arduino/
+    robotics/3D-printer/homelab specs, the parts catalog, imports, and
+    revision history are all untouched.
+  - `public.saved_setup_categories` (id, user_id, name, normalized_name,
+    created_at, updated_at) — private, owner-scoped, reusable category
+    templates. RLS: 4 owner-only policies (select/insert/update/delete,
+    all `auth.uid() = user_id`); **no public/anon read policy**. A
+    case/whitespace-insensitive unique index on `(user_id,
+    normalized_name)` prevents duplicate saved categories per builder. A
+    `CHECK` requires a non-blank, length-bounded name. Reuses the
+    existing shared `public.set_updated_at()` trigger; adds one new
+    trigger function, `set_saved_setup_category_normalized_name()`.
+  - `profiles.building_since_year integer`, nullable, with a `CHECK`
+    bounding it to `1980..extract(year from now())`. Distinct from the
+    existing, unrelated `profiles.created_at` (the account's real join
+    date) — no backfill; every existing row gets `null`.
+  - Replaces `publish_draft()` and `restore_revision_to_draft()` in
+    place — full bodies sourced from their true latest prior
+    definitions (0006 and 0005 respectively, confirmed by grepping every
+    later redefinition, not assumed), each with a small, clearly marked
+    addition so `setup_inventory` is copied on publish/republish (into
+    both `builds` and the new `build_revisions` row) and restored from a
+    revision snapshot back onto the draft. `create or replace function`
+    preserves each function's existing grants — no new `grant execute`
+    statements needed for either.
+- **No new SECURITY DEFINER function** — every new table's CRUD goes
+  through plain RLS-governed `supabase-js` calls, the same
+  "RLS is the real gate, no RPC needed" pattern already used for
+  `onboarding_welcomed_at`/`guidelines_accepted_at`/`_version`. Migration
+  0033's function-EXECUTE hardening therefore has no new surface to
+  close here.
+- **Compatibility**: a pre-existing revision restored after this
+  migration gets `setup_inventory` from its own DB-level column default
+  (the empty-inventory shape) if the revision predates snapshot capture
+  for this field; the editor and public build page both render an empty
+  inventory as "nothing to show" rather than an error. Confirmed live
+  against a real pre-Milestone-23 Setup blueprint: the new public
+  Setup-Inventory section renders in the DOM but stays cleanly hidden,
+  while that build's legacy `specifications` fields render exactly as
+  before.
+- **Context**: Milestone 23 (Setup Inventory, Search & Builder History) —
+  see `docs/milestones/MILESTONE_23_SETUP_INVENTORY_SEARCH_SPECIFICATION.md`
+  for the full architecture, JSON contract, and security rationale.
