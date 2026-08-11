@@ -18,7 +18,13 @@
         pages/legal/community-guidelines.html source — proves the
         finalized copy actually shipped (no leftover Draft wording,
         correct title/metadata/date, all 10 sections present and
-        numbered, reporting text scoped to projects/comments only).
+        numbered, reporting text scoped to projects/comments only) and
+        that sections 01-07 actually cover every approved policy topic
+        (harassment/hate speech, threats or encouragement of violence,
+        sexual or disturbing content, personal information/doxxing,
+        spam/scams/unrelated promotions, impersonation, attribution and
+        IP, project authenticity, dangerous or illegal activity, and the
+        electrical/tool/project-safety disclaimer).
     </p>
     <div id="results"></div>
     <div id="summary"></div>
@@ -136,6 +142,103 @@
         test(
             "no age/minimum-age section was added",
             !/minimum age|years old|age requirement/i.test(bodyText)
+        );
+
+        // --- No unsupported moderation promise ------------------------------------
+        // Sections 08-10 are explicit that reports/feedback don't guarantee
+        // review, action, or a response — this checks the page never makes
+        // the opposite (affirmative) promise anywhere else.
+        test(
+            "no affirmative promise that every report is reviewed/actioned or every question gets a response",
+            !/every report (is|will be) reviewed|action will be taken on every|you will receive a response|we will respond/i.test(bodyText)
+        );
+
+        // --- Sections 01-07 topic checklist -----------------------------------
+        // Each check pulls its own section by id and normalizes whitespace
+        // (source lines wrap for readability) before substring-matching, so
+        // these never depend on source indentation.
+        function sectionText(id) {
+            return normalizeWhitespace(doc.getElementById(id)?.textContent);
+        }
+
+        const feedbackText = sectionText("sharing-and-giving-feedback");
+        test(
+            "constructive criticism vs. personal attacks: section 02 contrasts critiquing the work with criticizing the person",
+            feedbackText.includes("focus on the work") &&
+                feedbackText.includes("criticizing the person who built it") &&
+                feedbackText.includes("doesn't belong here"),
+            feedbackText
+        );
+
+        const conductText = sectionText("respectful-conduct");
+        test(
+            "harassment and hate speech: section 03 names both explicitly",
+            conductText.includes("Harassment") && conductText.includes("hate speech"),
+            conductText
+        );
+        test(
+            "threats or encouragement of violence: section 03 covers both threats and encouraging violence",
+            conductText.includes("threats") && conductText.includes("encouraging or threatening violence"),
+            conductText
+        );
+
+        const boundariesText = sectionText("content-boundaries");
+        test(
+            "sexual or disturbing content: section 04 covers both",
+            boundariesText.includes("sexual content") && boundariesText.includes("shock or disturb"),
+            boundariesText
+        );
+        test(
+            "personal information and exposing someone: section 04 covers doxxing-style exposure",
+            boundariesText.includes("personal information") &&
+                boundariesText.includes("track down or expose someone"),
+            boundariesText
+        );
+
+        const spamText = sectionText("spam-scams-and-impersonation");
+        test(
+            "spam, scams, and unrelated promotions: section 05 names all three",
+            spamText.includes("spam") && spamText.includes("scams") && spamText.includes("unrelated promotions"),
+            spamText
+        );
+        test(
+            "impersonation: section 05 covers pretending to be someone else",
+            spamText.includes("pretend to be someone else"),
+            spamText
+        );
+
+        const authenticityText = sectionText("project-authenticity-and-other-peoples-work");
+        test(
+            "attribution and intellectual-property boundaries: section 06 requires credit and the right to share",
+            authenticityText.includes("say so and credit them") &&
+                authenticityText.includes("the right to share"),
+            authenticityText
+        );
+        test(
+            "project authenticity: section 06 disallows presenting someone else's project as your own",
+            authenticityText.includes("present someone else's project as your own"),
+            authenticityText
+        );
+
+        const dangerousText = sectionText("dangerous-or-illegal-activity");
+        test(
+            "dangerous or illegal activity: section 07 covers illegal activity and content causing harm",
+            dangerousText.includes("illegal activity") && dangerousText.includes("causing harm to people"),
+            dangerousText
+        );
+        test(
+            "electrical/tool/project-safety disclaimer: section 07 disclaims professional advice and safety verification",
+            dangerousText.includes("electronics, power") &&
+                dangerousText.includes("is professional electrical, safety, legal, or engineering advice") &&
+                dangerousText.includes("does not verify or endorse the safety"),
+            dangerousText
+        );
+
+        // --- Reporting only for projects and comments -----------------------------
+        test(
+            "section 08 (reporting) never mentions profiles as a reportable target",
+            !/profile/i.test(section08?.textContent || ""),
+            section08?.textContent
         );
 
         // --- Back to Home preserved ------------------------------------------------
