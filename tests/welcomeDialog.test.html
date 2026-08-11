@@ -137,9 +137,13 @@
 
         // --- Case: existing user (onboarding_welcomed_at already set) —
         // no dialog ------------------------------------------------------------
+        // profile fixtures throughout this file intentionally carry NO
+        // `id` field, matching layout.js's real navbar query
+        // (`.select("username, onboarding_welcomed_at")`) exactly — see
+        // the regression case further down for why this matters.
         {
             const { maybeShowWelcome } = await freshOnboardingModule();
-            await maybeShowWelcome({ id: "user-existing" }, { id: "user-existing", onboarding_welcomed_at: "2026-01-01T00:00:00Z" }, "../");
+            await maybeShowWelcome({ id: "user-existing" }, { username: "builder_existing", onboarding_welcomed_at: "2026-01-01T00:00:00Z" }, "../");
             await new Promise(r => setTimeout(r, 30));
 
             test("existing user (onboarding_welcomed_at set): no Welcome dialog appears", findDialog() === null);
@@ -173,7 +177,7 @@
         clearNamespace(sessionStorage);
 
         const { maybeShowWelcome: showA, calls: callsA } = await freshOnboardingModule();
-        await showA({ id: "user-new" }, { id: "user-new", onboarding_welcomed_at: null }, "../");
+        await showA({ id: "user-new" }, { username: "builder_new", onboarding_welcomed_at: null }, "../");
         await waitFor(() => findDialog() !== null);
 
         test("brand-new user (onboarding_welcomed_at null): Welcome dialog appears", findDialog() !== null);
@@ -189,6 +193,14 @@
 
         test("clicking Skip closes the dialog", findDialog() === null);
         test("clicking Skip marks onboarding_welcomed_at exactly once", callsA.filter(c => c[0] === "markOnboardingWelcomed").length === 1, JSON.stringify(callsA));
+        // Regression: the profile fixture above has no `id` (it only has
+        // username/onboarding_welcomed_at, exactly like layout.js's real
+        // navbar query). Against the pre-fix production code, which called
+        // markOnboardingWelcomed(profile.id), this would record `undefined`
+        // here instead of "user-new" — this assertion fails against that
+        // code and passes only once the save uses the authenticated
+        // user.id.
+        test("the save uses the authenticated user.id, not profile.id (profile has no id)", callsA.find(c => c[0] === "markOnboardingWelcomed")?.[1] === "user-new", JSON.stringify(callsA));
         test("focus returns to whatever had focus before the dialog opened", document.activeElement === focusTarget);
 
         focusTarget.remove();
@@ -199,7 +211,7 @@
         clearNamespace(sessionStorage);
 
         const { maybeShowWelcome: showB, calls: callsB } = await freshOnboardingModule({ markSaveDelayMs: 300 });
-        await showB({ id: "user-slow" }, { id: "user-slow", onboarding_welcomed_at: null }, "../");
+        await showB({ id: "user-slow" }, { username: "builder_slow", onboarding_welcomed_at: null }, "../");
         await waitFor(() => findDialog() !== null);
 
         const closeStart = performance.now();
@@ -212,6 +224,7 @@
 
         await waitFor(() => callsB.some(c => c[0] === "markOnboardingWelcomed"), 1000);
         test("slow network: the save does eventually complete in the background", callsB.some(c => c[0] === "markOnboardingWelcomed"));
+        test("slow network: the eventual save uses user.id, not profile.id", callsB.find(c => c[0] === "markOnboardingWelcomed")?.[1] === "user-slow", JSON.stringify(callsB));
 
         // --- Case: failed timestamp save — dialog still closes immediately,
         // no error surfaces to the caller, and the session guard still
@@ -226,7 +239,7 @@
         let loggedError = false;
         console.error = (...args) => { loggedError = true; originalConsoleError(...args); };
 
-        await showC({ id: "user-fail" }, { id: "user-fail", onboarding_welcomed_at: null }, "../");
+        await showC({ id: "user-fail" }, { username: "builder_fail", onboarding_welcomed_at: null }, "../");
         await waitFor(() => findDialog() !== null);
         findDialog().querySelector('[data-action="skip"]').click();
         await waitFor(() => findDialog() === null);
@@ -241,7 +254,7 @@
         // another page" (a real page load re-imports every module fresh)
         // while sessionStorage persists, exactly like a real browser tab.
         const { maybeShowWelcome: showCAgain } = await freshOnboardingModule({ markSaveShouldFail: true });
-        await showCAgain({ id: "user-fail" }, { id: "user-fail", onboarding_welcomed_at: null }, "../");
+        await showCAgain({ id: "user-fail" }, { username: "builder_fail", onboarding_welcomed_at: null }, "../");
         await new Promise(r => setTimeout(r, 30));
 
         test("same session, later page: Welcome does NOT reopen even though the earlier save failed (onboarding_welcomed_at is still null)", findDialog() === null);
@@ -253,7 +266,7 @@
         clearNamespace(sessionStorage);
 
         const { maybeShowWelcome: showD } = await freshOnboardingModule();
-        const profileD = { id: "user-double", onboarding_welcomed_at: null };
+        const profileD = { username: "builder_double", onboarding_welcomed_at: null };
 
         const p1 = showD({ id: "user-double" }, profileD, "../");
         const p2 = showD({ id: "user-double" }, profileD, "../");
@@ -279,7 +292,7 @@
         // createDraft() perpetually pending lets the "was it called with
         // the right args" assertion run while never reaching that line.
         const { maybeShowWelcome: showE, calls: callsE } = await freshOnboardingModule({ neverResolveCreateDraft: true });
-        await showE({ id: "user-chooser" }, { id: "user-chooser", onboarding_welcomed_at: null }, "../");
+        await showE({ id: "user-chooser" }, { username: "builder_chooser", onboarding_welcomed_at: null }, "../");
         await waitFor(() => findDialog() !== null);
 
         const dialogEl = findDialog();
@@ -290,6 +303,7 @@
         test("Continue transitions to the chooser step within the same dialog element (not a new one)", document.querySelectorAll(".modal-onboarding").length === 1);
         test("chooser title matches the approved copy", dialogEl.querySelector(".modal-title")?.textContent === "What are you documenting?");
         test("Continue already marked onboarding_welcomed_at (not deferred to the chooser's own exit)", callsE.filter(c => c[0] === "markOnboardingWelcomed").length === 1, JSON.stringify(callsE));
+        test("Continue's save uses user.id, not profile.id", callsE.find(c => c[0] === "markOnboardingWelcomed")?.[1] === "user-chooser", JSON.stringify(callsE));
         test("chooser renders one card per technology", dialogEl.querySelectorAll(".technology-picker-card").length > 0);
 
         const firstCard = dialogEl.querySelector(".technology-picker-card");
@@ -315,7 +329,7 @@
         clearNamespace(sessionStorage);
 
         const { maybeShowWelcome: showF, calls: callsF } = await freshOnboardingModule();
-        await showF({ id: "user-cancel" }, { id: "user-cancel", onboarding_welcomed_at: null }, "../");
+        await showF({ id: "user-cancel" }, { username: "builder_cancel", onboarding_welcomed_at: null }, "../");
         await waitFor(() => findDialog() !== null);
 
         findDialog().dispatchEvent(new Event("cancel", { cancelable: true }));
@@ -323,13 +337,14 @@
 
         test("a cancel event (Escape) closes the dialog, same as Skip", findDialog() === null);
         test("a cancel event (Escape) marks the exit exactly once", callsF.filter(c => c[0] === "markOnboardingWelcomed").length === 1);
+        test("a cancel event (Escape) saves using user.id, not profile.id", callsF.find(c => c[0] === "markOnboardingWelcomed")?.[1] === "user-cancel", JSON.stringify(callsF));
 
         // --- Backdrop click is also a valid, never-trapping exit path -------
         clearNamespace(localStorage);
         clearNamespace(sessionStorage);
 
         const { maybeShowWelcome: showG, calls: callsG } = await freshOnboardingModule();
-        await showG({ id: "user-backdrop" }, { id: "user-backdrop", onboarding_welcomed_at: null }, "../");
+        await showG({ id: "user-backdrop" }, { username: "builder_backdrop", onboarding_welcomed_at: null }, "../");
         await waitFor(() => findDialog() !== null);
 
         // event.target === dialog only happens on the ::backdrop itself,
@@ -340,6 +355,7 @@
 
         test("a backdrop click closes the dialog", findDialog() === null);
         test("a backdrop click marks the exit exactly once", callsG.filter(c => c[0] === "markOnboardingWelcomed").length === 1);
+        test("a backdrop click saves using user.id, not profile.id", callsG.find(c => c[0] === "markOnboardingWelcomed")?.[1] === "user-backdrop", JSON.stringify(callsG));
 
         clearNamespace(localStorage);
         clearNamespace(sessionStorage);

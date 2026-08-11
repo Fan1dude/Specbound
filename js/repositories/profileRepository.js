@@ -138,11 +138,25 @@ export async function ensureProfile({ id }) {
 // failure only means it may show again on a later session (see
 // core/onboarding.js's sessionStorage guard for the current-session
 // case), never a blocking condition.
+//
+// .select("id").single() forces PostgREST to return the updated row
+// (or throw) instead of silently reporting success on zero rows matched
+// — a plain .update().eq() with no .select() does NOT error when the id
+// doesn't match anything, which is exactly how the earlier profile.id
+// (undefined) bug went unnoticed: the write silently affected zero rows
+// every time. .single() throws when it gets back anything other than
+// exactly one row, so an id that matches no profile (or, in principle,
+// more than one) is now a real caught error, not a silent no-op. RLS is
+// unchanged: the existing owner-scoped "Users can update their own
+// profile" policy (0000) still governs which row this id is allowed to
+// touch.
 export async function markOnboardingWelcomed(id) {
     const { error } = await supabase
         .from("profiles")
         .update({ onboarding_welcomed_at: new Date().toISOString() })
-        .eq("id", id);
+        .eq("id", id)
+        .select("id")
+        .single();
 
     if (error) throw error;
 }
