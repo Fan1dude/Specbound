@@ -208,7 +208,8 @@
             avatar_path: "avatars/user-a/500.jpg",
             avatar_url: null,
             created_at: "2024-03-15T00:00:00Z",
-            featured_build_id: null
+            featured_build_id: null,
+            building_since_year: null
         };
 
         const fullBuilds = [
@@ -232,6 +233,27 @@
         test("Technology Breakdown is visible with 2 public builds across 2 categories", document.getElementById("profileTechBreakdown").hidden === false);
         test("About Builder shows the bio text", document.getElementById("profileAbout").textContent.includes("I build robots."));
         test("Connected Accounts area is hidden when no discordConnection is passed", document.getElementById("profileConnectedAccounts").hidden === true);
+
+        // Milestone 23 §6 — a null building_since_year is omitted entirely,
+        // not shown blank or backfilled from anything.
+        test("Overview stats omit \"Building Since\" when building_since_year is null", !statsText.includes("Building Since"));
+        // Regression coverage for the pre-Milestone-23 bug this section
+        // used to have: it mislabeled the account join date (created_at)
+        // as "Building since", duplicating what the Hero's own "Joined"
+        // line already shows. About Builder must never render that text.
+        test("About Builder never duplicates the join date as \"Building since\"", !document.getElementById("profileAbout").textContent.includes("Building since"));
+
+        // --- Case 1d: a set building_since_year renders as its own quiet
+        //     stat tile, alongside (not instead of) Member Since ------------
+        resetDom();
+        mockAvatarUrl = "";
+
+        const buildingSinceProfile = { ...fullProfile, building_since_year: 2019 };
+        await renderProfile({ profile: buildingSinceProfile, builds: fullBuilds, commentCount: 0, currentUser: null, journeyEvents: [] });
+
+        const buildingSinceStatsText = document.getElementById("profileStats").textContent;
+        test("a set building_since_year renders a \"Building Since\" stat with the year", buildingSinceStatsText.includes("Building Since") && buildingSinceStatsText.includes("2019"));
+        test("\"Building Since\" appears alongside \"Member Since\", not instead of it", buildingSinceStatsText.includes("Member Since"));
 
         // --- Case 1b: a public Discord connection renders as a real,
         // separate clickable area (not folded into .profile-links) -----------

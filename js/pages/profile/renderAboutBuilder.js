@@ -1,6 +1,4 @@
 import { escapeHtml } from "../../utils/escapeHtml.js";
-import { icon } from "../../utils/icons.js";
-import { formatJoinDate } from "./formatJoinDate.js";
 
 // The narrative section — spec §4.1/§10.2/§7, revised in the polish pass
 // to drop the repeated Website/GitHub/YouTube links this section used to
@@ -37,9 +35,5 @@ export function renderAboutBuilder(profile, isOwner) {
                         <a href="../settings.html">Edit your profile</a>
                    </p>`
         }
-
-        <p class="about-builder-since">
-            ${icon("calendar", 16)} Building since ${formatJoinDate(profile?.created_at)}
-        </p>
     `;
 }

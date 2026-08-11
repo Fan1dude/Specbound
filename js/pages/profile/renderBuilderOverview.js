@@ -31,6 +31,16 @@ function renderStats(profile, builds, commentCount) {
         { value: formatJoinDate(profile?.created_at, { yearOnly: true }), label: "Member Since" }
     ];
 
+    // Milestone 23 §6 — "Building since" is a distinct, optional,
+    // creator-controlled fact (profiles.building_since_year), never
+    // guessed/backfilled from created_at — omitted entirely rather than
+    // shown blank when the builder hasn't set one. Rendered as a plain
+    // metric tile identical to the other four, not a colorful badge, so
+    // it reads as one more fact, not an achievement.
+    if (Number.isInteger(profile?.building_since_year)) {
+        stats.push({ value: String(profile.building_since_year), label: "Building Since" });
+    }
+
     el.innerHTML = stats
         .map(stat => `
             <div class="overview-metric">

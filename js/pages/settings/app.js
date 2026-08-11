@@ -93,6 +93,7 @@ async function loadSettings(user) {
     document.getElementById("headline").value = profile?.headline || "";
     document.getElementById("bio").value = profile?.bio || "";
     document.getElementById("location").value = profile?.location || "";
+    initBuildingSinceYearField(profile);
     document.getElementById("website").value = profile?.website || "";
     document.getElementById("github").value = profile?.github || "";
     document.getElementById("youtube").value = profile?.youtube || "";
@@ -146,6 +147,14 @@ async function loadSettings(user) {
     document.getElementById("saveProfile").addEventListener("click", async () => {
         const featuredBuildValue = document.getElementById("featuredBuild").value;
 
+        const buildingSinceYear = parseBuildingSinceYear();
+
+        if (buildingSinceYear === INVALID_BUILDING_SINCE_YEAR) {
+            showToast(`Building Since must be a year between 1980 and ${new Date().getFullYear()}.`, "warning");
+            document.getElementById("buildingSinceYear").focus();
+            return;
+        }
+
         const updates = {
             display_name: document.getElementById("displayName").value.trim(),
             username: document.getElementById("username").value.trim(),
@@ -155,6 +164,7 @@ async function loadSettings(user) {
             website: document.getElementById("website").value.trim(),
             github: document.getElementById("github").value.trim(),
             youtube: document.getElementById("youtube").value.trim(),
+            building_since_year: buildingSinceYear,
             // "Choose automatically" is the empty option — unpins any
             // existing selection, falling back to the documented
             // completed -> published -> hidden chain (see
@@ -174,6 +184,39 @@ async function loadSettings(user) {
 
         showToast("Profile updated successfully.", "success");
     });
+}
+
+// Milestone 23 §6 — "Building since" is optional and nullable; existing
+// users get null, never a guessed/backfilled value (spec explicitly
+// prohibits this). Mirrors migration 0035's own CHECK constraint bounds
+// (1980..current year) so an invalid value is caught here with a clear
+// message rather than surfacing as a raw Postgres constraint-violation
+// error after Save is clicked.
+const MIN_BUILDING_SINCE_YEAR = 1980;
+const INVALID_BUILDING_SINCE_YEAR = Symbol("invalid-building-since-year");
+
+function initBuildingSinceYearField(profile) {
+    const input = document.getElementById("buildingSinceYear");
+    if (!input) return;
+
+    input.max = String(new Date().getFullYear());
+    input.value = Number.isInteger(profile?.building_since_year) ? String(profile.building_since_year) : "";
+}
+
+// Returns a valid integer year, null (field left blank — explicitly
+// allowed, never defaulted to anything), or the INVALID sentinel.
+function parseBuildingSinceYear() {
+    const raw = document.getElementById("buildingSinceYear")?.value.trim();
+    if (!raw) return null;
+
+    const year = Number(raw);
+    const currentYear = new Date().getFullYear();
+
+    if (!Number.isInteger(year) || year < MIN_BUILDING_SINCE_YEAR || year > currentYear) {
+        return INVALID_BUILDING_SINCE_YEAR;
+    }
+
+    return year;
 }
 
 function initHeadlineCounter() {
