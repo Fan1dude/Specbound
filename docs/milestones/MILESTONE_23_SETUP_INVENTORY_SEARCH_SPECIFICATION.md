@@ -372,11 +372,16 @@ pattern already established for `markOnboardingWelcomed()`/
 `acceptGuidelines()`/`saved_setup_categories` itself. Migration `0033`'s
 default-privilege hardening therefore has nothing new to close here:
 no new function means no new function-grant surface. `saved_setup_categories`
-gets ordinary owner-scoped table RLS (§3.2) plus standard
-`grant select, insert, update, delete on saved_setup_categories to
-authenticated` (RLS is still the real gate; the grant only permits the
-role to attempt the statement at all, same layering already established
-for every other owner-scoped table in this schema).
+gets ordinary owner-scoped table RLS (§3.2) and **no explicit table
+grant** — Supabase's ambient default grants to `anon`/`authenticated`
+already permit attempting the statement at all, with RLS as the real
+gate; this matches the existing `project_drafts` (0001) precedent
+exactly, not a new pattern. (Corrected from an earlier draft of this
+section that incorrectly described an explicit `grant ... to
+authenticated` statement — the migration's own file header explicitly
+documents the no-explicit-grant decision, and live testing against the
+local Docker stack confirms owner CRUD succeeds with no grant beyond
+the ambient default.)
 
 ## 9. Security summary (expanded on in the final report)
 
@@ -387,6 +392,24 @@ for every other owner-scoped table in this schema).
   hand-rolled TCP+TLS client, judged out of proportion here; every
   other check (scheme/credentials/port/redirect-revalidation/timeout/
   size/content-type/allowlist) still applies regardless.
+  **Live-verified** (not just unit-tested) against the local disposable
+  Supabase/Docker stack via real HTTP requests through Kong once its
+  container came up cleanly: no-Authorization-header and anon-key-only
+  requests both correctly return `401 auth_required`; a malformed URL,
+  a `javascript:` scheme, credentials-in-URL, and a non-default port
+  all correctly return `{error:"invalid"}`; `127.0.0.1`, `localhost`,
+  `169.254.169.254` (cloud metadata), `10.0.0.5`, and `192.168.1.1` all
+  correctly return `{error:"blocked"}`; a real non-allowlisted domain
+  (`example.com`) correctly returns `{error:"unsupported"}`; the
+  fixed-window rate limiter correctly returns `429` after the
+  documented 20-request threshold for one user; a real allowlisted
+  retailer (`ikea.com`) was successfully fetched and parsed end-to-end
+  (`{"title":"Hej! Welcome to IKEA Global","retailerName":"IKEA",
+  "priceCents":null,"currency":null}` for its homepage — correctly
+  `null`, not `0`, with no price data present); and the edge-runtime
+  container's own logs confirm outcome logging is genuinely
+  hostname-only (`www.ikea.com: ok`, `example.com:
+  rejected(unsupported)`), never the full URL.
 - **XSS**: every metadata field is escaped both server-side (defensive)
   and client-side (`escapeHtml`/`escapeAttribute`, the existing
   established pattern) before ever reaching the DOM; public rendering
