@@ -105,13 +105,6 @@ export async function loadNavbar(pathPrefix = "") {
                     placeholder="Search builds, builders, parts..."
                     aria-label="Search builds, builders, parts"
                 >
-
-                <select class="search-scope" aria-label="Search scope">
-                    <option value="all">All</option>
-                    <option value="build">Build Name</option>
-                    <option value="creator">Creator</option>
-                    <option value="category">Category</option>
-                </select>
             </div>
 
             <div class="nav-links" id="navLinks">
@@ -141,7 +134,6 @@ export async function loadNavbar(pathPrefix = "") {
     }
 
     const search = navbar.querySelector(".search-bar");
-    const searchScope = navbar.querySelector(".search-scope");
 
     if (search) {
         search.addEventListener("keydown", (e) => {
@@ -150,14 +142,11 @@ export async function loadNavbar(pathPrefix = "") {
             const value = search.value.trim();
             if (!value) return;
 
-            // Milestone 23 §5 — the navbar search is the one shared entry
-            // point every page already had; this passes the chosen scope
-            // straight through to search.html rather than adding a second,
-            // duplicate hero search anywhere.
-            const scope = searchScope?.value || "all";
-
+            // Milestone 23 polish — the navbar carries only the query now;
+            // scope is chosen on the results page itself (search.html),
+            // which defaults to "all" when none is supplied.
             window.location.href =
-                `${pathPrefix}pages/search.html?q=${encodeURIComponent(value)}&scope=${encodeURIComponent(scope)}`;
+                `${pathPrefix}pages/search.html?q=${encodeURIComponent(value)}`;
         });
     }
 

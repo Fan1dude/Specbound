@@ -51,10 +51,15 @@
     color: var(--text);
 }
 
-/* Wraps .search-bar + the Milestone 23 §5 scope <select> as one unit —
-   .search-bar previously carried flex:1/max-width itself; that now lives
-   on this wrapper so the input and the (much narrower) select share the
-   same row and the same max-width budget. */
+/* Milestone 23 polish — the scope <select> that used to live here
+   (beside .search-bar) was removed: it duplicated the scope filter that
+   already exists on the results page itself (css/pages/search/search.css's
+   .search-scope-wrap), and having it beside the search field on every
+   page — including the homepage — was confusing rather than useful.
+   The navbar now carries only the query; scope is chosen after landing
+   on search.html. .navbar-search still wraps just .search-bar so the
+   input keeps its own max-width budget without a sibling to share it
+   with. */
 .navbar-search {
     display: flex;
     flex: 1;
@@ -76,13 +81,6 @@
 .search-bar:focus-visible {
     outline: none;
     box-shadow: var(--focus-ring);
-}
-
-.search-scope {
-    flex: 0 0 auto;
-    width: auto;
-    max-width: 112px;
-    font-size: var(--font-size-sm);
 }
 
 .nav-links {
@@ -173,14 +171,6 @@
         max-width: none;
         width: 100%;
         flex-basis: 100%;
-    }
-
-    /* At this width the select would otherwise be squeezed to near-
-       unreadable — a fixed floor keeps "Category" (the longest option
-       label) legible without the row wrapping onto a second line. */
-    .search-scope {
-        max-width: none;
-        min-width: 110px;
     }
 
     .nav-links {

@@ -53,27 +53,42 @@
     border: 0;
 }
 
-/* --- Scope selector (Milestone 23 §5) ------------------------------------
+/* --- Scope filter (Milestone 23 polish) ----------------------------------
    Sits directly under the search input on this page — a separate,
    compact control from the input itself, not merged into one element,
-   so it stays keyboard/label-accessible on its own. */
+   so it stays keyboard/label-accessible on its own. This is now the
+   *only* place scope can be changed (the navbar's former duplicate
+   selector was removed — js/core/layout.js, navbar.css) — styled as a
+   small filter panel using the same surface/eyebrow-label language as
+   Explore's .filter-panel/.filter-section (css/pages/explore/explore.css)
+   rather than a bare inline label+select, without importing that
+   page's stylesheet here. */
 .search-scope-wrap {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-1);
-    margin-top: var(--space-2);
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    background: var(--surface-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
 }
 
 .search-scope-wrap label {
-    color: var(--text-secondary);
-    font-size: var(--font-size-sm);
-    font-weight: 700;
+    color: var(--primary);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: .08em;
+    text-transform: uppercase;
 }
 
 .search-scope-wrap select {
     width: auto;
-    min-width: 160px;
-    padding: var(--space-0-5) var(--space-1);
+    min-width: 180px;
+    min-height: 44px;
+    padding: 0 var(--space-2);
+    background: var(--surface-input);
     font-size: var(--font-size-sm);
 }
 
