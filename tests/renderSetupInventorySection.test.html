@@ -69,8 +69,12 @@
             export async function createSavedSetupCategory() { throw new Error("not used in this test"); }
         `);
 
+        // Controllable via globalThis.__metadataFetchImpl, set per-case
+        // below — a bare closed-over variable wouldn't survive being
+        // transplanted into this separate blob module.
+        globalThis.__metadataFetchImpl = async () => { throw new Error("not used in this test"); };
         const productMetadataMockUrl = blobUrl(`
-            export async function fetchProductMetadata() { throw new Error("not used in this test"); }
+            export async function fetchProductMetadata(url) { return globalThis.__metadataFetchImpl(url); }
         `);
 
         const renderSetupInventorySectionUrl = await loadPatched("../js/pages/editor/renderSetupInventorySection.js", {
@@ -326,6 +330,134 @@
         container.querySelector('[data-action="add-item"]').click();
         addFlowTitleInputs = container.querySelectorAll('[data-action="edit-item-title"]');
         test("once the blank product is filled in, Add Product creates a genuine third product", addFlowTitleInputs.length === 3);
+
+        // --- Case 5: metadata fetch outcomes. Regression coverage for the
+        // real bug found in live manual testing — the failure message was
+        // being set on the status <p>, then immediately wiped out because
+        // the very next line called updateItem()/commit(), which
+        // re-renders the whole section from scratch. ------------------------
+        const NOTHING_FOUND = "We couldn't fill in details from this link. You can enter them manually below.";
+        const PARTIAL_SUCCESS = "We filled in what we found. Complete any missing details below.";
+
+        function metadataStatusEl(itemId) {
+            return container.querySelector(`[data-metadata-status="${itemId}"]`);
+        }
+
+        function fetchButtonFor(itemId) {
+            return container.querySelector(`[data-action="fetch-metadata"][data-item-id="${itemId}"]`);
+        }
+
+        // -- 5a: failure — message appears, survives an unrelated re-render,
+        // never clears what the builder already typed, never fabricates a
+        // price, and the button recovers. -------------------------------------
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        const failureDraft = makeDraftWithOneProduct();
+        failureDraft.setup_inventory.categories[0].items[0].pricePaid = { cents: null, isFree: false };
+        renderSetupInventorySection(failureDraft, autosaveMock);
+
+        globalThis.__metadataFetchImpl = async () => {
+            throw new Error("Enter a valid http:// or https:// URL.");
+        };
+
+        let fetchBtn = fetchButtonFor("item-1");
+        fetchBtn.click();
+        test("while a fetch is pending, the button is disabled and reads a loading state", fetchBtn.disabled === true && fetchBtn.textContent.trim() === "Filling in details...");
+
+        await new Promise(r => setTimeout(r, 50));
+
+        let statusEl = metadataStatusEl("item-1");
+        test("failure: an inline message appears next to the link field", statusEl.textContent.includes("Enter a valid http:// or https:// URL."), statusEl.textContent);
+        test("failure: the status paragraph is an accessible alert (assistive tech announces it)", statusEl.getAttribute("role") === "alert");
+        test("failure: the message isn't color-only — it carries an icon", !!statusEl.querySelector(".setup-item-metadata-status-icon"));
+
+        fetchBtn = fetchButtonFor("item-1");
+        test("failure: the fetch button re-enables and its label is restored", fetchBtn.disabled === false && fetchBtn.textContent.trim() === "Fill details from link");
+
+        test("failure: the product's title field is untouched (still \"Standing Desk\")", container.querySelector('[data-action="edit-item-title"]').value === "Standing Desk");
+        test("failure: the product's URL field is untouched", container.querySelector('[data-action="edit-item-url"]').value === "https://www.ikea.com/");
+        test("failure: no price was fabricated — still empty, not $0", container.querySelector('[data-action="edit-item-price"]').value === "");
+        test("failure: Free was not turned on as a side effect", container.querySelector('[data-action="toggle-item-free"]').checked === false);
+        test("failure: no error/unhandled rejection was thrown", caughtErrors.length === 0, JSON.stringify(caughtErrors));
+
+        // An unrelated action elsewhere (renaming the category) forces a
+        // full commit()/render() — the failure message must still be there
+        // afterward, proving it's read from state, not just left over in
+        // a stale DOM node the next render should have replaced.
+        const categoryNameInput = container.querySelector('[data-action="rename-category"]');
+        categoryNameInput.value = "Desk (renamed)";
+        categoryNameInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+        statusEl = metadataStatusEl("item-1");
+        test("failure message survives an unrelated full re-render", statusEl?.textContent.includes("Enter a valid http:// or https:// URL."), statusEl?.textContent);
+
+        // Editing the link again clears the stale failure message.
+        const urlInput = container.querySelector('[data-action="edit-item-url"]');
+        urlInput.value = "https://www.target.com/p/desk";
+        urlInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+        statusEl = metadataStatusEl("item-1");
+        test("editing the link clears the previous failure message", statusEl?.textContent.trim() === "");
+
+        // -- 5b: success but the retailer returned nothing usable — treated
+        // like a failure from the builder's point of view (same message,
+        // same alert role), not silently ignored. -----------------------------
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        renderSetupInventorySection(makeDraftWithOneProduct(), autosaveMock);
+        globalThis.__metadataFetchImpl = async () => ({ title: null, retailerName: null, priceCents: null, currency: null });
+
+        fetchButtonFor("item-1").click();
+        await new Promise(r => setTimeout(r, 50));
+
+        statusEl = metadataStatusEl("item-1");
+        test("nothing-found success: shows the same friendly fallback message", statusEl.textContent.includes(NOTHING_FOUND), statusEl.textContent);
+        test("nothing-found success: still an accessible alert", statusEl.getAttribute("role") === "alert");
+        test("nothing-found success: no error/unhandled rejection", caughtErrors.length === 0, JSON.stringify(caughtErrors));
+
+        // -- 5c: partial success — a distinct, non-error message. -------------
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        const partialDraft = makeDraftWithOneProduct();
+        partialDraft.setup_inventory.categories[0].items[0].title = "";
+        partialDraft.setup_inventory.categories[0].items[0].pricePaid = { cents: null, isFree: false };
+        renderSetupInventorySection(partialDraft, autosaveMock);
+        globalThis.__metadataFetchImpl = async () => ({ title: "Standing Desk", retailerName: "IKEA", priceCents: null, currency: null });
+
+        fetchButtonFor("item-1").click();
+        await new Promise(r => setTimeout(r, 50));
+
+        statusEl = metadataStatusEl("item-1");
+        test("partial success: shows the \"filled in what we found\" message, not the failure one", statusEl.textContent.includes(PARTIAL_SUCCESS), statusEl.textContent);
+        test("partial success: is a polite status, not an alert", statusEl.getAttribute("role") === "status");
+        test("partial success: the found title was filled in", container.querySelector('[data-action="edit-item-title"]').value === "Standing Desk");
+        test("partial success: the missing price stayed empty, never defaulted to $0", container.querySelector('[data-action="edit-item-price"]').value === "");
+        test("partial success: no error/unhandled rejection", caughtErrors.length === 0, JSON.stringify(caughtErrors));
+
+        // -- 5d: full success — title and price both found, no status shown. --
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        const fullSuccessDraft = makeDraftWithOneProduct();
+        fullSuccessDraft.setup_inventory.categories[0].items[0].title = "";
+        fullSuccessDraft.setup_inventory.categories[0].items[0].pricePaid = { cents: null, isFree: false };
+        renderSetupInventorySection(fullSuccessDraft, autosaveMock);
+        globalThis.__metadataFetchImpl = async () => ({ title: "Standing Desk", retailerName: "IKEA", priceCents: 45000, currency: "USD" });
+
+        fetchButtonFor("item-1").click();
+        await new Promise(r => setTimeout(r, 50));
+
+        statusEl = metadataStatusEl("item-1");
+        test("full success: no status message is shown once everything was found", statusEl.textContent.trim() === "", statusEl.textContent);
+        test("full success: title was filled in", container.querySelector('[data-action="edit-item-title"]').value === "Standing Desk");
+        test("full success: price was filled in", container.querySelector('[data-action="edit-item-price"]').value === "450.00");
 
         // --- Render + report ------------------------------------------------
         const resultsEl = document.getElementById("results");

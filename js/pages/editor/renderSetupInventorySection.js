@@ -47,6 +47,15 @@ export function renderSetupInventorySection(draft, autosave) {
     let savedCategoriesLoadFailed = false;
     let addCategoryMode = null; // null | "picker" | "custom"
 
+    // Per-item metadata-fetch result, kept outside currentInventory since
+    // it's transient UI feedback, not saved data. Read by renderItem() on
+    // every render so the message survives a commit()-triggered re-render
+    // instead of being wiped by it — the whole point of this map is that
+    // setting statusEl.textContent directly doesn't survive the next
+    // render() call, but currentInventory has nowhere to hold "the last
+    // fetch for this item found nothing."
+    const itemMetadataStatus = new Map(); // itemId -> { type: "error" | "info", message }
+
     loadSavedCategories();
 
     updateVisibility(draft.category);
@@ -243,6 +252,7 @@ export function renderSetupInventorySection(draft, autosave) {
         });
         if (!confirmed) return;
 
+        itemMetadataStatus.delete(itemId);
         found.category.items = found.category.items
             .filter(i => i.id !== itemId)
             .map((i, index) => ({ ...i, sortOrder: index }));
@@ -284,18 +294,26 @@ export function renderSetupInventorySection(draft, autosave) {
         commit();
     }
 
+    // What we tell the builder once a fetch settles — reused for both the
+    // "the request itself failed" case and the "it succeeded but found
+    // nothing usable" case, since from the builder's side those look the
+    // same: paste a link, nothing came back, fall back to typing it in.
+    const NOTHING_FOUND_MESSAGE = "We couldn't fill in details from this link. You can enter them manually below.";
+    const PARTIAL_SUCCESS_MESSAGE = "We filled in what we found. Complete any missing details below.";
+
     async function fetchMetadataForItem(itemId, url) {
         const found = findItem(itemId);
         if (!found) return;
 
         const button = container.querySelector(`[data-action="fetch-metadata"][data-item-id="${cssEscape(itemId)}"]`);
-        const statusEl = container.querySelector(`[data-metadata-status="${cssEscape(itemId)}"]`);
+
+        itemMetadataStatus.delete(itemId);
+        renderMetadataStatus(itemId);
 
         if (button) {
             button.disabled = true;
             button.textContent = "Filling in details...";
         }
-        if (statusEl) statusEl.textContent = "";
 
         try {
             const result = await fetchProductMetadata(url);
@@ -310,31 +328,91 @@ export function renderSetupInventorySection(draft, autosave) {
             if (!found.item.title && result.title) patch.title = result.title;
             if (result.retailerName) patch.retailerName = result.retailerName;
 
+            let priceApplied = false;
             if (typeof result.priceCents === "number") {
                 if (isCompatibleCurrency(currentInventory.currency, result.currency)) {
                     patch.listedPriceCents = result.priceCents;
                     patch.listedPriceCurrency = result.currency || currentInventory.currency;
+                    priceApplied = true;
                     if (found.item.pricePaid.cents === null && !found.item.pricePaid.isFree) {
                         patch.pricePaid = { cents: result.priceCents, isFree: false };
                     }
                 }
             }
 
+            // Classify what the retailer actually gave us — never $0/Free
+            // for a genuinely missing price, just "found nothing" or
+            // "found some of it," matching the three-way outcome the
+            // builder needs to see (nothing / partial / everything).
+            const foundTitle = !!result.title;
+            const foundPrice = priceApplied;
+            const foundAnything = foundTitle || foundPrice || !!result.retailerName;
+
+            if (!foundAnything) {
+                itemMetadataStatus.set(itemId, { type: "error", message: NOTHING_FOUND_MESSAGE });
+            } else if (!(foundTitle && foundPrice)) {
+                itemMetadataStatus.set(itemId, { type: "info", message: PARTIAL_SUCCESS_MESSAGE });
+            } else {
+                itemMetadataStatus.delete(itemId);
+            }
+
             updateItem(itemId, patch);
         } catch (error) {
             console.error("Product metadata fetch error:", error);
-            if (statusEl) {
-                statusEl.textContent = "We couldn't fill in the details from this link. You can enter them manually.";
-            }
-            // Preserve the pasted URL/manual fields exactly as they were —
-            // only the fetch's own suggestion is affected by a failure.
-            updateItem(itemId, { originalUrl: url });
+            // Never touch the item's data on failure — the pasted URL and
+            // every manually-entered field stay exactly as they were.
+            itemMetadataStatus.set(itemId, {
+                type: "error",
+                message: error instanceof Error && error.message ? error.message : NOTHING_FOUND_MESSAGE
+            });
+            renderMetadataStatus(itemId);
         } finally {
-            if (button) {
-                button.disabled = false;
-                button.textContent = "Fill details from link";
+            const liveButton = container.querySelector(`[data-action="fetch-metadata"][data-item-id="${cssEscape(itemId)}"]`);
+            if (liveButton) {
+                liveButton.disabled = false;
+                liveButton.textContent = "Fill details from link";
             }
         }
+    }
+
+    // Single source of truth for how a metadata status renders, shared by
+    // the initial template (renderItem, below) and the in-place DOM patch
+    // (renderMetadataStatus, right after this) so the two never drift.
+    // The icon means the distinction isn't color-only, and role="alert" vs
+    // role="status" gives assistive tech the right urgency for each case.
+    function metadataStatusView(itemId) {
+        const status = itemMetadataStatus.get(itemId);
+        if (!status) {
+            return { className: "setup-item-metadata-status", role: null, innerHTML: "" };
+        }
+
+        return {
+            className: `setup-item-metadata-status setup-item-metadata-status-${status.type}`,
+            role: status.type === "error" ? "alert" : "status",
+            innerHTML: `
+                <span class="setup-item-metadata-status-icon" aria-hidden="true">${icon(status.type === "error" ? "warning" : "info", 16)}</span>
+                <span>${escapeHtml(status.message)}</span>
+            `
+        };
+    }
+
+    // Updates one item's status paragraph in place, without a full
+    // commit()/render() — used for the failure path (nothing in
+    // currentInventory changes, so a re-render would be pure churn) and
+    // for clearing the message the instant a new fetch starts. The
+    // success path still goes through commit()/render() via updateItem(),
+    // which is fine because renderItem() reads itemMetadataStatus fresh
+    // every time via the same metadataStatusView() — the map, not the
+    // DOM, is the source of truth either way.
+    function renderMetadataStatus(itemId) {
+        const el = container.querySelector(`[data-metadata-status="${cssEscape(itemId)}"]`);
+        if (!el) return;
+
+        const view = metadataStatusView(itemId);
+        el.className = view.className;
+        if (view.role) el.setAttribute("role", view.role);
+        else el.removeAttribute("role");
+        el.innerHTML = view.innerHTML;
     }
 
     function cssEscape(value) {
@@ -429,6 +507,7 @@ export function renderSetupInventorySection(draft, autosave) {
         const isFirst = index === 0;
         const isLast = index === category.items.length - 1;
         const otherCategories = currentInventory.categories.filter(c => c.id !== category.id);
+        const metadataStatus = metadataStatusView(item.id);
 
         return `
             <div class="setup-item" data-item-id="${escapeAttribute(item.id)}">
@@ -474,7 +553,7 @@ export function renderSetupInventorySection(draft, autosave) {
                         <button type="button" class="btn btn-secondary btn-small" data-action="fetch-metadata" data-item-id="${escapeAttribute(item.id)}" ${item.originalUrl ? "" : "disabled"}>
                             Fill details from link
                         </button>
-                        <p class="setup-item-metadata-status" data-metadata-status="${escapeAttribute(item.id)}"></p>
+                        <p class="${metadataStatus.className}" data-metadata-status="${escapeAttribute(item.id)}"${metadataStatus.role ? ` role="${metadataStatus.role}"` : ""}>${metadataStatus.innerHTML}</p>
                         ${item.retailerName
                             ? `<p class="setup-item-suggested">Suggested from ${escapeHtml(item.retailerName)}${typeof item.listedPriceCents === "number" ? `: ${escapeHtml(formatCents(item.listedPriceCents, item.listedPriceCurrency || currentInventory.currency))}` : ""}</p>`
                             : ""
@@ -607,6 +686,9 @@ export function renderSetupInventorySection(draft, autosave) {
             el.addEventListener("change", () => updateItem(el.dataset.itemId, { title: el.value })));
         container.querySelectorAll('[data-action="edit-item-url"]').forEach(el => {
             el.addEventListener("change", () => {
+                // A changed link invalidates whatever the last fetch (or
+                // failure) said about the previous one.
+                itemMetadataStatus.delete(el.dataset.itemId);
                 updateItem(el.dataset.itemId, { originalUrl: el.value.trim() || null });
             });
         });
