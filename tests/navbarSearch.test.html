@@ -104,11 +104,20 @@
         const escapeHtmlUrl = new URL("../js/utils/escapeHtml.js", location.href).href;
         const iconsUrl = new URL("../js/utils/icons.js", location.href).href;
 
+        // Milestone 24 — layout.js now also imports communityRepository.js
+        // for the moderator-only "Moderation" link. This test's mocked
+        // getCurrentUser() always returns null (signed-out), so that branch
+        // never actually runs — but ES module imports resolve eagerly
+        // regardless of which code path executes, so the specifier still
+        // needs a mock or the whole blob module fails to load.
+        const communityMockSrc = `export async function getProfileRoles() { return []; }`;
+
         const rewrites = {
             '"./supabase.js"': blobUrl(supabaseMockSrc),
             '"./auth.js"': blobUrl(authMockSrc),
             '"./notificationBell.js"': blobUrl(notificationBellMockSrc),
             '"./onboarding.js"': blobUrl(onboardingMockSrc),
+            '"../repositories/communityRepository.js"': blobUrl(communityMockSrc),
             '"../utils/escapeHtml.js"': escapeHtmlUrl,
             '"../utils/icons.js"': iconsUrl
         };

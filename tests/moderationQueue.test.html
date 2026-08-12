@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 24 — Moderator Report Queue (page + authorization)</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+        #fixtureHost { width: 390px; border: 1px solid #333; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 24 — Moderator Report Queue</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <!-- Fixture DOM — must match pages/moderation.html's real ids exactly. -->
+    <div id="fixtureHost">
+        <div id="moderationGate" role="status" aria-live="polite">
+            <p>Checking access...</p>
+        </div>
+
+        <div id="moderationDenied" hidden>
+            <h1>You don't have access to this page</h1>
+            <p>Moderation is only available to Specbound moderators and staff.</p>
+        </div>
+
+        <div id="moderationContent" hidden>
+            <section>
+                <h1 tabindex="-1" id="moderationOpenHeading">Reports</h1>
+            </section>
+
+            <div class="tabs" id="moderationTabs" role="tablist">
+                <button type="button" class="tab is-active" role="tab" id="moderationOpenTab" aria-selected="true" aria-controls="moderationOpenPanel">
+                    Open <span id="moderationOpenCount" class="badge" hidden></span>
+                </button>
+                <button type="button" class="tab" role="tab" id="moderationHistoryTab" aria-selected="false" aria-controls="moderationHistoryPanel">
+                    Resolved
+                </button>
+            </div>
+
+            <div id="moderationError" class="empty-state" hidden>
+                <h3>Could not load reports</h3>
+                <button type="button" id="moderationRetryBtn">Try again</button>
+            </div>
+
+            <div id="moderationBody">
+                <div id="moderationOpenPanel" class="tab-panel" role="tabpanel">
+                    <div id="moderationOpenList" aria-live="polite"></div>
+                </div>
+                <div id="moderationHistoryPanel" class="tab-panel" role="tabpanel" hidden>
+                    <div id="moderationHistoryList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function absUrl(path) {
+            return new URL(path, location.href).href;
+        }
+
+        async function loadPatched(realPath, map) {
+            const src = await (await fetch(realPath)).text();
+            let rewritten = src;
+            for (const [from, to] of Object.entries(map)) {
+                rewritten = rewritten.replaceAll(`"${from}"`, `"${to}"`);
+            }
+            return blobUrl(rewritten);
+        }
+
+        function byId(id) { return document.getElementById(id); }
+
+        // =====================================================================
+        // Part A — js/pages/moderation/loadModerationQueue.js: authorization
+        // =====================================================================
+
+        globalThis.__authMock = { user: { id: "user-1" }, roles: [], rolesError: null };
+
+        const authMockSrc = `
+            export async function requireAuth() {
+                return globalThis.__authMock.user;
+            }
+        `;
+        const communityMockSrc = `
+            export async function getProfileRoles() {
+                if (globalThis.__authMock.rolesError) throw globalThis.__authMock.rolesError;
+                return globalThis.__authMock.roles;
+            }
+        `;
+        // renderModerationPage.js itself is mocked out for Part A — only the
+        // gate's own decision (which of #moderationContent/#moderationDenied
+        // becomes visible) is under test here, not the page body it would
+        // go on to render.
+        globalThis.__renderCalls = 0;
+        const renderPageMockSrc = `
+            export async function renderModerationPage() {
+                globalThis.__renderCalls++;
+            }
+        `;
+
+        const loadQueueUrl = await loadPatched("../js/pages/moderation/loadModerationQueue.js", {
+            "../../core/auth.js": blobUrl(authMockSrc),
+            "../../repositories/communityRepository.js": blobUrl(communityMockSrc),
+            "./renderModerationPage.js": blobUrl(renderPageMockSrc)
+        });
+        const { loadModerationQueue } = await import(loadQueueUrl);
+
+        function resetGateDom() {
+            byId("moderationGate").hidden = false;
+            byId("moderationContent").hidden = true;
+            byId("moderationDenied").hidden = true;
+            globalThis.__renderCalls = 0;
+        }
+
+        // -- Signed-out visitor: requireAuth() "redirecting" (returning no
+        // user, same contract as every other requireAuth()-gated page) means
+        // nothing here should ever unhide. ---------------------------------
+        resetGateDom();
+        globalThis.__authMock.user = null;
+        await loadModerationQueue();
+        test("signed-out visitor: #moderationContent stays hidden", byId("moderationContent").hidden === true);
+        test("signed-out visitor: #moderationDenied stays hidden (requireAuth already redirected)", byId("moderationDenied").hidden === true);
+        test("signed-out visitor: the report queue is never rendered", globalThis.__renderCalls === 0);
+
+        // -- Ordinary authenticated user (no moderator/staff role): fails
+        // closed with a visible access-denied state, content never shown. ---
+        resetGateDom();
+        globalThis.__authMock.user = { id: "user-1" };
+        globalThis.__authMock.roles = ["community_builder"];
+        globalThis.__authMock.rolesError = null;
+        await loadModerationQueue();
+        test("ordinary user: #moderationContent is never unhidden", byId("moderationContent").hidden === true);
+        test("ordinary user: #moderationDenied becomes visible", byId("moderationDenied").hidden === false);
+        test("ordinary user: report data is never rendered", globalThis.__renderCalls === 0);
+
+        // -- A role-check failure fails closed too — a check that couldn't
+        // confirm authorization must never be treated as authorized. ---------
+        resetGateDom();
+        globalThis.__authMock.roles = [];
+        globalThis.__authMock.rolesError = new Error("network error");
+        await loadModerationQueue();
+        test("role-check error: fails closed (denied shown, not content)", byId("moderationDenied").hidden === false && byId("moderationContent").hidden === true);
+        globalThis.__authMock.rolesError = null;
+
+        // -- A moderator gets through. ----------------------------------------
+        resetGateDom();
+        globalThis.__authMock.roles = ["moderator"];
+        await loadModerationQueue();
+        test("moderator: #moderationContent becomes visible", byId("moderationContent").hidden === false);
+        test("moderator: #moderationDenied stays hidden", byId("moderationDenied").hidden === true);
+        test("moderator: the report queue is rendered", globalThis.__renderCalls === 1);
+
+        // -- Staff — the current DB contract's is_platform_moderator() treats
+        // staff as moderator too (0027_profile_roles.sql); the client gate
+        // must match that exactly, not just check for "moderator" literally. -
+        resetGateDom();
+        globalThis.__authMock.roles = ["staff"];
+        await loadModerationQueue();
+        test("staff: #moderationContent becomes visible (staff counts as moderator)", byId("moderationContent").hidden === false);
+        test("staff: the report queue is rendered", globalThis.__renderCalls === 1);
+
+        // =====================================================================
+        // Part B — js/pages/moderation/renderModerationPage.js: queue,
+        // resolution, and history behavior.
+        // =====================================================================
+
+        globalThis.__repo = {
+            open: [],
+            resolved: [],
+            targetContext: new Map(),
+            actorProfiles: new Map(),
+            failLoad: false,
+            resolveImpl: null // (reportId, outcomeKey) => row | throws
+        };
+        globalThis.__resolveCalls = [];
+        globalThis.__toasts = [];
+        globalThis.__confirmResult = true;
+        globalThis.__freshnessStatus = "open"; // what the mocked supabase freshness check returns
+
+        const moderationRepoMockSrc = `
+            export const RESOLUTION_OUTCOMES = {
+                no_violation: { status: "dismissed", label: "No violation", description: "The report was reviewed and the content does not violate the Community Guidelines." },
+                violation_confirmed: { status: "reviewed", label: "Violation confirmed", description: "The report was reviewed and found valid. This records the decision only — it does not remove content, suspend the user, or take any other action." }
+            };
+            export async function getOpenReports() {
+                if (globalThis.__repo.failLoad) throw new Error("load failed");
+                return globalThis.__repo.open;
+            }
+            export async function getResolvedReports() {
+                if (globalThis.__repo.failLoad) throw new Error("load failed");
+                return globalThis.__repo.resolved;
+            }
+            export async function getReportTargetContext() {
+                return globalThis.__repo.targetContext;
+            }
+            export async function getReportActorProfiles() {
+                return globalThis.__repo.actorProfiles;
+            }
+            export async function resolveReport(reportId, outcomeKey) {
+                globalThis.__resolveCalls.push([reportId, outcomeKey]);
+                if (globalThis.__repo.resolveImpl) return globalThis.__repo.resolveImpl(reportId, outcomeKey);
+                return { id: reportId, status: RESOLUTION_OUTCOMES[outcomeKey].status, reviewed_by: "mod-1", reviewed_at: "2026-01-01T00:00:00Z" };
+            }
+            export function describeReportStatus(status) {
+                if (status === "open") return { label: "Open", description: "" };
+                const found = Object.values(RESOLUTION_OUTCOMES).find(o => o.status === status);
+                return found ? { label: found.label, description: found.description } : { label: "Unknown status", description: "" };
+            }
+        `;
+
+        const modalMockSrc = `
+            export function confirmDialog() {
+                return Promise.resolve(globalThis.__confirmResult);
+            }
+        `;
+        const toastMockSrc = `
+            export function showToast(message, type) {
+                globalThis.__toasts.push({ message, type });
+            }
+        `;
+        const supabaseFreshnessMockSrc = `
+            export const supabase = {
+                from() {
+                    return {
+                        select() { return this; },
+                        eq() { return this; },
+                        single: async () => ({ data: { status: globalThis.__freshnessStatus }, error: null })
+                    };
+                }
+            };
+        `;
+
+        const reportCardRealUrl = absUrl("../js/components/ReportCard.js");
+        const iconsRealUrl = absUrl("../js/utils/icons.js");
+        const escapeRealUrl = absUrl("../js/utils/escapeHtml.js");
+        const formatDateRealUrl = absUrl("../js/utils/formatDate.js");
+        const skeletonsRealUrl = absUrl("../js/utils/skeletons.js");
+
+        // ReportCard.js itself imports moderationRepository.js for
+        // describeReportStatus/RESOLUTION_OUTCOMES — patched to the same
+        // mock module used above so both files share one source of truth,
+        // exactly like the real app.
+        const reportCardUrl = await loadPatched("../js/components/ReportCard.js", {
+            "../utils/escapeHtml.js": escapeRealUrl,
+            "../utils/formatDate.js": formatDateRealUrl,
+            "../repositories/moderationRepository.js": blobUrl(moderationRepoMockSrc),
+            "../utils/icons.js": iconsRealUrl
+        });
+
+        const renderPageUrl = await loadPatched("../js/pages/moderation/renderModerationPage.js", {
+            "../../repositories/moderationRepository.js": blobUrl(moderationRepoMockSrc),
+            "../../core/supabase.js": blobUrl(supabaseFreshnessMockSrc),
+            "../../components/ReportCard.js": reportCardUrl,
+            "../../utils/modal.js": blobUrl(modalMockSrc),
+            "../../core/toast.js": blobUrl(toastMockSrc),
+            "../../utils/skeletons.js": skeletonsRealUrl,
+            "../../utils/icons.js": iconsRealUrl
+        });
+        const { renderModerationPage } = await import(renderPageUrl);
+
+        // Part B exercises renderModerationPage.js as if
+        // loadModerationQueue.js's gate had already passed (Part A tests
+        // the gate itself, separately) — the real page only ever calls
+        // renderModerationPage() once #moderationContent is unhidden, so
+        // the fixture must match that precondition. Left hidden (as Part
+        // A's fixture requires), .focus() on anything inside it —
+        // including #moderationOpenHeading, the focus-restoration
+        // fallback — silently no-ops per browser behavior for elements
+        // inside a hidden ancestor, which is what the one-off focus
+        // test below was actually catching before this fix.
+        byId("moderationContent").hidden = false;
+
+        function makeReport(overrides = {}) {
+            return {
+                id: "report-1",
+                target_type: "build",
+                target_id: "build-1",
+                reason: "This project contains inappropriate content.",
+                status: "open",
+                reporter_id: "reporter-1",
+                reviewed_by: null,
+                reviewed_at: null,
+                created_at: "2026-01-01T00:00:00Z",
+                ...overrides
+            };
+        }
+
+        function resetPageState() {
+            globalThis.__repo.open = [];
+            globalThis.__repo.resolved = [];
+            globalThis.__repo.targetContext = new Map();
+            globalThis.__repo.actorProfiles = new Map();
+            globalThis.__repo.failLoad = false;
+            globalThis.__repo.resolveImpl = null;
+            globalThis.__resolveCalls = [];
+            globalThis.__toasts = [];
+            globalThis.__confirmResult = true;
+            globalThis.__freshnessStatus = "open";
+            byId("moderationOpenList").innerHTML = "";
+            byId("moderationHistoryList").innerHTML = "";
+            byId("moderationError").hidden = true;
+            byId("moderationBody").hidden = false;
+        }
+
+        // -- Empty open queue. --------------------------------------------------
+        resetPageState();
+        await renderModerationPage();
+        test("empty open queue: shows an empty state", byId("moderationOpenList").textContent.includes("No open reports"));
+        test("empty open queue: the count badge stays hidden", byId("moderationOpenCount").hidden === true);
+
+        // -- Repository failure -> error state + retry. --------------------------
+        resetPageState();
+        globalThis.__repo.failLoad = true;
+        await renderModerationPage();
+        test("load failure: shows the error state, not the body", byId("moderationError").hidden === false && byId("moderationBody").hidden === true);
+        globalThis.__repo.failLoad = false;
+        byId("moderationRetryBtn").click();
+        await new Promise(r => setTimeout(r, 20));
+        test("retry: recovers once the underlying load succeeds again", byId("moderationError").hidden === true && byId("moderationBody").hidden === false);
+
+        // -- Multiple reports render with human-readable context, not raw
+        // UUIDs, and the open count badge reflects the real count. -------------
+        resetPageState();
+        globalThis.__repo.open = [
+            makeReport({ id: "r1", target_id: "build-1" }),
+            makeReport({ id: "r2", target_id: "build-2", target_type: "profile" })
+        ];
+        globalThis.__repo.targetContext = new Map([
+            ["build:build-1", { available: true, label: "My Desk Setup", href: "../build/build.html?slug=my-desk-setup" }],
+            ["profile:build-2", { available: true, label: "Builder Two", href: "../profile.html?user=build-2" }]
+        ]);
+        globalThis.__repo.actorProfiles = new Map([["reporter-1", { username: "reporter_one" }]]);
+        await renderModerationPage();
+        test("multiple reports: both render", byId("moderationOpenList").querySelectorAll(".report-card").length === 2);
+        test("multiple reports: the target renders as a human label, not a raw UUID", byId("moderationOpenList").textContent.includes("My Desk Setup") && !byId("moderationOpenList").textContent.includes("build-1"));
+        test("multiple reports: the open count badge shows 2 and is visible", byId("moderationOpenCount").textContent === "2" && byId("moderationOpenCount").hidden === false);
+
+        // -- Missing/unavailable target — the queue must not crash. -------------
+        resetPageState();
+        globalThis.__repo.open = [makeReport({ id: "r3", target_id: "gone" })];
+        globalThis.__repo.targetContext = new Map([["build:gone", { available: false, label: null, href: null }]]);
+        let threwOnMissingTarget = false;
+        try { await renderModerationPage(); } catch { threwOnMissingTarget = true; }
+        test("missing target: rendering never throws", threwOnMissingTarget === false);
+        test("missing target: shows an honest \"unavailable\" state", byId("moderationOpenList").textContent.includes("unavailable"));
+        test("missing target: still shows the raw id only as restrained diagnostic context", byId("moderationOpenList").textContent.includes("gone"));
+
+        // -- Long reason text wraps safely, and user-controlled content is
+        // escaped, not rendered as markup. --------------------------------------
+        resetPageState();
+        const longReason = "x".repeat(400);
+        const xssReason = `<img src=x onerror=alert(1)>`;
+        globalThis.__repo.open = [
+            makeReport({ id: "r4", reason: longReason }),
+            makeReport({ id: "r5", reason: xssReason, target_id: "build-5" })
+        ];
+        globalThis.__repo.targetContext = new Map([
+            ["build:build-1", { available: true, label: "A Project", href: "#" }],
+            ["build:build-5", { available: true, label: "Another Project", href: "#" }]
+        ]);
+        await renderModerationPage();
+        test("long reason: the full text is present in the DOM", byId("moderationOpenList").textContent.includes(longReason));
+        test(
+            "long reason: no horizontal overflow at 390px",
+            document.getElementById("fixtureHost").scrollWidth <= document.getElementById("fixtureHost").clientWidth + 1,
+            `scrollWidth=${document.getElementById("fixtureHost").scrollWidth} clientWidth=${document.getElementById("fixtureHost").clientWidth}`
+        );
+        test(
+            "XSS reason: rendered as escaped text, never as markup",
+            !byId("moderationOpenList").querySelector("img"),
+            byId("moderationOpenList").innerHTML.includes("&lt;img")
+        );
+
+        // -- Accessible, distinguishable action names per card. ------------------
+        resetPageState();
+        globalThis.__repo.open = [makeReport({ id: "r6" })];
+        globalThis.__repo.targetContext = new Map([["build:build-1", { available: true, label: "A Project", href: "#" }]]);
+        await renderModerationPage();
+        const noViolationBtn = byId("moderationOpenList").querySelector('[data-outcome="no_violation"]');
+        const confirmedBtn = byId("moderationOpenList").querySelector('[data-outcome="violation_confirmed"]');
+        test("action buttons: both outcomes are present", !!noViolationBtn && !!confirmedBtn);
+        test("action buttons: each has a distinguishing accessible name, not a bare repeated label", (noViolationBtn.getAttribute("aria-label") || "").length > "No violation".length);
+
+        // -- Resolution: confirmation required, correct status mapping, success
+        // removes the card, adds it to history, no focus loss. -------------------
+        resetPageState();
+        globalThis.__repo.open = [makeReport({ id: "r7" })];
+        globalThis.__repo.targetContext = new Map([["build:build-1", { available: true, label: "A Project", href: "#" }]]);
+        await renderModerationPage();
+
+        globalThis.__confirmResult = false;
+        byId("moderationOpenList").querySelector('[data-outcome="no_violation"]').click();
+        await new Promise(r => setTimeout(r, 20));
+        test("resolution cancelled at the confirmation dialog: the report stays open, resolve() never called", globalThis.__resolveCalls.length === 0 && byId("moderationOpenList").querySelectorAll(".report-card").length === 1);
+
+        globalThis.__confirmResult = true;
+        const violationBtn = byId("moderationOpenList").querySelector('[data-outcome="violation_confirmed"]');
+        violationBtn.focus();
+        violationBtn.click();
+        await new Promise(r => setTimeout(r, 20));
+
+        test("resolution confirmed: resolveReport() called with the correct outcome key", globalThis.__resolveCalls.some(c => c[0] === "r7" && c[1] === "violation_confirmed"));
+        test("resolution success: the report leaves the Open list", byId("moderationOpenList").querySelectorAll(".report-card").length === 0);
+        test("resolution success: the Open list shows its empty state again", byId("moderationOpenList").textContent.includes("No open reports"));
+        test("resolution success: the report now appears in the Resolved history", byId("moderationHistoryList").querySelector(".report-card") !== null);
+        test("resolution success: history shows the correct UI label for the stored status", byId("moderationHistoryList").textContent.includes("Violation confirmed"));
+        test("resolution success: an accessible success message was shown", globalThis.__toasts.some(t => t.type === "success"));
+        test(
+            "resolution success: focus never silently falls back to <body> after the card disappears",
+            document.activeElement !== document.body,
+            document.activeElement?.tagName
+        );
+
+        // -- Duplicate-click suppression: both action buttons on a card
+        // disable immediately once one is clicked, before the network call
+        // resolves. ---------------------------------------------------------
+        resetPageState();
+        globalThis.__repo.open = [makeReport({ id: "r8" })];
+        globalThis.__repo.targetContext = new Map([["build:build-1", { available: true, label: "A Project", href: "#" }]]);
+        let resolveGate;
+        globalThis.__repo.resolveImpl = () => new Promise(resolve => { resolveGate = resolve; });
+        await renderModerationPage();
+
+        const dupNoViolation = byId("moderationOpenList").querySelector('[data-outcome="no_violation"]');
+        const dupConfirmed = byId("moderationOpenList").querySelector('[data-outcome="violation_confirmed"]');
+        dupNoViolation.click();
+        await new Promise(r => setTimeout(r, 20)); // past the confirm() + freshness-check microtasks, RPC still pending
+        test("duplicate-click suppression: both buttons on the card are disabled while a resolution is pending", dupNoViolation.disabled === true && dupConfirmed.disabled === true);
+        resolveGate({ id: "r8", status: "dismissed", reviewed_by: "mod-1", reviewed_at: "2026-01-01T00:00:00Z" });
+        await new Promise(r => setTimeout(r, 20));
+        globalThis.__repo.resolveImpl = null;
+
+        // -- Failure preserves the open report and restores controls. -----------
+        resetPageState();
+        globalThis.__repo.open = [makeReport({ id: "r9" })];
+        globalThis.__repo.targetContext = new Map([["build:build-1", { available: true, label: "A Project", href: "#" }]]);
+        globalThis.__repo.resolveImpl = () => { throw new Error("network blip"); };
+        await renderModerationPage();
+        byId("moderationOpenList").querySelector('[data-outcome="no_violation"]').click();
+        await new Promise(r => setTimeout(r, 20));
+        test("resolution failure: the report is still in the Open list", byId("moderationOpenList").querySelectorAll(".report-card").length === 1);
+        test("resolution failure: the action buttons are re-enabled", byId("moderationOpenList").querySelector('[data-outcome="no_violation"]').disabled === false);
+        test("resolution failure: an accessible error message was shown", globalThis.__toasts.some(t => t.type === "error"));
+        globalThis.__repo.resolveImpl = null;
+
+        // -- Stale/already-resolved conflict: the freshness pre-check catches
+        // it, gives honest feedback, and never appears to succeed as the
+        // clicked outcome. -----------------------------------------------------
+        resetPageState();
+        globalThis.__repo.open = [makeReport({ id: "r10" })];
+        globalThis.__repo.targetContext = new Map([["build:build-1", { available: true, label: "A Project", href: "#" }]]);
+        globalThis.__freshnessStatus = "dismissed"; // someone else already resolved it
+        await renderModerationPage();
+        byId("moderationOpenList").querySelector('[data-outcome="violation_confirmed"]').click();
+        await new Promise(r => setTimeout(r, 20));
+        test("stale conflict: resolveReport() (the actual write) is never called", globalThis.__resolveCalls.length === 0);
+        test("stale conflict: the report still leaves the Open list (it's genuinely no longer open)", byId("moderationOpenList").querySelectorAll(".report-card").length === 0);
+        test(
+            "stale conflict: gives honest, specific feedback rather than a generic success/error",
+            globalThis.__toasts.some(t => /already resolved/i.test(t.message))
+        );
+
+        // =====================================================================
+        // Part C — History view
+        // =====================================================================
+
+        resetPageState();
+        await renderModerationPage();
+        test("empty history: shows an empty state", byId("moderationHistoryList").textContent.includes("No resolved reports"));
+
+        resetPageState();
+        globalThis.__repo.resolved = [
+            makeReport({ id: "h1", status: "dismissed", reviewed_at: "2026-01-01T00:00:00Z", reviewed_by: "mod-1" }),
+            makeReport({ id: "h2", status: "reviewed", reviewed_at: "2026-02-01T00:00:00Z", reviewed_by: "mod-1" }),
+            makeReport({ id: "h3", status: "some_legacy_status", reviewed_at: "2025-01-01T00:00:00Z", reviewed_by: "mod-1" })
+        ];
+        globalThis.__repo.targetContext = new Map([["build:build-1", { available: true, label: "A Project", href: "#" }]]);
+        globalThis.__repo.actorProfiles = new Map([["mod-1", { username: "mod_one" }]]);
+        await renderModerationPage();
+
+        const historyCards = Array.from(byId("moderationHistoryList").querySelectorAll(".report-card"));
+        test("history: all three resolved reports render, including a legacy/unknown status", historyCards.length === 3);
+        test("history: \"dismissed\" shows the \"No violation\" label", byId("moderationHistoryList").textContent.includes("No violation"));
+        test("history: \"reviewed\" shows the \"Violation confirmed\" label", byId("moderationHistoryList").textContent.includes("Violation confirmed"));
+        test("history: an unrecognized stored status is handled safely, not thrown", byId("moderationHistoryList").textContent.includes("Unknown status"));
+        test("history: no resolve action controls are offered — read-only", byId("moderationHistoryList").querySelector('[data-action="resolve-report"]') === null);
+        test("history: shows the resolving moderator's identity", byId("moderationHistoryList").textContent.includes("mod_one"));
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`moderationQueue.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

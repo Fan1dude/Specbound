@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 24 — js/repositories/moderationRepository.js</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 24 — moderationRepository.js</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function absUrl(path) {
+            return new URL(path, location.href).href;
+        }
+
+        async function loadPatched(realPath, map) {
+            const src = await (await fetch(realPath)).text();
+            let rewritten = src;
+            for (const [from, to] of Object.entries(map)) {
+                rewritten = rewritten.replaceAll(`"${from}"`, `"${to}"`);
+            }
+            return blobUrl(rewritten);
+        }
+
+        // --- Mock supabase client — same builder-chain pattern already
+        // established by guidelinesVersion.test.html, extended with
+        // .rpc() (not previously needed by any existing test) since
+        // resolveReport() calls it directly. ---------------------------------
+        globalThis.__mock = {
+            calls: [],
+            tableResponse: { data: [], error: null },
+            rpcResponse: { data: null, error: null }
+        };
+
+        function makeBuilder(table) {
+            const builder = {
+                select(cols) { globalThis.__mock.calls.push([table, "select", cols]); return builder; },
+                eq(col, val) { globalThis.__mock.calls.push([table, "eq", col, val]); return builder; },
+                in(col, vals) { globalThis.__mock.calls.push([table, "in", col, vals]); return builder; },
+                order(col, opts) { globalThis.__mock.calls.push([table, "order", col, opts]); return builder; },
+                limit(n) { globalThis.__mock.calls.push([table, "limit", n]); return builder; },
+                single() { globalThis.__mock.calls.push([table, "single"]); return builder; },
+                then(resolve) {
+                    const resp = globalThis.__mock.tableResponse;
+                    resolve(typeof resp === "function" ? resp(table) : resp);
+                }
+            };
+            return builder;
+        }
+
+        const supabaseSrc = `
+            export const supabase = {
+                from(table) { return (${makeBuilder.toString()})(table); },
+                rpc(name, params) {
+                    globalThis.__mock.calls.push(["rpc", name, params]);
+                    const resp = globalThis.__mock.rpcResponse;
+                    return Promise.resolve(typeof resp === "function" ? resp(name, params) : resp);
+                }
+            };
+        `;
+
+        // --- Mock batch-lookup collaborators — moderationRepository.js's
+        // OWN grouping/batching/unavailable-handling logic is what's under
+        // test here, not buildRepository.js/profileRepository.js/
+        // commentRepository.js's internals (each already a thin,
+        // RLS-reliant pass-through with no branching logic of its own worth
+        // re-verifying through a full supabase mock chain). -------------------
+        globalThis.__fixtures = {
+            builds: [],
+            comments: [],
+            profiles: []
+        };
+
+        const buildsMockSrc = `
+            export async function getBuildsByIds(ids) {
+                globalThis.__mock.calls.push(["getBuildsByIds", ids]);
+                return globalThis.__fixtures.builds.filter(b => ids.includes(b.id));
+            }
+        `;
+        const commentsMockSrc = `
+            export async function getCommentsByIds(ids) {
+                globalThis.__mock.calls.push(["getCommentsByIds", ids]);
+                return globalThis.__fixtures.comments.filter(c => ids.includes(c.id));
+            }
+        `;
+        const profilesMockSrc = `
+            export async function getProfilesByIds(ids) {
+                globalThis.__mock.calls.push(["getProfilesByIds", ids]);
+                return globalThis.__fixtures.profiles.filter(p => ids.includes(p.id));
+            }
+        `;
+
+        const moderationRepoUrl = await loadPatched("../js/repositories/moderationRepository.js", {
+            "../core/supabase.js": blobUrl(supabaseSrc),
+            "./buildRepository.js": blobUrl(buildsMockSrc),
+            "./profileRepository.js": blobUrl(profilesMockSrc),
+            "./commentRepository.js": blobUrl(commentsMockSrc)
+        });
+
+        const {
+            getOpenReports,
+            getResolvedReports,
+            resolveReport,
+            getReportTargetContext,
+            getReportActorProfiles,
+            describeReportStatus,
+            RESOLUTION_OUTCOMES
+        } = await import(moderationRepoUrl);
+
+        function reset() {
+            globalThis.__mock.calls = [];
+            globalThis.__mock.tableResponse = { data: [], error: null };
+            globalThis.__mock.rpcResponse = { data: null, error: null };
+        }
+
+        // --- RESOLUTION_OUTCOMES / describeReportStatus — the stored-status
+        // <-> UI-label mapping this whole milestone hinges on. -----------------
+        test(
+            "RESOLUTION_OUTCOMES.no_violation maps to the stored status \"dismissed\"",
+            RESOLUTION_OUTCOMES.no_violation.status === "dismissed"
+        );
+        test(
+            "RESOLUTION_OUTCOMES.violation_confirmed maps to the stored status \"reviewed\"",
+            RESOLUTION_OUTCOMES.violation_confirmed.status === "reviewed"
+        );
+        test("describeReportStatus(\"open\") labels it \"Open\"", describeReportStatus("open").label === "Open");
+        test("describeReportStatus(\"dismissed\") labels it \"No violation\"", describeReportStatus("dismissed").label === "No violation");
+        test("describeReportStatus(\"reviewed\") labels it \"Violation confirmed\"", describeReportStatus("reviewed").label === "Violation confirmed");
+        test(
+            "describeReportStatus() on an unknown/legacy status is handled safely, never throws",
+            describeReportStatus("some_legacy_status").label === "Unknown status"
+        );
+
+        // --- getOpenReports / getResolvedReports — query shape ----------------
+        reset();
+        globalThis.__mock.tableResponse = { data: [{ id: "r1", status: "open" }], error: null };
+        const openReports = await getOpenReports();
+        test("getOpenReports() queries content_reports", globalThis.__mock.calls.some(c => c[0] === "content_reports" && c[1] === "select"));
+        test("getOpenReports() filters to status = open", globalThis.__mock.calls.some(c => c[1] === "eq" && c[2] === "status" && c[3] === "open"));
+        test("getOpenReports() orders newest-created first", globalThis.__mock.calls.some(c => c[1] === "order" && c[2] === "created_at" && c[3]?.ascending === false));
+        test("getOpenReports() applies a bounded limit, not an unbounded query", globalThis.__mock.calls.some(c => c[1] === "limit" && typeof c[2] === "number"));
+        test("getOpenReports() returns the rows", Array.isArray(openReports) && openReports.length === 1);
+
+        reset();
+        globalThis.__mock.tableResponse = { data: [{ id: "r2", status: "dismissed", reviewed_at: "2026-01-02T00:00:00Z" }], error: null };
+        await getResolvedReports();
+        test("getResolvedReports() filters to reviewed/dismissed", globalThis.__mock.calls.some(c => c[1] === "in" && c[2] === "status" && JSON.stringify(c[3]) === JSON.stringify(["reviewed", "dismissed"])));
+        test("getResolvedReports() orders newest-RESOLVED first (reviewed_at, not created_at)", globalThis.__mock.calls.some(c => c[1] === "order" && c[2] === "reviewed_at" && c[3]?.ascending === false));
+        test("getResolvedReports() also applies a bounded limit", globalThis.__mock.calls.some(c => c[1] === "limit" && typeof c[2] === "number"));
+
+        reset();
+        globalThis.__mock.tableResponse = { data: null, error: { message: "boom" } };
+        let threw = false;
+        try { await getOpenReports(); } catch { threw = true; }
+        test("getOpenReports() propagates a repository failure instead of swallowing it", threw);
+
+        // --- resolveReport() -----------------------------------------------
+        reset();
+        globalThis.__mock.rpcResponse = { data: { id: "r1", status: "dismissed" }, error: null };
+        await resolveReport("r1", "no_violation");
+        const rpcCall = globalThis.__mock.calls.find(c => c[0] === "rpc");
+        test("resolveReport(\"no_violation\") calls the resolve_report RPC", rpcCall?.[1] === "resolve_report");
+        test("resolveReport(\"no_violation\") sends the report id", rpcCall?.[2]?.p_report_id === "r1");
+        test("resolveReport(\"no_violation\") sends the STORED status \"dismissed\", not the UI label", rpcCall?.[2]?.p_status === "dismissed");
+
+        reset();
+        globalThis.__mock.rpcResponse = { data: { id: "r2", status: "reviewed" }, error: null };
+        await resolveReport("r2", "violation_confirmed");
+        const rpcCall2 = globalThis.__mock.calls.find(c => c[0] === "rpc");
+        test("resolveReport(\"violation_confirmed\") sends the STORED status \"reviewed\"", rpcCall2?.[2]?.p_status === "reviewed");
+
+        let rejected = false;
+        try { await resolveReport("r3", "not_a_real_outcome"); } catch { rejected = true; }
+        test("resolveReport() with an unknown outcome key is rejected client-side, never reaches the RPC", rejected);
+
+        reset();
+        globalThis.__mock.rpcResponse = { data: null, error: { message: "Report not found." } };
+        let rpcThrew = false;
+        try { await resolveReport("missing", "no_violation"); } catch (error) {
+            rpcThrew = true;
+            test("resolveReport() surfaces the RPC's own error message on failure", /not found/i.test(error.message), error.message);
+        }
+        test("resolveReport() propagates an RPC-level error", rpcThrew);
+
+        // --- getReportTargetContext() — batching + unavailable handling -------
+        globalThis.__fixtures.builds = [{ id: "build-1", title: "My Desk Setup", slug: "my-desk-setup" }];
+        globalThis.__fixtures.comments = [{ id: "comment-1", build_id: "build-2", body: "great work" }];
+        globalThis.__fixtures.profiles = [{ id: "profile-1", username: "builder1", display_name: "Builder One" }];
+        globalThis.__fixtures.builds.push({ id: "build-2", title: "Commented-on Build", slug: "commented-on-build" });
+
+        const reports = [
+            { target_type: "build", target_id: "build-1" },
+            { target_type: "build", target_id: "build-missing" },
+            { target_type: "comment", target_id: "comment-1" },
+            { target_type: "comment", target_id: "comment-missing" },
+            { target_type: "profile", target_id: "profile-1" },
+            { target_type: "profile", target_id: "profile-missing" }
+        ];
+
+        const context = await getReportTargetContext(reports);
+
+        test("target context: an existing build resolves to its title", context.get("build:build-1")?.label === "My Desk Setup");
+        test("target context: an existing build's href points at its slug", context.get("build:build-1")?.href?.includes("slug=my-desk-setup"));
+        test("target context: a missing build is marked unavailable, not thrown", context.get("build:build-missing")?.available === false);
+        test("target context: an existing comment's label names its parent build", context.get("comment:comment-1")?.label === "Comment on Commented-on Build");
+        test("target context: an existing comment's href points at the parent build + #commentsList", context.get("comment:comment-1")?.href?.includes("commented-on-build") && context.get("comment:comment-1")?.href?.includes("#commentsList"));
+        test("target context: a missing comment is marked unavailable", context.get("comment:comment-missing")?.available === false);
+        test("target context: an existing profile resolves to a display name", context.get("profile:profile-1")?.label === "Builder One");
+        test("target context: a missing profile is marked unavailable", context.get("profile:profile-missing")?.available === false);
+        test(
+            "target context never throws for a fully-missing target — the queue must survive a deleted/private target",
+            context.size === 6
+        );
+
+        // --- getReportActorProfiles() ------------------------------------------
+        globalThis.__fixtures.profiles = [
+            { id: "reporter-1", username: "reporter_one" },
+            { id: "moderator-1", username: "mod_one" }
+        ];
+        const actorReports = [
+            { reporter_id: "reporter-1", reviewed_by: null },
+            { reporter_id: "reporter-1", reviewed_by: "moderator-1" }
+        ];
+        const actors = await getReportActorProfiles(actorReports);
+        test("actor profiles: resolves the reporter", actors.get("reporter-1")?.username === "reporter_one");
+        test("actor profiles: resolves the reviewing moderator", actors.get("moderator-1")?.username === "mod_one");
+
+        const noActors = await getReportActorProfiles([]);
+        test("actor profiles: an empty report list never calls the batch lookup", noActors.size === 0);
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`moderationRepository.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

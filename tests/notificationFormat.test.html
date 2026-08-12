@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 24 — js/utils/notificationFormat.js (report_resolved)</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 24 — notificationFormat.js: report_resolved</h1>
+    <p>
+        resolve_report() (supabase/migrations/0028_moderation.sql, Milestone 22)
+        has always notified the reporter with this type on resolution — it just
+        had no client-side caller until this milestone, so this case never
+        actually fired before. Without this fix it fell through to the generic
+        default ("Someone interacted with your project") and built a dead link
+        (an empty build slug), since a report_resolved notification never
+        carries a build. Also covers the pre-existing types to confirm they're
+        unaffected.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        const { formatNotificationText, getNotificationUrl } = await import("../js/utils/notificationFormat.js");
+
+        function notification(overrides = {}) {
+            return {
+                type: "comment",
+                actor: { username: "alice" },
+                build: { slug: "cool-build", title: "Cool Build" },
+                ...overrides
+            };
+        }
+
+        // --- Pre-existing types — unaffected regression check ------------------
+        test("comment: unaffected by this change", formatNotificationText(notification({ type: "comment" })) === "alice commented on Cool Build");
+        test("like: unaffected", formatNotificationText(notification({ type: "like" })) === "alice liked Cool Build");
+        test("comment url: unaffected (still #commentsList)", getNotificationUrl(notification({ type: "comment" }), "../").endsWith("cool-build#commentsList"));
+        test("like url: unaffected (no #commentsList)", getNotificationUrl(notification({ type: "like" }), "../") === "../pages/build/build.html?slug=cool-build");
+
+        // --- report_resolved (Milestone 24) -------------------------------------
+        const reportResolved = { type: "report_resolved", actor: null, build: null };
+
+        test(
+            "report_resolved: never names an actor or a build — the RPC never sets either",
+            formatNotificationText(reportResolved) === "A moderator reviewed a report you submitted."
+        );
+        test(
+            "report_resolved: never discloses the specific outcome (no violation / violation confirmed)",
+            !/no violation|violation confirmed/i.test(formatNotificationText(reportResolved))
+        );
+        test(
+            "report_resolved: routes to notifications.html, never a dead build link with an empty slug",
+            getNotificationUrl(reportResolved, "../") === "../pages/notifications.html"
+        );
+        test(
+            "report_resolved: the notifications.html destination is never suffixed with #commentsList",
+            !getNotificationUrl(reportResolved, "../").includes("#")
+        );
+
+        // A report_resolved row could theoretically carry an actor/build if
+        // that ever changed server-side — this must still route safely and
+        // never regress to naming the actor, since the whole point is that
+        // the reporter never sees who reviewed their report.
+        const reportResolvedWithExtra = { type: "report_resolved", actor: { username: "mod1" }, build: { slug: "irrelevant" } };
+        test(
+            "report_resolved: ignores an actor/build even if present, by design",
+            formatNotificationText(reportResolvedWithExtra) === "A moderator reviewed a report you submitted."
+        );
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`notificationFormat.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

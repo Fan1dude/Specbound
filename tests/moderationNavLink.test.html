@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 24 — moderator-only "Moderation" nav entry (js/core/layout.js)</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 24 — moderator-only "Moderation" nav entry</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <nav class="navbar" id="navbar"></nav>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function absUrl(path) {
+            return new URL(path, location.href).href;
+        }
+
+        async function loadPatched(realPath, map) {
+            const src = await (await fetch(realPath)).text();
+            let rewritten = src;
+            for (const [from, to] of Object.entries(map)) {
+                rewritten = rewritten.replaceAll(`"${from}"`, `"${to}"`);
+            }
+            return blobUrl(rewritten);
+        }
+
+        globalThis.__nav = { user: null, profile: { username: "builder1", onboarding_welcomed_at: "2026-01-01T00:00:00Z" }, roles: [] };
+
+        const authMockSrc = `
+            export async function getCurrentUser() { return globalThis.__nav.user; }
+            export function clearCurrentUserCache() {}
+        `;
+        const supabaseMockSrc = `
+            export const supabase = {
+                from(table) {
+                    return {
+                        select() { return this; },
+                        eq() { return this; },
+                        single: async () => ({ data: globalThis.__nav.profile, error: null })
+                    };
+                },
+                auth: { signOut: async () => ({ error: null }) }
+            };
+        `;
+        const communityMockSrc = `
+            export async function getProfileRoles() { return globalThis.__nav.roles; }
+        `;
+        const notificationBellMockSrc = `export async function initNotificationBell() {}`;
+        const onboardingMockSrc = `export function maybeShowWelcome() {}`;
+
+        const layoutUrl = await loadPatched("../js/core/layout.js", {
+            "./supabase.js": blobUrl(supabaseMockSrc),
+            "./auth.js": blobUrl(authMockSrc),
+            "./notificationBell.js": blobUrl(notificationBellMockSrc),
+            "./onboarding.js": blobUrl(onboardingMockSrc),
+            "../repositories/communityRepository.js": blobUrl(communityMockSrc),
+            "../utils/escapeHtml.js": absUrl("../js/utils/escapeHtml.js"),
+            "../utils/icons.js": absUrl("../js/utils/icons.js")
+        });
+        const { loadNavbar } = await import(layoutUrl);
+
+        // -- Signed-out visitor: no builder menu at all, so no Moderation
+        // link can exist. --------------------------------------------------
+        globalThis.__nav.user = null;
+        await loadNavbar();
+        test("signed-out visitor: no Moderation link anywhere in the navbar", !document.getElementById("navbar").innerHTML.includes("Moderation"));
+
+        // -- Ordinary signed-in user: link absent from both the desktop
+        // dropdown and the mobile list. --------------------------------------
+        globalThis.__nav.user = { id: "user-1" };
+        globalThis.__nav.roles = ["community_builder"];
+        await loadNavbar();
+        test("ordinary user: no Moderation link in the desktop dropdown", !document.getElementById("builderDropdown").innerHTML.includes("Moderation"));
+        test("ordinary user: no Moderation link in the mobile account list", !Array.from(document.querySelectorAll(".mobile-account-link")).some(a => a.textContent.trim() === "Moderation"));
+
+        // -- Moderator: link present in BOTH the desktop dropdown and the
+        // mobile list (the same two-routes-one-destination pattern every
+        // other nav destination already uses). --------------------------------
+        globalThis.__nav.roles = ["moderator"];
+        await loadNavbar();
+        test("moderator: Moderation link present in the desktop dropdown", document.getElementById("builderDropdown").innerHTML.includes("Moderation"));
+        test("moderator: Moderation link present in the mobile account list", Array.from(document.querySelectorAll(".mobile-account-link")).some(a => a.textContent.trim() === "Moderation"));
+        test("moderator: the link points at pages/moderation.html", document.getElementById("builderDropdown").innerHTML.includes("pages/moderation.html"));
+
+        // -- Staff: also visible (is_platform_moderator() covers staff too;
+        // the nav gate must match the same contract resolve_report() itself
+        // enforces server-side). ------------------------------------------------
+        globalThis.__nav.roles = ["staff"];
+        await loadNavbar();
+        test("staff: Moderation link present too", document.getElementById("builderDropdown").innerHTML.includes("Moderation"));
+
+        // -- No open-report count badge in the nav — a stale/wrong count
+        // would be worse than none (explicit product decision, see
+        // js/core/layout.js's own comment). --------------------------------------
+        test("nav link: carries no open-report count — deliberately not fetched here", !/Moderation\s*\(\d+\)/.test(document.getElementById("builderDropdown").innerHTML));
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`moderationNavLink.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

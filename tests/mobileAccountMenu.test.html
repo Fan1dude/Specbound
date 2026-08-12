@@ -67,6 +67,10 @@
         `;
         const notificationBellMockSrc = `export async function initNotificationBell() {}`;
         const onboardingMockSrc = `export function maybeShowWelcome() {}`;
+        // Milestone 24 — layout.js now also checks the viewer's roles to
+        // decide whether to show the moderator-only "Moderation" link.
+        // Not what this file is testing, so a plain non-moderator stub.
+        const communityMockSrc = `export async function getProfileRoles() { return []; }`;
 
         const escapeHtmlUrl = new URL("../js/utils/escapeHtml.js", location.href).href;
         const iconsUrl = new URL("../js/utils/icons.js", location.href).href;
@@ -76,6 +80,7 @@
             '"./auth.js"': blobUrl(authMockSrc),
             '"./notificationBell.js"': blobUrl(notificationBellMockSrc),
             '"./onboarding.js"': blobUrl(onboardingMockSrc),
+            '"../repositories/communityRepository.js"': blobUrl(communityMockSrc),
             '"../utils/escapeHtml.js"': escapeHtmlUrl,
             '"../utils/icons.js"': iconsUrl
         };
@@ -250,6 +255,7 @@
     const authMockSrc = ${JSON.stringify(delayedAuthMockSrc)};
     const onboardingMockSrc = ${JSON.stringify(delayedOnboardingMockSrc)};
     const notificationRepoMockSrc = ${JSON.stringify(delayedNotificationRepoMockSrc)};
+    const communityMockSrc = ${JSON.stringify("export async function getProfileRoles() { return []; }")};
 
     // notificationBell.js is the REAL file — only its own
     // network-touching import (the repository) is rewritten to a mock;
@@ -274,6 +280,7 @@
         '"./auth.js"': blobUrl(authMockSrc),
         '"./notificationBell.js"': notifBellBlobUrl,
         '"./onboarding.js"': blobUrl(onboardingMockSrc),
+        '"../repositories/communityRepository.js"': blobUrl(communityMockSrc),
         '"../utils/escapeHtml.js"': ${JSON.stringify(escapeHtmlUrl2)},
         '"../utils/icons.js"': ${JSON.stringify(iconsUrl2)}
     };
