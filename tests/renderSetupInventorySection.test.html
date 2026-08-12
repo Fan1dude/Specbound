@@ -151,10 +151,16 @@
         const productLinkInput = container.querySelector('[data-action="edit-item-url"]');
         test("product link field is present", !!productLinkInput);
         test("product link field carries the item's existing URL", productLinkInput?.value === "https://www.ikea.com/");
+        test("product link field placeholder reads \"Paste a retailer product link\"", productLinkInput?.placeholder === "Paste a retailer product link");
+
+        const linkLabel = container.querySelector(".setup-item-link-label");
+        test("product link field has a real, visible label reading \"Product link (optional)\"", linkLabel?.textContent.trim().startsWith("Product link (optional)"));
+        test("the link label wraps the link input (real <label>, not just aria-label)", linkLabel?.contains(productLinkInput));
 
         const fetchButton = container.querySelector('[data-action="fetch-metadata"]');
-        test("\"Get product details\" control is present", !!fetchButton);
-        test("\"Get product details\" is enabled when a URL is already present", fetchButton?.disabled === false);
+        test("\"Fill details from link\" control is present", !!fetchButton);
+        test("\"Fill details from link\" is enabled when a URL is already present", fetchButton?.disabled === false);
+        test("the fetch button reads \"Fill details from link\", not \"Get product details\" / \"import\"", fetchButton?.textContent.trim() === "Fill details from link");
 
         const titleInput = container.querySelector('[data-action="edit-item-title"]');
         test("product title field is present", !!titleInput);
@@ -175,10 +181,39 @@
         const sourceNameInput = container.querySelector('[data-action="edit-item-source-name"]');
         test("source name field is present", !!sourceNameInput);
         test("source name field carries the item's existing value", sourceNameInput?.value === "IKEA");
+        test("source name field placeholder reads \"e.g. Goodwill, Best Buy\"", sourceNameInput?.placeholder === "e.g. Goodwill, Best Buy");
+
+        const sourceNameLabel = container.querySelector(".setup-item-source-name-label");
+        test("source name field has a real, visible label reading \"Source name\"", sourceNameLabel?.textContent.trim().startsWith("Source name"));
+        test("the source name label wraps the source name input (real <label>, not just aria-label)", sourceNameLabel?.contains(sourceNameInput));
 
         test("move-item-up control is present", !!container.querySelector('[data-action="move-item-up"]'));
         test("move-item-down control is present", !!container.querySelector('[data-action="move-item-down"]'));
         test("delete-item control is present", !!container.querySelector('[data-action="delete-item"]'));
+
+        // --- "Add a product" copy: replaces the old, confusing "Import
+        // your own product" wording. Lives once per category, immediately
+        // above the Add Product button. ---------------------------------
+        const addProductHeading = container.querySelector(".setup-add-product-heading");
+        const addProductDescription = container.querySelector(".setup-add-product-description");
+        test("the \"Add a product\" heading is present", addProductHeading?.textContent.trim() === "Add a product");
+        test(
+            "the \"Add a product\" description gives the correct manual-or-link explanation",
+            addProductDescription?.textContent.trim() === "Enter the product details yourself, or paste a product link and we'll fill in what we can."
+        );
+        test("the old \"Import your own product\" wording is gone", !container.textContent.includes("Import your own product"));
+
+        // --- All six product controls the request calls out must be
+        // visible at once for a real, non-empty item: product name, product
+        // link, price paid, free status, source type, source name. -----------
+        test("required product controls are all visible for an existing item: name, link, price, free, source type, source name", [
+            container.querySelector('[data-action="edit-item-title"]'),
+            container.querySelector('[data-action="edit-item-url"]'),
+            container.querySelector('[data-action="edit-item-price"]'),
+            container.querySelector('[data-action="toggle-item-free"]'),
+            container.querySelector('[data-action="edit-item-source-type"]'),
+            container.querySelector('[data-action="edit-item-source-name"]')
+        ].every(el => !!el && el.offsetParent !== null));
 
         // --- Case 2: an item with no URL — manual entry, "Get product
         // details" must be present but disabled, never hidden. ----------------
@@ -198,7 +233,7 @@
         test("a manually-entered (no-URL) product also renders without throwing", caughtErrors.length === 0, JSON.stringify(caughtErrors));
 
         const manualFetchButton = container.querySelector('[data-action="fetch-metadata"]');
-        test("\"Get product details\" is present but disabled when there's no URL yet", !!manualFetchButton && manualFetchButton.disabled === true);
+        test("\"Fill details from link\" is present but disabled when there's no URL yet", !!manualFetchButton && manualFetchButton.disabled === true);
 
         const manualPriceInput = container.querySelector('[data-action="edit-item-price"]');
         test("price paid field is disabled when the item is marked Free", manualPriceInput?.disabled === true);
@@ -242,6 +277,55 @@
         test("the second product's move-up is enabled", moveUpButtons[1]?.disabled === false);
         test("the first product's move-down is enabled", moveDownButtons[0]?.disabled === false);
         test("the second product's move-down is disabled", moveDownButtons[1]?.disabled === true);
+
+        // --- Case 4: Add Product behavior. A click must create exactly
+        // one new blank card, scroll/focus it, and give visible feedback.
+        // A second click while that card is still completely blank must
+        // reuse it instead of piling up a second blank card, per the live
+        // testing report that repeated clicks could spam empty products. ---
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        renderSetupInventorySection(makeDraftWithOneProduct(), autosaveMock);
+
+        test("Add Product flow: initial render throws no error", caughtErrors.length === 0, JSON.stringify(caughtErrors));
+        test("starts with exactly one product", container.querySelectorAll('[data-action="edit-item-title"]').length === 1);
+
+        container.querySelector('[data-action="add-item"]').click();
+
+        let addFlowTitleInputs = container.querySelectorAll('[data-action="edit-item-title"]');
+        test("clicking Add Product once creates exactly one new blank product (two total)", addFlowTitleInputs.length === 2);
+        test("focus moves to the newly created product's title field", document.activeElement === addFlowTitleInputs[1]);
+
+        let addFlowToastMessages = Array.from(document.querySelectorAll(".toast .toast-message")).map(el => el.textContent);
+        test("a \"Product added.\" confirmation toast is shown", addFlowToastMessages.includes("Product added."));
+
+        test("no error/unhandled rejection after the first Add Product click", caughtErrors.length === 0, JSON.stringify(caughtErrors));
+
+        // Second click, while the just-created card is still completely
+        // blank — must reuse it, not create a third card.
+        container.querySelector('[data-action="add-item"]').click();
+
+        addFlowTitleInputs = container.querySelectorAll('[data-action="edit-item-title"]');
+        test("clicking Add Product again while a blank product exists does not create a third product", addFlowTitleInputs.length === 2);
+        test("focus is returned to the existing blank product's title field, not a new one", document.activeElement === addFlowTitleInputs[1]);
+
+        addFlowToastMessages = Array.from(document.querySelectorAll(".toast .toast-message")).map(el => el.textContent);
+        test(
+            "a \"Finish adding this product first.\" message is shown instead of creating another blank product",
+            addFlowToastMessages.includes("Finish adding this product first.")
+        );
+
+        // Filling in the blank card's title should let a subsequent click
+        // create a genuinely new second blank card again (proves the dedup
+        // check is based on live field state, not a one-time flag).
+        addFlowTitleInputs[1].value = "Chair";
+        addFlowTitleInputs[1].dispatchEvent(new Event("change", { bubbles: true }));
+
+        container.querySelector('[data-action="add-item"]').click();
+        addFlowTitleInputs = container.querySelectorAll('[data-action="edit-item-title"]');
+        test("once the blank product is filled in, Add Product creates a genuine third product", addFlowTitleInputs.length === 3);
 
         // --- Render + report ------------------------------------------------
         const resultsEl = document.getElementById("results");
