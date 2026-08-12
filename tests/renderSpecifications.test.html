@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 23 polish — public renderSpecifications.js (legacy spec-field URL overflow fix)</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+        /* A narrow fixed-width host, standing in for a spec-item card on
+           the public build page. */
+        #hostCard { width: 320px; border: 1px solid #333; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 23 polish — legacy Hardware Blueprint spec-field URL overflow fix</h1>
+    <p>
+        A second occurrence of the same class of bug already fixed in
+        the newer Setup Inventory section, found in the older,
+        per-technology dynamic specification fields (e.g. "Desk" for
+        the Desk Setups technology) — a genuinely separate data
+        structure and rendering path
+        (<code>js/pages/build/renderSpecifications.js</code>, reading
+        the <code>specifications</code> jsonb column, not
+        <code>setup_inventory</code>). Confirmed by reading both
+        client save paths and the publish/restore SQL that neither
+        column is ever copied into the other — this is a rendering-only
+        bug: a pasted retailer URL stored as a plain spec value with no
+        link-ification and no wrap CSS.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="hostCard">
+        <div id="buildSpecifications"></div>
+    </div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        const { renderSpecifications } = await import("../js/pages/build/renderSpecifications.js");
+
+        // The exact shape of URL reported in live testing.
+        const LONG_IKEA_URL =
+            "https://www.ikea.com/us/en/p/idasen-desk-sit-stand-brown-dark-gray-s79280461/" +
+            "?icid=marketing_email_20260301_desks&itm_campaign=q1_workspace&itm_source=affiliate" +
+            "&itm_medium=partner_link&gclid=EAIaIQobChMI9r6z3fj5AhVUXvAAHVSc1HcREAAYASAAEgLxvfD_BwE" +
+            "&session_token=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0";
+
+        const container = document.getElementById("buildSpecifications");
+        const hostCard = document.getElementById("hostCard");
+
+        // --- Case 1: a URL pasted into a plain legacy field (old flat-
+        // string shape — {desk: "https://..."}), exactly what a build
+        // published before this fix would have stored. ------------------
+        renderSpecifications({ desk: LONG_IKEA_URL });
+
+        const linkEl = container.querySelector(".spec-item-link");
+        const looseP = container.querySelector(".spec-item p");
+
+        test("a URL-valued legacy spec field renders as a link, not a plain <p>", !!linkEl && !looseP);
+        test("the link's visible label is the fixed \"View product\" text, never the URL", linkEl?.textContent.trim() === "View product", linkEl?.textContent);
+        test("the link's visible label never contains the tracking query string", !linkEl?.textContent.includes("session_token"));
+        test("the href carries the exact original URL, untouched", linkEl?.getAttribute("href") === LONG_IKEA_URL, linkEl?.getAttribute("href"));
+        test("the link opens in a new tab", linkEl?.getAttribute("target") === "_blank");
+        test("the link uses safe rel (noopener noreferrer)", linkEl?.getAttribute("rel") === "noopener noreferrer", linkEl?.getAttribute("rel"));
+        test("the field label itself still renders (\"Desk\")", container.querySelector(".spec-item h3")?.textContent === "Desk");
+        test(
+            "the 320px host card never scrolls horizontally with a long URL as a spec value",
+            hostCard.scrollWidth <= hostCard.clientWidth + 1,
+            `scrollWidth=${hostCard.scrollWidth} clientWidth=${hostCard.clientWidth}`
+        );
+
+        // --- Case 2: the same URL, but in the newer structured shape —
+        // {desk: {componentId: null, name: "https://..."}} — must be
+        // detected identically, since both shapes normalize through the
+        // same getSpecDisplayName(). ------------------------------------
+        renderSpecifications({ desk: { componentId: null, name: LONG_IKEA_URL } });
+        const structuredLink = container.querySelector(".spec-item-link");
+        test("a URL in the newer {componentId, name} shape is also link-ified", structuredLink?.getAttribute("href") === LONG_IKEA_URL, structuredLink?.getAttribute("href"));
+
+        // --- Case 3: ordinary text, not a URL — renders normally as
+        // plain text, never treated as a link. ---------------------------
+        renderSpecifications({ desk: "Standing desk, IKEA IDÅSEN" });
+        const textP = container.querySelector(".spec-item p");
+        test("ordinary text renders as plain text, not a link", textP?.textContent === "Standing desk, IKEA IDÅSEN" && !container.querySelector(".spec-item-link"));
+
+        // --- Case 4: a long, unbroken, non-URL string must still wrap
+        // safely rather than overflow — the defensive CSS applies
+        // regardless of whether the value happens to be a URL. -----------
+        const LONG_UNBROKEN_TEXT = "Standing" + "x".repeat(150) + "Desk";
+        renderSpecifications({ desk: LONG_UNBROKEN_TEXT });
+        const longTextP = container.querySelector(".spec-item p");
+        test("a long unbroken non-URL string still renders in full", longTextP?.textContent === LONG_UNBROKEN_TEXT);
+        test(
+            "the host card doesn't overflow with a long unbroken non-URL string either",
+            hostCard.scrollWidth <= hostCard.clientWidth + 1,
+            `scrollWidth=${hostCard.scrollWidth} clientWidth=${hostCard.clientWidth}`
+        );
+        const specItem = container.querySelector(".spec-item");
+        test("the spec-item card has min-width: 0 (grid overflow guard)", getComputedStyle(specItem).minWidth === "0px", getComputedStyle(specItem).minWidth);
+        test("the value paragraph has defensive wrap CSS (overflow-wrap: anywhere)", getComputedStyle(longTextP).overflowWrap === "anywhere", getComputedStyle(longTextP).overflowWrap);
+
+        // --- Case 5: malformed / non-http(s) values are never treated as
+        // links — only a genuine, fully-parseable http(s) URL qualifies. --
+        renderSpecifications({ desk: "not a url", chair: "ftp://example.com/file", monitor: "javascript:alert(1)" });
+        test("a plain non-URL string is never linked", !container.querySelector('.spec-item:nth-of-type(1) .spec-item-link'));
+        const items = Array.from(container.querySelectorAll(".spec-item"));
+        const anyLinkified = items.some(item => item.querySelector(".spec-item-link"));
+        test("ftp:// and javascript: values are never link-ified (http/https only)", !anyLinkified);
+
+        // --- Case 6: HTML-special characters are escaped, not rendered
+        // as markup — this restructure must not reopen an XSS gap. -------
+        renderSpecifications({ desk: `<img src=x onerror=alert(1)>` });
+        test(
+            "HTML-special characters in a spec value are escaped, not rendered as markup",
+            !container.querySelector(".spec-item p img"),
+            container.querySelector(".spec-item p")?.innerHTML
+        );
+        test(
+            "the escaped value's visible text still reads correctly",
+            container.querySelector(".spec-item p")?.textContent === `<img src=x onerror=alert(1)>`
+        );
+
+        // --- Case 7: pre-existing null/empty behavior is unaffected. -----
+        renderSpecifications(null);
+        test("null specifications (not recorded for this revision) still shows its own message", container.textContent.includes("not recorded"));
+
+        renderSpecifications({});
+        test("empty specifications still shows \"no specifications\" message", container.textContent.includes("No specifications added"));
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`renderSpecifications.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

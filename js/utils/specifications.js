@@ -29,3 +29,21 @@ export function getSpecComponentId(raw) {
 export function isSpecEntryFilled(raw) {
     return Boolean(getSpecDisplayName(raw));
 }
+
+// A spec value is free text — nothing stops a builder from pasting a
+// full retailer URL into a plain field like "Desk" instead of a name
+// (this happened in practice: live testing found an IKEA product link,
+// tracking parameters and all, stored as a "Desk" spec value). The
+// public renderer uses this to decide whether to show the value as a
+// link instead of raw text — never partial/loose matching, only a
+// value that parses as a genuine http(s) URL end to end.
+export function isValidHttpUrl(value) {
+    if (typeof value !== "string" || !value.trim()) return false;
+
+    try {
+        const parsed = new URL(value.trim());
+        return parsed.protocol === "http:" || parsed.protocol === "https:";
+    } catch {
+        return false;
+    }
+}
