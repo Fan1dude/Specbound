@@ -393,13 +393,13 @@ export function renderSetupInventorySection(draft, autosave) {
 
                     <div class="setup-item-move-controls">
                         <button type="button" class="btn-icon" data-action="move-item-up" data-item-id="${escapeAttribute(item.id)}" ${isFirst ? "disabled" : ""} aria-label="Move ${escapeAttribute(item.title || "this product")} up">
-                            ${icon("chevron-up", 14)}
+                            ${icon("chevron-up", 16)}
                         </button>
                         <button type="button" class="btn-icon" data-action="move-item-down" data-item-id="${escapeAttribute(item.id)}" ${isLast ? "disabled" : ""} aria-label="Move ${escapeAttribute(item.title || "this product")} down">
-                            ${icon("chevron-down", 14)}
+                            ${icon("chevron-down", 16)}
                         </button>
                         <button type="button" class="btn-icon" data-action="delete-item" data-item-id="${escapeAttribute(item.id)}" aria-label="Delete ${escapeAttribute(item.title || "this product")}">
-                            ${icon("trash", 14)}
+                            ${icon("trash", 16)}
                         </button>
                     </div>
                 </div>
