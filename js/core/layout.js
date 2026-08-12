@@ -2,6 +2,7 @@ import { supabase } from "./supabase.js";
 import { getCurrentUser, clearCurrentUserCache } from "./auth.js";
 import { initNotificationBell } from "./notificationBell.js";
 import { maybeShowWelcome } from "./onboarding.js";
+import { getProfileRoles } from "../repositories/communityRepository.js";
 import { escapeHtml } from "../utils/escapeHtml.js";
 import { icon } from "../utils/icons.js";
 
@@ -35,6 +36,29 @@ export async function loadNavbar(pathPrefix = "") {
             maybeShowWelcome(user, profile, pathPrefix);
         }
 
+        // Milestone 24 — a moderator-only "Moderation" entry point. One
+        // extra lightweight RPC per signed-in page load (the same
+        // get_public_profile_roles() call already used to gate
+        // ManageRolesControl.js on the profile page), deliberately with
+        // no open-report count fetched alongside it: a count needs its
+        // own query, and a stale or wrong count would be worse than none
+        // — see docs/milestones/MILESTONE_24_MODERATOR_REPORT_QUEUE_SPECIFICATION.md.
+        // This is a UX convenience only, same as every other role check
+        // in this app; the real boundary is the page's own gate
+        // (js/pages/moderation/loadModerationQueue.js) plus RLS.
+        let isModerator = false;
+
+        try {
+            const roles = await getProfileRoles(user.id);
+            isModerator = roles.includes("moderator") || roles.includes("staff");
+        } catch (error) {
+            console.error("Moderator nav-link role check error:", error);
+        }
+
+        const moderationLink = isModerator
+            ? `<a href="${pathPrefix}pages/moderation.html">Moderation</a>`
+            : "";
+
         // .builder-menu (the desktop-style disclosure button + dropdown)
         // and .mobile-account-link (three plain links) render the same
         // three destinations two different ways — CSS picks exactly one
@@ -60,6 +84,7 @@ export async function loadNavbar(pathPrefix = "") {
                     <a href="${pathPrefix}pages/workshop.html">Workshop</a>
                     <a href="${pathPrefix}pages/profile.html?user=${user.id}">View My Profile</a>
                     <a href="${pathPrefix}pages/settings.html">Settings</a>
+                    ${moderationLink}
                     <hr>
                     <a href="#" class="logout-link">Log Out</a>
                 </div>
@@ -67,6 +92,7 @@ export async function loadNavbar(pathPrefix = "") {
 
             <a href="${pathPrefix}pages/profile.html?user=${user.id}" class="mobile-account-link">View My Profile</a>
             <a href="${pathPrefix}pages/settings.html" class="mobile-account-link">Settings</a>
+            ${moderationLink ? `<a href="${pathPrefix}pages/moderation.html" class="mobile-account-link">Moderation</a>` : ""}
             <a href="#" class="mobile-account-link logout-link">Log Out</a>
         `;
     } else {

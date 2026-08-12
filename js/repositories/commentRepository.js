@@ -53,6 +53,32 @@ export async function getCommentCountForBuilds(buildIds) {
     return count || 0;
 }
 
+// Batch lookup for a set of specific comment ids — Milestone 24's
+// moderation queue, resolving a content_reports row whose target_type is
+// "comment" (see moderationRepository.js). Same shape/pattern as
+// buildRepository.js's getBuildsByIds()/profileRepository.js's
+// getProfilesByIds(): a plain `.in("id", ids)` select relying entirely on
+// RLS, no extra filtering here. RLS (0007_comments.sql) already excludes
+// soft-deleted comments and comments on a build the caller can't see — so
+// a moderator reviewing a report against a comment that's since been
+// deleted, or whose build has gone private/unpublished, simply gets that
+// id back missing from the result, never an error. Callers must treat a
+// missing id as "unavailable," not assume every requested id resolves.
+export async function getCommentsByIds(ids) {
+    const uniqueIds = [...new Set(ids)];
+
+    if (!uniqueIds.length) return [];
+
+    const { data, error } = await supabase
+        .from("comments")
+        .select("id, build_id, user_id, body, created_at")
+        .in("id", uniqueIds);
+
+    if (error) throw error;
+
+    return data || [];
+}
+
 // Calls the SECURITY DEFINER create_comment() function (see
 // supabase/migrations/0007_comments.sql) — the only path allowed to
 // insert into comments. auth.uid() is read server-side, not passed here,
