@@ -1,6 +1,6 @@
 # Milestone 21: First-Time Builder Experience — Specification
 
-Status: **Decisions locked 2026-08-01.** §12 records the seven decisions that closed the previous draft's open-decision list, including the exact global trigger point, schema, copy, localStorage key scheme, technology-picker accessibility contract, and first-publish detection flow. Nothing in this document has been implemented. The proposed migration (§4) has not been applied to any database. **Specification only — do not implement yet**, per the original request.
+Status: **Implemented and shipped.** §12 records the seven decisions that closed the previous draft's open-decision list, including the exact global trigger point, schema, copy, localStorage key scheme, technology-picker accessibility contract, and first-publish detection flow. The proposed migration (§4) shipped as `0025_profile_onboarding_welcomed.sql`, applied and merged to main. See `docs/CHANGELOG.md`'s Milestone 21 entry for what actually shipped; this document is retained as the design record, not an up-to-date description of every implementation detail.
 
 Objective: *"A new builder should feel confident enough to publish their first project."*
 

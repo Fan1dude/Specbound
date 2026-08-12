@@ -90,24 +90,41 @@ The Workshop answers one question: *what should I continue building?* It priorit
 
 **Pages:** none dedicated; comments and follow relationships surface inline on Project and Builder Archive pages.
 
-**V1 features (all three explicitly approved in `SCOPE.md`):**
+**V1 features (all explicitly approved in `SCOPE.md`):**
 - Project-focused comments and feedback
 - Following builders or projects
 - Meaningful notifications
+- Discord account linking — an optional identity connection (Settings, Builder Archive), not a forums/chat surface. Approved 2026-08-12, shipped Milestone 22.
+- Likes, as a lightweight appreciation signal only — never a ranking input, never displayed as a popularity statistic. Approved 2026-08-12.
+- Activity Feed, redefined around meaningful builder activity (project milestones, publishes, build-log progress) rather than raw engagement counts. Approved 2026-08-12.
 
-**Explicitly not approved for V1** (per `SCOPE.md`): likes, popularity rankings, engagement-first activity feeds, vanity counters, infinite scrolling, gamification, forums, Discord integration, challenges, Q&A.
+**Explicitly not approved for V1** (per `SCOPE.md`): popularity rankings, engagement-first (like/view-count-ranked) activity feeds, vanity counters, infinite scrolling, gamification, forums, challenges, Q&A.
 
-The existing `likes` table and the current homepage "Activity Feed" section predate this decision — see `SCOPE.md`'s Known Gap section for the dependency-review plan, not addressed by this document.
+The `likes` table and the homepage "Activity Feed" section predate the 2026-08-12 decision above but are no longer a tracked gap against `SCOPE.md` — see that document's "Resolved: Likes and Activity Feed" section. Any future work making the Activity Feed read as engagement-ranked rather than activity-based is a regression, not a continuation.
 
 ---
 
-## 6. Marketplace System — not approved for V1
+## 6. Trust & Safety System
+
+**Purpose:** let builders flag content that violates the Community Guidelines, and let moderators act on those reports.
+
+**Pages:** none dedicated for reporting (a `ReportButton` surfaces inline on projects and comments); `pages/moderation.html` ("Reports") for the moderator-only review queue.
+
+**V1 features:** content reporting (Milestone 22 — `content_reports`, reasons, reporter identity retained for moderator context); a moderator/staff-only report queue with Open and Resolved views, batched target-context resolution, and two resolution outcomes — "No violation" and "Violation confirmed" (Milestone 24). Resolving a report records a decision only; it never automatically unpublishes or deletes content, suspends an account, or sends any notification beyond a generic "a moderator reviewed your report" message to the reporter.
+
+**Not approved for V1:** moderator notes on a resolution, automatic enforcement (unpublish/suspend/delete) triggered by a resolution, an appeals process, reporter notifications naming the resolving moderator or the specific outcome.
+
+**Future:** enforcement actions taken directly from a resolved report; an appeals flow; anti-spam hardening beyond what already exists (tracked separately, see `ROADMAP.md`'s backlog).
+
+---
+
+## 7. Marketplace System — not approved for V1
 
 Explicitly out of scope per the master prompt and `SCOPE.md`. Recorded here so the idea isn't lost, not because it's planned. If ever revisited, it needs its own scope proposal.
 
 ---
 
-## 7. Intelligence System — not approved for V1
+## 8. Intelligence System — not approved for V1
 
 AI-authored documentation and AI-driven features are explicitly out of scope per `SCOPE.md`. `docs/AI.md` is the placeholder for if/when this changes. Recorded here so the idea isn't lost, not because it's planned.
 
