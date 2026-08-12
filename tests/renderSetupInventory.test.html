@@ -189,6 +189,105 @@
             container.querySelector(".setup-item-public-title")?.textContent === `<img src=x onerror=alert(1)>`
         );
 
+        // --- Case 6: empty-inventory presentation on the public page
+        // (post-M23 maintenance fix). The section used to render (and
+        // show a bare "$0.00") the moment a build had any category at
+        // all, even with zero products in it. Now the entire section
+        // must hide unless there's at least one real product — while
+        // never hiding a genuinely non-empty inventory just because
+        // every product happens to be Free or unknown-price. -----------------
+        function emptyItem(overrides = {}) {
+            return {
+                id: "item-1", title: "", originalUrl: null, retailerName: null,
+                listedPriceCents: null, listedPriceCurrency: null, metadataFetchedAt: null,
+                pricePaid: { cents: null, isFree: false }, sourceType: "other", sourceName: null, sortOrder: 0,
+                ...overrides
+            };
+        }
+
+        // -- 6a: no categories at all. ------------------------------------------
+        renderSetupInventory({ schemaVersion: 1, currency: "USD", categories: [] });
+        test("no categories: the entire section is hidden", section.hidden === true);
+
+        // -- 6b: categories exist but every one is empty (e.g. a saved
+        // category added, then never given any products). ---------------------
+        renderSetupInventory({
+            schemaVersion: 1,
+            currency: "USD",
+            categories: [
+                { id: "c1", name: "Desk", templateId: null, sortOrder: 0, items: [] },
+                { id: "c2", name: "Displays", templateId: null, sortOrder: 1, items: [] }
+            ]
+        });
+        test("empty categories only: the entire section is hidden, not just showing $0.00", section.hidden === true);
+
+        // -- 6c: a single genuinely Free product — counts as real
+        // inventory, section must be visible. -----------------------------------
+        renderSetupInventory({
+            schemaVersion: 1,
+            currency: "USD",
+            categories: [{ id: "c1", name: "Desk", templateId: null, sortOrder: 0, items: [baseItem({ id: "i1", title: "Free Lamp", pricePaid: { cents: null, isFree: true } })] }]
+        });
+        test("one Free product: the section is shown, not hidden", section.hidden === false);
+        test("one Free product: the total banner is present", !!container.querySelector(".setup-inventory-total"));
+        test("one Free product: the item's price renders as \"Free\", distinguishable from an unknown price", container.querySelector(".setup-item-public-price")?.textContent.trim() === "Free");
+
+        // -- 6d: a single product with an unknown (not Free) price — also
+        // counts as real inventory, section must be visible, and the
+        // price element must be absent (not "Free", not "$0.00" — simply
+        // not rendered), keeping it visually distinguishable from Free. ------
+        renderSetupInventory({
+            schemaVersion: 1,
+            currency: "USD",
+            categories: [{ id: "c1", name: "Desk", templateId: null, sortOrder: 0, items: [baseItem({ id: "i1", title: "Mystery Chair", pricePaid: { cents: null, isFree: false } })] }]
+        });
+        test("one unknown-price product: the section is shown, not hidden", section.hidden === false);
+        test("one unknown-price product: no price element renders at all (never \"Free\", never a fabricated $0.00)", !container.querySelector(".setup-item-public-price"));
+
+        // -- 6e: a single normally-priced product — existing known-total
+        // behavior preserved. ----------------------------------------------------
+        renderSetupInventory({
+            schemaVersion: 1,
+            currency: "USD",
+            categories: [{ id: "c1", name: "Desk", templateId: null, sortOrder: 0, items: [baseItem({ id: "i1", title: "Desk", pricePaid: { cents: 4999, isFree: false } })] }]
+        });
+        test("one priced product: the section is shown", section.hidden === false);
+        test("one priced product: the price renders correctly", container.querySelector(".setup-item-public-price")?.textContent.includes("49.99"));
+
+        // -- 6f: mixed priced + Free + unknown-price products, plus an
+        // unrelated empty category — section stays visible; must never be
+        // hidden just because every product is Free/unknown-price, and
+        // must never be hidden by the presence of one extra empty category. -
+        renderSetupInventory({
+            schemaVersion: 1,
+            currency: "USD",
+            categories: [
+                { id: "c1", name: "Empty Category", templateId: null, sortOrder: 0, items: [] },
+                {
+                    id: "c2", name: "Desk", templateId: null, sortOrder: 1, items: [
+                        baseItem({ id: "i1", title: "Desk", pricePaid: { cents: 5000, isFree: false } }),
+                        baseItem({ id: "i2", title: "Free Mousepad", pricePaid: { cents: null, isFree: true } }),
+                        baseItem({ id: "i3", title: "Mystery Monitor", pricePaid: { cents: null, isFree: false } })
+                    ]
+                }
+            ]
+        });
+        test("mixed inventory: the section is shown", section.hidden === false);
+        test("mixed inventory: the empty category doesn't render at all", !Array.from(container.querySelectorAll(".setup-category-name")).some(el => el.textContent === "Empty Category"));
+        test("mixed inventory: the non-empty category renders with all three items", container.querySelectorAll(".setup-item-public").length === 3);
+        test("mixed inventory: known total sums the priced item (Free counts as known $0, unknown excluded)", container.querySelector(".setup-inventory-total-value")?.textContent.includes("50.00"));
+
+        // -- 6g: a Free-only inventory (every product Free, no unknowns) —
+        // must still show the section and a real "Setup total" (not hidden
+        // merely because nothing costs money). ----------------------------------
+        renderSetupInventory({
+            schemaVersion: 1,
+            currency: "USD",
+            categories: [{ id: "c1", name: "Desk", templateId: null, sortOrder: 0, items: [baseItem({ id: "i1", title: "Free Desk", pricePaid: { cents: null, isFree: true } })] }]
+        });
+        test("Free-only inventory: the section is shown, never hidden just because nothing costs money", section.hidden === false);
+        test("Free-only inventory: labeled \"Setup total\" (fully known, since Free counts as known $0)", container.querySelector(".setup-inventory-total-label")?.textContent === "Setup total");
+
         // --- Render + report ------------------------------------------------
         const resultsEl = document.getElementById("results");
         resultsEl.innerHTML = results

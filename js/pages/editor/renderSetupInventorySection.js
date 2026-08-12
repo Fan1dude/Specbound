@@ -6,6 +6,7 @@ import {
     DEFAULT_CATEGORY_NAMES,
     SOURCE_TYPES,
     LIMITS,
+    isInventoryEmpty,
     calculateCategoryTotal,
     calculateSetupTotal,
     formatCents,
@@ -429,7 +430,7 @@ export function renderSetupInventorySection(draft, autosave) {
                 <p>Group what's in your setup by category, with as much or as little pricing detail as you want to share.</p>
             </div>
 
-            ${currentInventory.categories.length
+            ${!isInventoryEmpty(currentInventory)
                 ? `<div class="setup-inventory-total">
                         <span class="setup-inventory-total-label">${escapeHtml(setupTotal.label)}</span>
                         <span class="setup-inventory-total-value">${escapeHtml(formatCents(setupTotal.knownCents, currentInventory.currency))}</span>
