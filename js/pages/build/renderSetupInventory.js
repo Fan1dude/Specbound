@@ -1,4 +1,5 @@
 import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
+import { icon } from "../../utils/icons.js";
 import {
     normalizeInventory,
     isInventoryEmpty,
@@ -78,12 +79,24 @@ function renderCategory(category, currency) {
     `;
 }
 
+// The product name is always plain text now, never the clickable
+// element itself — a builder's typed title (or, in live testing, a
+// pasted retailer URL landing in the title field before the editor's
+// link field was easy to find) is shown as-is, wrapped safely, but
+// never doubles as the outbound link. The link — when there is one —
+// is its own small "View product" control with a fixed, short label,
+// so its visible text can never grow with the URL's length (tracking
+// parameters and all). The href itself is untouched; only what's
+// *displayed* is decoupled from it.
 function renderItem(item, currency) {
     const title = item.title || "Untitled product";
 
-    const titleMarkup = item.originalUrl
-        ? `<a href="${escapeAttribute(item.originalUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(title)}</a>`
-        : escapeHtml(title);
+    const linkMarkup = item.originalUrl
+        ? `<a class="setup-item-public-link" href="${escapeAttribute(item.originalUrl)}" target="_blank" rel="noopener noreferrer">
+                View product
+                <span aria-hidden="true">${icon("arrow-up-right", 16)}</span>
+           </a>`
+        : "";
 
     const priceMarkup = item.pricePaid.isFree
         ? `<span class="setup-item-public-price">Free</span>`
@@ -98,8 +111,9 @@ function renderItem(item, currency) {
 
     return `
         <li class="setup-item setup-item-public">
-            <span class="setup-item-public-title">${titleMarkup}</span>
+            <span class="setup-item-public-title">${escapeHtml(title)}</span>
             ${priceMarkup}
+            ${linkMarkup}
             ${sourceText ? `<span class="setup-item-public-source">${escapeHtml(sourceText)}</span>` : ""}
         </li>
     `;
