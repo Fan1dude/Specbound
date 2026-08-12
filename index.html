@@ -125,20 +125,28 @@
                          their neighbors, so any artificial rotation would
                          visibly misalign the gaps between them. --i (0-4) is
                          each piece's index in clockwise order (starting at
-                         the diagonal/lower-right piece) — see
-                         css/pages/home/home.css's hero-mark-enter/hero-mark-
-                         spiral keyframes, which stagger every piece's
-                         opacity/scale off this single number. No piece ever
-                         translates, rotates, or leaves its exact resting
-                         position: the motion is opacity + scale only, so the
-                         mark itself never appears to spin as one object. -->
+                         the diagonal/lower-right piece), set via
+                         :nth-child() in css/pages/home/home.css rather than
+                         an inline style attribute here — production's CSP
+                         has no 'unsafe-inline' in style-src, which silently
+                         dropped an inline style="--i:N" attribute entirely
+                         (confirmed live: the animation-delay calc()s that
+                         read var(--i) all fell back to the same value, so
+                         every tile animated in lockstep instead of
+                         staggered). See css/pages/home/home.css's
+                         hero-mark-enter/hero-mark-spiral keyframes, which
+                         stagger every piece's opacity/scale off this single
+                         number. No piece ever translates, rotates, or
+                         leaves its exact resting position: the motion is
+                         opacity + scale only, so the mark itself never
+                         appears to spin as one object. -->
                     <svg class="hero-mark" viewBox="-10 -10 150 177.7" xmlns="http://www.w3.org/2000/svg">
                         <g class="hero-mark-tiles">
-                            <path class="hero-mark-tile" style="--i:0" d="M 70.12 50.43 L 51.87 61.0 L 50.59 63.24 L 90.62 89.33 L 91.58 103.26 L 89.17 109.19 L 89.17 134.48 L 92.38 139.45 L 97.66 140.09 L 124.88 124.08 L 128.72 119.91 L 130.0 116.07 L 129.84 85.49 L 125.84 79.89 L 77.17 51.71 Z"></path>
-                            <path class="hero-mark-tile" style="--i:1" d="M 80.53 115.59 L 75.89 116.07 L 65.0 122.32 L 61.16 122.16 L 54.75 118.95 L 50.75 119.43 L 47.07 122.32 L 45.79 126.16 L 45.79 143.61 L 46.43 146.49 L 48.83 149.69 L 61.0 157.06 L 66.28 157.7 L 69.64 156.58 L 82.13 148.57 L 84.05 143.61 L 84.05 120.55 L 82.93 117.35 Z"></path>
-                            <path class="hero-mark-tile" style="--i:2" d="M 3.2 95.26 L 0.48 99.9 L 0.48 117.19 L 2.56 122.0 L 31.38 139.77 L 35.38 140.25 L 37.94 139.13 L 40.67 134.64 L 40.67 114.15 L 38.9 110.15 L 11.53 93.5 L 6.72 93.34 Z"></path>
-                            <path class="hero-mark-tile" style="--i:3" d="M 64.36 0.0 L 58.92 1.12 L 5.12 33.94 L 0.0 42.43 L 0.32 73.97 L 2.24 78.13 L 55.07 108.87 L 71.72 100.54 L 75.41 96.54 L 36.98 73.0 L 35.54 56.35 L 38.58 51.71 L 61.48 37.78 L 74.29 40.67 L 81.81 35.86 L 82.45 11.05 L 79.57 7.68 Z"></path>
-                            <path class="hero-mark-tile" style="--i:4" d="M 90.78 19.53 L 88.53 24.01 L 88.53 44.51 L 90.3 48.67 L 118.15 65.64 L 121.83 66.12 L 126.96 63.88 L 129.04 61.32 L 130.0 58.44 L 130.0 40.5 L 128.4 36.5 L 125.84 34.1 L 98.46 18.25 L 94.14 17.77 Z"></path>
+                            <path class="hero-mark-tile" d="M 70.12 50.43 L 51.87 61.0 L 50.59 63.24 L 90.62 89.33 L 91.58 103.26 L 89.17 109.19 L 89.17 134.48 L 92.38 139.45 L 97.66 140.09 L 124.88 124.08 L 128.72 119.91 L 130.0 116.07 L 129.84 85.49 L 125.84 79.89 L 77.17 51.71 Z"></path>
+                            <path class="hero-mark-tile" d="M 80.53 115.59 L 75.89 116.07 L 65.0 122.32 L 61.16 122.16 L 54.75 118.95 L 50.75 119.43 L 47.07 122.32 L 45.79 126.16 L 45.79 143.61 L 46.43 146.49 L 48.83 149.69 L 61.0 157.06 L 66.28 157.7 L 69.64 156.58 L 82.13 148.57 L 84.05 143.61 L 84.05 120.55 L 82.93 117.35 Z"></path>
+                            <path class="hero-mark-tile" d="M 3.2 95.26 L 0.48 99.9 L 0.48 117.19 L 2.56 122.0 L 31.38 139.77 L 35.38 140.25 L 37.94 139.13 L 40.67 134.64 L 40.67 114.15 L 38.9 110.15 L 11.53 93.5 L 6.72 93.34 Z"></path>
+                            <path class="hero-mark-tile" d="M 64.36 0.0 L 58.92 1.12 L 5.12 33.94 L 0.0 42.43 L 0.32 73.97 L 2.24 78.13 L 55.07 108.87 L 71.72 100.54 L 75.41 96.54 L 36.98 73.0 L 35.54 56.35 L 38.58 51.71 L 61.48 37.78 L 74.29 40.67 L 81.81 35.86 L 82.45 11.05 L 79.57 7.68 Z"></path>
+                            <path class="hero-mark-tile" d="M 90.78 19.53 L 88.53 24.01 L 88.53 44.51 L 90.3 48.67 L 118.15 65.64 L 121.83 66.12 L 126.96 63.88 L 129.04 61.32 L 130.0 58.44 L 130.0 40.5 L 128.4 36.5 L 125.84 34.1 L 98.46 18.25 L 94.14 17.77 Z"></path>
                         </g>
                     </svg>
 
