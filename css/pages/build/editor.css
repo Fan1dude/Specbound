@@ -185,6 +185,52 @@
     max-width: none;
 }
 
+/* Milestone 23 polish — layered dark-surface hierarchy. Reuses the
+   existing dark-workspace surface scale (css/base/tokens.css's
+   --surface-card/-raised/-input, already rolled out to Publish/Explore/
+   Homepage) instead of the older warm-graphite --surface/--surface-2
+   ramp .card falls back to by default globally — that ramp's steps sit
+   within ~5% lightness of each other by design (see tokens.css's own
+   comment on it), which is exactly why the Specifications panel, its
+   sections, its cards, and its inputs all read as nearly the same gray.
+   Scoped to .editor-page only — no other page's .card/input is touched.
+   Extra rungs for category/product cards (setup-inventory.css) are
+   derived from --surface-raised via color-mix() rather than new literal
+   colors, the same technique already used a few lines up in this file
+   (#editorPublishBadge) — the palette is settled, only how it's layered
+   here is new. */
+.editor-page .card {
+    background: var(--surface-card);
+    border-color: color-mix(in srgb, var(--color-border) 45%, transparent);
+}
+
+.editor-page input,
+.editor-page textarea,
+.editor-page select {
+    background: var(--surface-input);
+}
+
+.editor-page input:disabled,
+.editor-page textarea:disabled,
+.editor-page select:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+/* Stops Chrome/Safari's autofill fill (yellow, or plain white) from
+   blowing out the new darker inset surface — autofill's own background
+   can't be overridden directly, only masked with an inset box-shadow;
+   the long transition-delay is the standard trick for suppressing the
+   fill-color flash entirely rather than just delaying it. */
+.editor-page input:-webkit-autofill,
+.editor-page input:-webkit-autofill:hover,
+.editor-page input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--text);
+    -webkit-box-shadow: 0 0 0 1000px var(--surface-input) inset;
+    box-shadow: 0 0 0 1000px var(--surface-input) inset;
+    transition: background-color 9999s ease-in-out 0s;
+}
+
 .resources-list {
     display: grid;
     gap: var(--space-2);

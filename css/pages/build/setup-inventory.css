@@ -1,7 +1,23 @@
 /* Milestone 23 — Setup Inventory editor. Lives inside the existing
-   .card.card-padding wrapper in #panel-specifications (see edit.html),
-   so no new card/border/background is defined here — only the
-   inventory-specific layout inside it. */
+   .card.card-padding wrapper in #panel-specifications (see edit.html).
+
+   Milestone 23 polish — layered dark-surface hierarchy (see the comment
+   above .editor-page .card in editor.css for the full rationale). The
+   section itself steps up from the panel's --surface-card to
+   --surface-raised; category cards and product cards each step up
+   again via color-mix() off that same --surface-raised base rather
+   than inventing new literal colors, so a category card is always a
+   little lighter than the section and a product card a little lighter
+   still — the same "closer to the light = more raised" logic the
+   dark-workspace scale already uses between page/card/raised. Borders
+   are dimmed throughout since the tonal steps now carry the separation
+   that used to be the border's job alone. */
+#setupInventorySection {
+    margin-top: var(--space-3);
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+}
 
 .setup-inventory-total {
     display: flex;
@@ -10,9 +26,9 @@
     flex-wrap: wrap;
     margin: var(--space-2) 0 var(--space-3);
     padding: var(--space-2);
-    border: 1px solid var(--color-border);
+    border: 1px solid color-mix(in srgb, var(--color-primary-strong) 30%, transparent);
     border-radius: var(--radius-sm);
-    background: var(--surface-2);
+    background: color-mix(in srgb, var(--color-primary-strong) 10%, var(--surface-raised));
 }
 
 .setup-inventory-total-label {
@@ -40,9 +56,10 @@
 }
 
 .setup-category {
-    border: 1px solid var(--color-border);
+    border: 1px solid color-mix(in srgb, var(--color-border) 35%, transparent);
     border-radius: var(--radius-sm);
     padding: var(--space-2);
+    background: color-mix(in srgb, white 4%, var(--surface-raised));
 }
 
 .setup-category-header {
@@ -107,13 +124,11 @@
 }
 
 .setup-item {
-    padding: var(--space-1) 0;
-    border-top: 1px solid var(--color-border);
-}
-
-.setup-item:first-child {
-    border-top: none;
-    padding-top: 0;
+    padding: var(--space-2);
+    border: 1px solid color-mix(in srgb, var(--color-border) 25%, transparent);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, white 8%, var(--surface-raised));
+    transition: background 900ms var(--ease-standard);
 }
 
 .setup-item-row {
@@ -180,13 +195,37 @@
 }
 
 .setup-item-metadata-status {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-0-5);
     margin: var(--space-0-5) 0 0;
-    color: var(--color-warning);
     font-size: var(--font-size-xs);
 }
 
 .setup-item-metadata-status:empty {
     display: none;
+}
+
+.setup-item-metadata-status-icon {
+    flex: 0 0 auto;
+    display: flex;
+    margin-top: 1px;
+}
+
+.setup-item-metadata-status-error {
+    color: var(--text-secondary);
+}
+
+.setup-item-metadata-status-error .setup-item-metadata-status-icon {
+    color: var(--color-warning-strong);
+}
+
+.setup-item-metadata-status-info {
+    color: var(--text-secondary);
+}
+
+.setup-item-metadata-status-info .setup-item-metadata-status-icon {
+    color: var(--color-info);
 }
 
 .setup-item-suggested {
@@ -293,8 +332,9 @@
     flex-direction: column;
     gap: var(--space-1);
     padding: var(--space-2);
-    border: 1px solid var(--color-border);
+    border: 1px solid color-mix(in srgb, var(--color-border) 35%, transparent);
     border-radius: var(--radius-sm);
+    background: color-mix(in srgb, white 4%, var(--surface-raised));
 }
 
 .setup-add-category-actions {
@@ -340,18 +380,7 @@
     font-weight: 600;
     color: var(--text);
     overflow-wrap: anywhere;
-}
-
-.setup-item-public-title a {
-    color: inherit;
-    text-decoration: underline;
-    text-decoration-color: var(--color-border-strong);
-    text-underline-offset: 2px;
-}
-
-.setup-item-public-title a:hover,
-.setup-item-public-title a:focus-visible {
-    text-decoration-color: currentColor;
+    word-break: break-word;
 }
 
 .setup-item-public-price {
@@ -361,10 +390,38 @@
     font-weight: 700;
 }
 
+/* A fixed, short label ("View product") — never the URL itself, so its
+   width never depends on the link's length. Own element, not part of
+   the title, so a very long product name/URL-shaped title can wrap
+   freely without dragging this control along with it. */
+.setup-item-public-link {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--color-primary);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    transition: text-decoration-color var(--duration-fast) var(--ease-standard);
+}
+
+.setup-item-public-link:hover,
+.setup-item-public-link:focus-visible {
+    text-decoration-color: currentColor;
+}
+
+.setup-item-public-link svg {
+    flex: 0 0 auto;
+}
+
 .setup-item-public-source {
     flex-basis: 100%;
     color: var(--text-muted);
     font-size: var(--font-size-xs);
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 @media (max-width: 900px) {
