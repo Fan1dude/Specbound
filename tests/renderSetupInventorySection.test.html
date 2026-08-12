@@ -459,6 +459,134 @@
         test("full success: title was filled in", container.querySelector('[data-action="edit-item-title"]').value === "Standing Desk");
         test("full success: price was filled in", container.querySelector('[data-action="edit-item-price"]').value === "450.00");
 
+        // --- Case 6: empty-inventory presentation (post-M23 maintenance
+        // fix). The public page and this editor both used to show a bare
+        // "$0.00" total the instant a category existed, even with zero
+        // products in it. The total/subtotal summary must only appear
+        // once there's at least one real product — but the controls to
+        // add a category or product must always stay visible regardless. -----
+        function draftWithInventory(inventory) {
+            return { id: "draft-1", user_id: "user-1", category: "setup", setup_inventory: inventory };
+        }
+
+        function makeCategory(id, name, items = []) {
+            return { id, name, templateId: null, sortOrder: 0, items };
+        }
+
+        function makeFreeItem(id) {
+            return { id, title: "Free item", originalUrl: null, retailerName: null, listedPriceCents: null, listedPriceCurrency: null, metadataFetchedAt: null, pricePaid: { cents: null, isFree: true }, sourceType: "other", sourceName: null, sortOrder: 0 };
+        }
+
+        function makeUnknownPriceItem(id) {
+            return { id, title: "Unknown-price item", originalUrl: null, retailerName: null, listedPriceCents: null, listedPriceCurrency: null, metadataFetchedAt: null, pricePaid: { cents: null, isFree: false }, sourceType: "other", sourceName: null, sortOrder: 0 };
+        }
+
+        function makePricedItem(id, cents) {
+            return { id, title: "Priced item", originalUrl: null, retailerName: null, listedPriceCents: null, listedPriceCurrency: null, metadataFetchedAt: null, pricePaid: { cents, isFree: false }, sourceType: "other", sourceName: null, sortOrder: 0 };
+        }
+
+        // -- 6a: no categories at all — no total banner, but the "add a
+        // category" controls are still there. ---------------------------------
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        renderSetupInventorySection(draftWithInventory({ schemaVersion: 1, currency: "USD", categories: [] }), autosaveMock);
+
+        test("empty state (no categories): renders without throwing", caughtErrors.length === 0, JSON.stringify(caughtErrors));
+        test("empty state (no categories): no total banner is shown", !container.querySelector(".setup-inventory-total"));
+        test("empty state (no categories): the add-category control is still present", !!container.querySelector('[data-action="start-add-custom-category"]'));
+        test("empty state (no categories): a default-category quick-add chip is still present", !!container.querySelector('[data-action="quick-add-category"]'));
+
+        // -- 6b: categories exist but every one is empty — still no total
+        // banner, and no per-category subtotal either, but Add Product
+        // stays visible for each category. -------------------------------------
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        renderSetupInventorySection(draftWithInventory({
+            schemaVersion: 1,
+            currency: "USD",
+            categories: [makeCategory("c1", "Desk"), makeCategory("c2", "Displays")]
+        }), autosaveMock);
+
+        test("empty state (empty categories only): renders without throwing", caughtErrors.length === 0, JSON.stringify(caughtErrors));
+        test("empty state (empty categories only): no total banner is shown", !container.querySelector(".setup-inventory-total"));
+        test("empty state (empty categories only): no per-category subtotal is shown", !container.querySelector(".setup-category-subtotal"));
+        test("empty state (empty categories only): Add Product is still available for each category", container.querySelectorAll('[data-action="add-item"]').length === 2);
+
+        // -- 6c: one genuinely Free product — counts as inventory, total
+        // banner appears (Free products must never be confused with "no
+        // inventory"). ---------------------------------------------------------
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        renderSetupInventorySection(draftWithInventory({
+            schemaVersion: 1,
+            currency: "USD",
+            categories: [makeCategory("c1", "Desk", [makeFreeItem("i1")])]
+        }), autosaveMock);
+
+        test("one Free product: renders without throwing", caughtErrors.length === 0, JSON.stringify(caughtErrors));
+        test("one Free product: the total banner is shown", !!container.querySelector(".setup-inventory-total"));
+        test("one Free product: the total value reads a real $0.00, not hidden/placeholder", container.querySelector(".setup-inventory-total-value")?.textContent.includes("0.00"));
+
+        // -- 6d: one product with an unknown (not Free) price — also
+        // counts as inventory, total banner appears with the "Known
+        // total"/unknown note, distinguishable from the Free case. -----------
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        renderSetupInventorySection(draftWithInventory({
+            schemaVersion: 1,
+            currency: "USD",
+            categories: [makeCategory("c1", "Desk", [makeUnknownPriceItem("i1")])]
+        }), autosaveMock);
+
+        test("one unknown-price product: renders without throwing", caughtErrors.length === 0, JSON.stringify(caughtErrors));
+        test("one unknown-price product: the total banner is shown", !!container.querySelector(".setup-inventory-total"));
+        test("one unknown-price product: the \"don't have a price yet\" note is shown", !!container.querySelector(".setup-inventory-total-note"));
+
+        // -- 6e: one normally-priced product — total banner shown, known
+        // total math intact (pre-existing behavior preserved). ----------------
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        renderSetupInventorySection(draftWithInventory({
+            schemaVersion: 1,
+            currency: "USD",
+            categories: [makeCategory("c1", "Desk", [makePricedItem("i1", 4999)])]
+        }), autosaveMock);
+
+        test("one priced product: the total banner is shown", !!container.querySelector(".setup-inventory-total"));
+        test("one priced product: the total reflects the real price", container.querySelector(".setup-inventory-total-value")?.textContent.includes("49.99"));
+        test("one priced product: no unknown-price note is shown", !container.querySelector(".setup-inventory-total-note"));
+
+        // -- 6f: mixed priced + Free + unknown-price products, plus an
+        // unrelated empty category — the banner still appears and is never
+        // hidden just because some/all items are Free or unknown-price. ------
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        renderSetupInventorySection(draftWithInventory({
+            schemaVersion: 1,
+            currency: "USD",
+            categories: [
+                makeCategory("c1", "Empty Category"),
+                makeCategory("c2", "Desk", [makePricedItem("i1", 5000), makeFreeItem("i2"), makeUnknownPriceItem("i3")])
+            ]
+        }), autosaveMock);
+
+        test("mixed inventory: renders without throwing", caughtErrors.length === 0, JSON.stringify(caughtErrors));
+        test("mixed inventory: the total banner is shown", !!container.querySelector(".setup-inventory-total"));
+        test("mixed inventory: known total sums the priced item only (Free counts as known $0, unknown excluded)", container.querySelector(".setup-inventory-total-value")?.textContent.includes("50.00"));
+        test("mixed inventory: the unknown-price note is still shown because one item's price is genuinely unknown", !!container.querySelector(".setup-inventory-total-note"));
+
         // --- Render + report ------------------------------------------------
         const resultsEl = document.getElementById("results");
         resultsEl.innerHTML = results

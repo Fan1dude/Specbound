@@ -1081,8 +1081,16 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0034_profile_guidelines_accepted_version
 
-- **Status**: Proposed — not yet applied. Depends on 0000-0033
-  (specifically 0031, which introduced `guidelines_accepted_at`).
+- **Status**: Applied to production. Confirmed via `supabase migration
+  list --linked` during the Milestone 23 production deployment
+  preflight (2026-08-12): 0034 was already present in the linked
+  Specbound production project's (`xpxjqyraizntbtijzoyp`) migration-
+  history table, matching local — it had been deployed at some earlier
+  point, before that audit, without this file's status ever being
+  updated to say so. Only 0035 (below) was genuinely pending at that
+  time; that mismatch between this document and the real database is
+  what the preflight caught. Depends on 0000-0033 (specifically 0031,
+  which introduced `guidelines_accepted_at`).
 - **File**: `migrations/0034_profile_guidelines_accepted_version.sql`
 - **Rollback**:
   `rollbacks/0034_profile_guidelines_accepted_version_rollback.sql`
@@ -1109,12 +1117,19 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0035_setup_inventory_and_builder_dates
 
-- **Status**: Proposed — not yet applied to the shared/production
-  project (confirmed live: a real Builder Portfolio page load against it
-  currently fails with `42703 column profiles.building_since_year does
-  not exist`, exactly as expected pre-deployment). Depends on 0000-0034
-  (specifically 0002/0004/0006 for `publish_draft()`'s current body and
-  0005 for `restore_revision_to_draft()`'s).
+- **Status**: Applied to production. Before deployment, a real Builder
+  Portfolio page load against the shared/production project failed
+  with `42703 column profiles.building_since_year does not exist`,
+  confirming it was genuinely pending. Applied 2026-08-12 via `supabase
+  db push --linked --yes` to the linked Specbound production project
+  (`xpxjqyraizntbtijzoyp`) — the one migration a dry run identified as
+  pending (0000-0034 already matched local at that point; see 0034's
+  own entry above for that discrepancy). Verified afterward: a fresh
+  `supabase migration list --linked` showed 0000-0035 matching local
+  and remote, and a second `supabase db push --linked --dry-run`
+  reported production up to date. Depends on 0000-0034 (specifically
+  0002/0004/0006 for `publish_draft()`'s current body and 0005 for
+  `restore_revision_to_draft()`'s).
 - **File**: `migrations/0035_setup_inventory_and_builder_dates.sql`
 - **Rollback**:
   `rollbacks/0035_setup_inventory_and_builder_dates_rollback.sql`

@@ -215,8 +215,13 @@ export function normalizeInventory(raw) {
     };
 }
 
+// "Empty" means no actual products anywhere — not "no categories." A
+// category (including an empty saved-category template) with zero
+// items contributes nothing to inventory and must not, by itself, make
+// this return false; a single item, regardless of price/Free/unknown
+// state, makes it non-empty.
 export function isInventoryEmpty(inventory) {
-    return !inventory?.categories?.length;
+    return !inventory?.categories?.some(category => category?.items?.length > 0);
 }
 
 // --- Totals -----------------------------------------------------------

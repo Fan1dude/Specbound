@@ -186,6 +186,64 @@
         test("isCompatibleCurrency: no suggested currency at all is treated as compatible (nothing to conflict with)", isCompatibleCurrency("USD", null) === true);
         test("isCompatibleCurrency is case-insensitive", isCompatibleCurrency("usd", "USD") === true);
 
+        // --- isInventoryEmpty: "empty" means no actual products, not no
+        // categories — a category (including an empty saved-category
+        // template) with zero items must not, by itself, count as
+        // inventory. Post-M23 maintenance fix for a bug where the public
+        // page and editor both showed a bare "$0.00" total for an
+        // inventory that had categories but no products in them. ------------
+        test("isInventoryEmpty: true with no categories at all", isInventoryEmpty({ schemaVersion: 1, currency: "USD", categories: [] }) === true);
+
+        test("isInventoryEmpty: true when every category exists but has zero items", isInventoryEmpty({
+            schemaVersion: 1,
+            currency: "USD",
+            categories: [
+                { id: "c1", name: "Desk", templateId: null, sortOrder: 0, items: [] },
+                { id: "c2", name: "Displays", templateId: null, sortOrder: 1, items: [] }
+            ]
+        }) === true);
+
+        test("isInventoryEmpty: false with a single genuinely Free product (Free still counts as inventory)", isInventoryEmpty({
+            schemaVersion: 1,
+            currency: "USD",
+            categories: [
+                { id: "c1", name: "Desk", templateId: null, sortOrder: 0, items: [{ id: "i1", pricePaid: { cents: null, isFree: true } }] }
+            ]
+        }) === false);
+
+        test("isInventoryEmpty: false with a single unknown-price (not Free) product", isInventoryEmpty({
+            schemaVersion: 1,
+            currency: "USD",
+            categories: [
+                { id: "c1", name: "Desk", templateId: null, sortOrder: 0, items: [{ id: "i1", pricePaid: { cents: null, isFree: false } }] }
+            ]
+        }) === false);
+
+        test("isInventoryEmpty: false with a single priced product", isInventoryEmpty({
+            schemaVersion: 1,
+            currency: "USD",
+            categories: [
+                { id: "c1", name: "Desk", templateId: null, sortOrder: 0, items: [{ id: "i1", pricePaid: { cents: 4999, isFree: false } }] }
+            ]
+        }) === false);
+
+        test("isInventoryEmpty: false with a mix of priced, Free, and unknown-price products alongside empty categories", isInventoryEmpty({
+            schemaVersion: 1,
+            currency: "USD",
+            categories: [
+                { id: "c1", name: "Desk", templateId: null, sortOrder: 0, items: [] },
+                {
+                    id: "c2", name: "Displays", templateId: null, sortOrder: 1, items: [
+                        { id: "i1", pricePaid: { cents: 4999, isFree: false } },
+                        { id: "i2", pricePaid: { cents: null, isFree: true } },
+                        { id: "i3", pricePaid: { cents: null, isFree: false } }
+                    ]
+                }
+            ]
+        }) === false);
+
+        test("isInventoryEmpty: true for null/undefined input", isInventoryEmpty(null) === true && isInventoryEmpty(undefined) === true);
+
         // --- createCategory / createItem id stability --------------------------
         const categoryA = createCategory({ name: "Audio" });
         const categoryB = createCategory({ name: "Audio" });

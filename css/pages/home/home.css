@@ -288,6 +288,19 @@
     transform-origin: center;
 }
 
+/* --i (0-4, clockwise) used to be set via an inline style="--i:N"
+   attribute directly on each <path> in index.html — silently dropped
+   by production's CSP (style-src has no 'unsafe-inline'), which made
+   every tile below animate in lockstep instead of staggered. Moved
+   here as plain :nth-child() rules — .hero-mark-tiles has exactly 5
+   <path class="hero-mark-tile"> children and nothing else, so index
+   order maps 1:1 to clockwise piece order with no inline style at all. */
+.hero-mark-tile:nth-child(1) { --i: 0; }
+.hero-mark-tile:nth-child(2) { --i: 1; }
+.hero-mark-tile:nth-child(3) { --i: 2; }
+.hero-mark-tile:nth-child(4) { --i: 3; }
+.hero-mark-tile:nth-child(5) { --i: 4; }
+
 /* Reduced motion — and any environment where the media feature can't be
    evaluated at all — is the DEFAULT above: every tile already at its
    resting position, full opacity, no animation. Motion is strictly
