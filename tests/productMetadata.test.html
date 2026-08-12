@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 23 — productMetadata.js client wrapper</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 23 — productMetadata.js client wrapper</h1>
+    <p>
+        Covers the friendly-fallback rework: malformed URLs are rejected
+        client-side (never spending a network round trip or a rate-limit
+        slot), edge-function reason codes map to safe messages — a couple
+        specific enough to help ("unsupported", "invalid"), the rest a
+        single generic fallback that never leaks raw Supabase/networking/
+        SSRF details — and a successful response always normalizes missing
+        fields to <code>null</code>, never <code>0</code> or <code>false</code>.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        // Every reference inside supabaseSrc has to go through
+        // globalThis.__metadataMock, not a bare closed-over variable —
+        // the source string gets transplanted into a separate blob
+        // module with no access to this script's lexical scope.
+        globalThis.__metadataMock = { invokeImpl: null, lastArgs: null };
+
+        const supabaseSrc = `
+            export const supabase = {
+                functions: {
+                    invoke(name, opts) {
+                        globalThis.__metadataMock.lastArgs = [name, opts];
+                        return globalThis.__metadataMock.invokeImpl(name, opts);
+                    }
+                }
+            };
+        `;
+
+        const realSrc = await (await fetch("../js/services/productMetadata.js")).text();
+        const rewritten = realSrc.replaceAll('"../core/supabase.js"', `"${blobUrl(supabaseSrc)}"`);
+        const { fetchProductMetadata } = await import(blobUrl(rewritten));
+
+        const GENERIC_FALLBACK = "We couldn't fill in details from this link. You can enter them manually below.";
+
+        // --- Malformed URLs never reach the network -------------------------
+        globalThis.__metadataMock.lastArgs = null;
+        globalThis.__metadataMock.invokeImpl = async () => { throw new Error("should not be called"); };
+
+        try {
+            await fetchProductMetadata("not a url");
+            test("malformed URL rejects", false, "did not throw");
+        } catch (error) {
+            test("malformed URL: safe, specific message", error.message === "Enter a valid http:// or https:// URL.", error.message);
+        }
+        test("malformed URL never calls supabase.functions.invoke", globalThis.__metadataMock.lastArgs === null);
+
+        try {
+            await fetchProductMetadata("ftp://example.com/product");
+            test("wrong-scheme URL rejects", false, "did not throw");
+        } catch (error) {
+            test("wrong-scheme (ftp://) URL: safe, specific message", error.message === "Enter a valid http:// or https:// URL.", error.message);
+        }
+
+        try {
+            await fetchProductMetadata("javascript:alert(1)");
+            test("javascript: URL rejects", false, "did not throw");
+        } catch (error) {
+            test("javascript: URL: safe, specific message, no code echoed back", error.message === "Enter a valid http:// or https:// URL.", error.message);
+        }
+        test("no malformed/wrong-scheme URL ever reached supabase.functions.invoke", globalThis.__metadataMock.lastArgs === null);
+
+        // --- supabase.functions.invoke() itself errors (network/CORS/5xx) ---
+        globalThis.__metadataMock.invokeImpl = async () => ({ data: null, error: { message: "FunctionsHttpError: 500 Internal Server Error" } });
+        try {
+            await fetchProductMetadata("https://www.ikea.com/product");
+            test("invoke-level error rejects", false, "did not throw");
+        } catch (error) {
+            test(
+                "invoke-level error: generic safe fallback, no raw error text leaked",
+                error.message === GENERIC_FALLBACK && !error.message.includes("FunctionsHttpError"),
+                error.message
+            );
+        }
+
+        // --- Edge function returns a non-object / unparseable body ----------
+        globalThis.__metadataMock.invokeImpl = async () => ({ data: "not an object", error: null });
+        try {
+            await fetchProductMetadata("https://www.ikea.com/product");
+            test("non-object data rejects", false, "did not throw");
+        } catch (error) {
+            test("non-object data: generic safe fallback", error.message === GENERIC_FALLBACK, error.message);
+        }
+
+        // --- Edge function reason codes ---------------------------------------
+        const reasonCases = [
+            { reason: "unsupported", expected: "We don't support pulling details from this link yet. You can enter them manually below." },
+            { reason: "timeout", expected: GENERIC_FALLBACK },
+            { reason: "blocked", expected: GENERIC_FALLBACK },
+            { reason: "invalid", expected: "Enter a valid http:// or https:// URL." },
+            { reason: "rate_limited", expected: "You've tried this a few times — wait a minute and try again, or enter the details manually." },
+            { reason: "auth_required", expected: GENERIC_FALLBACK },
+            { reason: "some_future_reason_code_this_client_has_never_seen", expected: GENERIC_FALLBACK }
+        ];
+
+        for (const { reason, expected } of reasonCases) {
+            globalThis.__metadataMock.invokeImpl = async () => ({ data: { error: reason }, error: null });
+            try {
+                await fetchProductMetadata("https://www.ikea.com/product");
+                test(`reason "${reason}" rejects`, false, "did not throw");
+            } catch (error) {
+                test(`reason "${reason}" maps to the expected safe message`, error.message === expected, error.message);
+            }
+        }
+
+        test(
+            "no reason-code message leaks implementation detail",
+            [GENERIC_FALLBACK, "We don't support pulling details from this link yet. You can enter them manually below.", "Enter a valid http:// or https:// URL.", "You've tried this a few times — wait a minute and try again, or enter the details manually."]
+                .every(msg => !/supabase|sql|dns|private|reserved|ssrf|localhost|edge function/i.test(msg))
+        );
+
+        // --- Success: full data -----------------------------------------------
+        globalThis.__metadataMock.invokeImpl = async () => ({
+            data: { title: "Desk", retailerName: "IKEA", priceCents: 4999, currency: "USD" },
+            error: null
+        });
+        const full = await fetchProductMetadata("https://www.ikea.com/product");
+        test(
+            "successful fetch returns all typed fields",
+            full.title === "Desk" && full.retailerName === "IKEA" && full.priceCents === 4999 && full.currency === "USD",
+            JSON.stringify(full)
+        );
+
+        // --- Success: partial data — missing fields are null, never 0/false --
+        globalThis.__metadataMock.invokeImpl = async () => ({ data: { title: "Desk" }, error: null });
+        const partial = await fetchProductMetadata("https://www.ikea.com/product");
+        test("partial success: title is preserved", partial.title === "Desk");
+        test("partial success: missing price normalizes to null, never 0", partial.priceCents === null, String(partial.priceCents));
+        test("partial success: missing retailerName normalizes to null", partial.retailerName === null);
+        test("partial success: missing currency normalizes to null", partial.currency === null);
+
+        // --- Success: completely empty data (e.g. an unrecognized page shape) -
+        globalThis.__metadataMock.invokeImpl = async () => ({ data: {}, error: null });
+        const empty = await fetchProductMetadata("https://www.ikea.com/product");
+        test(
+            "empty-but-successful response never fabricates a price or title",
+            empty.title === null && empty.retailerName === null && empty.priceCents === null && empty.currency === null,
+            JSON.stringify(empty)
+        );
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`productMetadata.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

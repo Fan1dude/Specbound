@@ -18,6 +18,13 @@
 
     padding:24px;
 
+    /* A grid item's default min-width is its content's intrinsic
+       width — for a long unbroken string (a pasted URL typed into a
+       plain spec field, e.g. "Desk") that can be wider than the
+       track itself, forcing the whole row to overflow. min-width: 0
+       lets the wrap rules on .spec-item p below actually take effect. */
+    min-width:0;
+
 }
 
 .spec-item h3{
@@ -39,5 +46,37 @@
     font-size:1.1rem;
 
     font-weight:600;
+
+    overflow-wrap:anywhere;
+
+    word-break:break-word;
+
+}
+
+/* A fixed, short label — never the URL itself, so it can't reintroduce
+   the overflow this rule set exists to prevent. Same treatment as
+   .setup-item-public-link (css/pages/build/setup-inventory.css). */
+.spec-item-link{
+
+    display:inline-block;
+
+    color:var(--color-primary);
+
+    font-size:1.1rem;
+
+    font-weight:700;
+
+    text-decoration:underline;
+
+    text-decoration-color:transparent;
+
+    transition:text-decoration-color var(--duration-fast) var(--ease-standard);
+
+}
+
+.spec-item-link:hover,
+.spec-item-link:focus-visible{
+
+    text-decoration-color:currentColor;
 
 }

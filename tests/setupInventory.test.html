@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 23 — js/utils/setupInventory.js</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 23 — Setup inventory normalization, validation, and totals</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        import {
+            SETUP_INVENTORY_SCHEMA_VERSION,
+            DEFAULT_CATEGORY_NAMES,
+            LIMITS,
+            createEmptyInventory,
+            createDefaultCategories,
+            createCategory,
+            createItem,
+            normalizeInventory,
+            isInventoryEmpty,
+            calculateCategoryTotal,
+            calculateSetupTotal,
+            formatCents,
+            parseDollarsToCents,
+            isCompatibleCurrency
+        } from "../js/utils/setupInventory.js";
+
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        // --- createEmptyInventory / createDefaultCategories -------------------
+        const empty = createEmptyInventory();
+        test("createEmptyInventory has the current schema version", empty.schemaVersion === SETUP_INVENTORY_SCHEMA_VERSION);
+        test("createEmptyInventory defaults currency to USD", empty.currency === "USD");
+        test("createEmptyInventory starts with zero categories", empty.categories.length === 0);
+        test("isInventoryEmpty is true for a brand-new empty inventory", isInventoryEmpty(empty) === true);
+
+        const defaults = createDefaultCategories();
+        test("createDefaultCategories returns all 8 named starter categories, in order", JSON.stringify(defaults.map(c => c.name)) === JSON.stringify(DEFAULT_CATEGORY_NAMES));
+        test("each default category starts with zero items", defaults.every(c => c.items.length === 0));
+        test("each default category gets a real, distinct id", new Set(defaults.map(c => c.id)).size === defaults.length);
+
+        // --- normalizeInventory: malformed/adversarial input never throws -----
+        test("normalizeInventory(null) returns a valid empty inventory, never throws", isInventoryEmpty(normalizeInventory(null)));
+        test("normalizeInventory(undefined) returns a valid empty inventory", isInventoryEmpty(normalizeInventory(undefined)));
+        test("normalizeInventory('not an object') returns a valid empty inventory", isInventoryEmpty(normalizeInventory("not an object")));
+        test("normalizeInventory([]) (an array, not a plain object) returns a valid empty inventory", isInventoryEmpty(normalizeInventory([])));
+        test("normalizeInventory({}) returns a valid empty inventory with defaults filled in", normalizeInventory({}).currency === "USD" && normalizeInventory({}).categories.length === 0);
+
+        // --- normalizeInventory: never regenerates an existing non-empty id ---
+        const stableCategoryId = "cat-fixed-id-123";
+        const stableItemId = "item-fixed-id-456";
+        const roundTripped = normalizeInventory({
+            currency: "usd",
+            categories: [
+                { id: stableCategoryId, name: "Desk", items: [{ id: stableItemId, title: "Monitor Arm" }] }
+            ]
+        });
+        test("normalizeInventory preserves an existing category id verbatim (never regenerates on re-render)", roundTripped.categories[0].id === stableCategoryId);
+        test("normalizeInventory preserves an existing item id verbatim", roundTripped.categories[0].items[0].id === stableItemId);
+        test("normalizeInventory uppercases/normalizes a lowercase currency code", roundTripped.currency === "USD");
+
+        const missingIds = normalizeInventory({ categories: [{ name: "No Id Category", items: [{ title: "No Id Item" }] }] });
+        test("normalizeInventory fills in a missing category id with a real one", typeof missingIds.categories[0].id === "string" && missingIds.categories[0].id.length > 0);
+        test("normalizeInventory fills in a missing item id with a real one", typeof missingIds.categories[0].items[0].id === "string" && missingIds.categories[0].items[0].id.length > 0);
+
+        // --- normalizeInventory: limits are enforced -----------------------
+        const tooManyCategories = normalizeInventory({
+            categories: Array.from({ length: LIMITS.MAX_CATEGORIES + 5 }, (_, i) => ({ name: `Category ${i}` }))
+        });
+        test(`normalizeInventory caps categories at LIMITS.MAX_CATEGORIES (${LIMITS.MAX_CATEGORIES})`, tooManyCategories.categories.length === LIMITS.MAX_CATEGORIES);
+
+        const tooManyItems = normalizeInventory({
+            categories: [{ name: "Overloaded", items: Array.from({ length: LIMITS.MAX_ITEMS_PER_CATEGORY + 5 }, (_, i) => ({ title: `Item ${i}` })) }]
+        });
+        test(`normalizeInventory caps items per category at LIMITS.MAX_ITEMS_PER_CATEGORY (${LIMITS.MAX_ITEMS_PER_CATEGORY})`, tooManyItems.categories[0].items.length === LIMITS.MAX_ITEMS_PER_CATEGORY);
+
+        const blankName = normalizeInventory({ categories: [{ name: "   " }] });
+        test("a blank/whitespace-only category name is repaired to \"Untitled Category\", never left blank", blankName.categories[0].name === "Untitled Category");
+
+        const longName = normalizeInventory({ categories: [{ name: "x".repeat(500) }] });
+        test("an overlong category name is clamped to LIMITS.MAX_CATEGORY_NAME_LENGTH", longName.categories[0].name.length === LIMITS.MAX_CATEGORY_NAME_LENGTH);
+
+        // --- normalizeInventory: URL validation ------------------------------
+        const httpUrl = normalizeInventory({ categories: [{ items: [{ originalUrl: "https://example.com/product" }] }] });
+        test("a valid https:// URL is preserved", httpUrl.categories[0].items[0].originalUrl === "https://example.com/product");
+
+        const jsUrl = normalizeInventory({ categories: [{ items: [{ originalUrl: "javascript:alert(1)" }] }] });
+        test("a javascript: URL is rejected (normalized to null), never stored or rendered as a link", jsUrl.categories[0].items[0].originalUrl === null);
+
+        const garbageUrl = normalizeInventory({ categories: [{ items: [{ originalUrl: "not a url" }] }] });
+        test("an unparseable URL string is normalized to null", garbageUrl.categories[0].items[0].originalUrl === null);
+
+        // --- normalizeInventory: pricePaid / isFree ---------------------------
+        const nestedPrice = normalizeInventory({ categories: [{ items: [{ pricePaid: { cents: 4999, isFree: false } }] }] });
+        test("the nested {cents, isFree} shape round-trips correctly", nestedPrice.categories[0].items[0].pricePaid.cents === 4999 && nestedPrice.categories[0].items[0].pricePaid.isFree === false);
+
+        const legacyFlatPrice = normalizeInventory({ categories: [{ items: [{ pricePaidCents: 2500, isFree: false }] }] });
+        test("the legacy flat {pricePaidCents, isFree} shape from the illustrative contract is still accepted on read", legacyFlatPrice.categories[0].items[0].pricePaid.cents === 2500);
+
+        const contradictoryPrice = normalizeInventory({ categories: [{ items: [{ pricePaid: { cents: 5000, isFree: true } }] }] });
+        test("isFree wins over a simultaneously-set cents value in a contradictory payload", contradictoryPrice.categories[0].items[0].pricePaid.isFree === true && contradictoryPrice.categories[0].items[0].pricePaid.cents === null);
+
+        const missingPrice = normalizeInventory({ categories: [{ items: [{}] }] });
+        test("a product with no price info at all normalizes to cents: null (not 0), isFree: false", missingPrice.categories[0].items[0].pricePaid.cents === null && missingPrice.categories[0].items[0].pricePaid.isFree === false);
+
+        const negativePrice = normalizeInventory({ categories: [{ items: [{ pricePaid: { cents: -500, isFree: false } }] }] });
+        test("a negative price is rejected (normalized to null), never stored as negative", negativePrice.categories[0].items[0].pricePaid.cents === null);
+
+        const floatPrice = normalizeInventory({ categories: [{ items: [{ pricePaid: { cents: 1999.7, isFree: false } }] }] });
+        test("a non-integer cents value is rounded to an integer, never stored as a float", Number.isInteger(floatPrice.categories[0].items[0].pricePaid.cents) && floatPrice.categories[0].items[0].pricePaid.cents === 2000);
+
+        // --- normalizeInventory: source type ----------------------------------
+        const validSourceType = normalizeInventory({ categories: [{ items: [{ sourceType: "thrift_store" }] }] });
+        test("a valid sourceType is preserved", validSourceType.categories[0].items[0].sourceType === "thrift_store");
+
+        const invalidSourceType = normalizeInventory({ categories: [{ items: [{ sourceType: "not-a-real-type" }] }] });
+        test("an invalid/unknown sourceType falls back to \"other\"", invalidSourceType.categories[0].items[0].sourceType === "other");
+
+        const defaultItem = createItem({ title: "New Item" });
+        test("createItem() defaults sourceType to \"other\"", defaultItem.sourceType === "other");
+        test("createItem() with no URL supports fully manual entry (originalUrl null, no metadata fields set)", defaultItem.originalUrl === null && defaultItem.retailerName === null && defaultItem.metadataFetchedAt === null);
+
+        // --- Totals: category and setup level ---------------------------------
+        function makeItem(cents, isFree = false) {
+            return createItem ? { ...createItem(), pricePaid: { cents, isFree } } : null;
+        }
+
+        const categoryAllKnown = {
+            items: [
+                { pricePaid: { cents: 5000, isFree: false } },
+                { pricePaid: { cents: 2500, isFree: false } },
+                { pricePaid: { cents: null, isFree: true } } // free counts as known $0
+            ]
+        };
+        const allKnownTotal = calculateCategoryTotal(categoryAllKnown);
+        test("calculateCategoryTotal sums known prices plus free items (as $0 known)", allKnownTotal.knownCents === 7500 && allKnownTotal.hasUnknown === false);
+
+        const categoryWithUnknown = {
+            items: [
+                { pricePaid: { cents: 3000, isFree: false } },
+                { pricePaid: { cents: null, isFree: false } } // missing price
+            ]
+        };
+        const unknownTotal = calculateCategoryTotal(categoryWithUnknown);
+        test("calculateCategoryTotal excludes a missing price from the sum (never treats it as 0)", unknownTotal.knownCents === 3000);
+        test("calculateCategoryTotal flags hasUnknown when any item's price is missing", unknownTotal.hasUnknown === true);
+
+        const inventoryAllKnown = { categories: [categoryAllKnown, { items: [{ pricePaid: { cents: 1000, isFree: false } }] }] };
+        const setupTotalKnown = calculateSetupTotal(inventoryAllKnown);
+        test("calculateSetupTotal sums across every category", setupTotalKnown.knownCents === 8500);
+        test("calculateSetupTotal labels \"Setup total\" when every product has a known price or is free", setupTotalKnown.label === "Setup total");
+
+        const inventoryWithUnknown = { categories: [categoryAllKnown, categoryWithUnknown] };
+        const setupTotalUnknown = calculateSetupTotal(inventoryWithUnknown);
+        test("calculateSetupTotal labels \"Known total\" when at least one product has no price and isn't free", setupTotalUnknown.label === "Known total");
+
+        // --- formatCents / parseDollarsToCents --------------------------------
+        test("formatCents(null) renders a placeholder, not $0.00", formatCents(null) === "—");
+        test("formatCents(undefined) renders a placeholder", formatCents(undefined) === "—");
+        test("formatCents(0) renders as a real $0.00, distinct from the null placeholder", formatCents(0).includes("0") && formatCents(0) !== "—");
+        test("formatCents(4999) renders as a real currency amount", formatCents(4999, "USD").includes("49.99"));
+
+        test("parseDollarsToCents('64.99') parses to 6499", parseDollarsToCents("64.99") === 6499);
+        test("parseDollarsToCents('$64.99') strips a leading dollar sign", parseDollarsToCents("$64.99") === 6499);
+        test("parseDollarsToCents('64') (no cents) parses to 6400", parseDollarsToCents("64") === 6400);
+        test("parseDollarsToCents('abc') returns null, never 0, for garbage input", parseDollarsToCents("abc") === null);
+        test("parseDollarsToCents('') returns null for an empty string", parseDollarsToCents("") === null);
+        test("parseDollarsToCents('-5.00') rejects a negative-looking string", parseDollarsToCents("-5.00") === null);
+        test("parseDollarsToCents(123) (a number, not a string) returns null", parseDollarsToCents(123) === null);
+
+        // --- isCompatibleCurrency ---------------------------------------------
+        test("isCompatibleCurrency: matching currencies are compatible", isCompatibleCurrency("USD", "USD") === true);
+        test("isCompatibleCurrency: a mismatched suggested currency is NOT compatible", isCompatibleCurrency("USD", "EUR") === false);
+        test("isCompatibleCurrency: no suggested currency at all is treated as compatible (nothing to conflict with)", isCompatibleCurrency("USD", null) === true);
+        test("isCompatibleCurrency is case-insensitive", isCompatibleCurrency("usd", "USD") === true);
+
+        // --- createCategory / createItem id stability --------------------------
+        const categoryA = createCategory({ name: "Audio" });
+        const categoryB = createCategory({ name: "Audio" });
+        test("createCategory() generates a distinct id for every call, even with identical input", categoryA.id !== categoryB.id);
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`setupInventory.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

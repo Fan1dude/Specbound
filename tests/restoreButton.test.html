@@ -109,6 +109,12 @@
             '"./renderBuild.js"': new URL("renderBuild.js", origin).href,
             '"./renderSpecifications.js"': new URL("renderSpecifications.js", origin).href,
             '"./renderResources.js"': new URL("renderResources.js", origin).href,
+            // Milestone 23 addition to loadBuild.js — same "real, harmless
+            // pure-DOM render function" treatment as renderSpecifications.js/
+            // renderResources.js above; it early-returns when its target
+            // elements aren't in the DOM, which this test's stub page never
+            // provides.
+            '"./renderSetupInventory.js"': new URL("renderSetupInventory.js", origin).href,
             '"./renderTimeline.js"': new URL("renderTimeline.js", origin).href,
             '"./renderComments.js"': new URL("renderComments.js", origin).href,
             '"./renderLike.js"': new URL("renderLike.js", origin).href,

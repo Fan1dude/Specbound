@@ -127,6 +127,13 @@ export async function renderRevisionView(build, revision, revisionMedia, { canRe
     return {
         specifications: hasSnapshot ? revision.specifications : null,
         resources: hasSnapshot ? revision.resources : null,
+        // Milestone 23 — revisions published before this milestone have no
+        // setup_inventory column value captured (see migration 0035's
+        // publish_draft()/restore_revision_to_draft() additions), so an
+        // old, otherwise-snapshotted revision still correctly renders "not
+        // recorded" for this one field rather than a misleading empty
+        // inventory.
+        setupInventory: hasSnapshot && revision.setup_inventory ? revision.setup_inventory : null,
         hasSnapshot
     };
 }

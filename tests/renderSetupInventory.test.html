@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 23 polish — public renderSetupInventory.js (product-link overflow fix)</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+        /* A narrow fixed-width host, standing in for a Blueprint card on
+           the public build page — this is what "must never overflow its
+           card" is actually checked against below. */
+        #hostCard { width: 320px; border: 1px solid #333; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 23 polish — public Setup Inventory product-link overflow fix</h1>
+    <p>
+        Regression coverage for the exact bug reported in live manual
+        testing: a real, very long IKEA product URL (tracking parameters
+        and all) rendered as the visible, clickable product name,
+        producing one long unbroken line that overflowed its card. The
+        product name and the outbound link are now two separate
+        elements — the link's visible label is always the fixed string
+        "View product", never the URL — and both the title and source
+        name get defensive wrap CSS regardless.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="hostCard">
+        <section id="buildSetupInventorySection" hidden>
+            <div id="buildSetupInventory"></div>
+        </section>
+    </div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        const { renderSetupInventory } = await import("../js/pages/build/renderSetupInventory.js");
+
+        // The exact shape of URL reported in live testing — a real IKEA
+        // product link is easily 150-250+ unbroken characters once its
+        // tracking/session query string is included.
+        const LONG_IKEA_URL =
+            "https://www.ikea.com/us/en/p/idasen-desk-sit-stand-brown-dark-gray-s79280461/" +
+            "?icid=marketing_email_20260301_desks&itm_campaign=q1_workspace&itm_source=affiliate" +
+            "&itm_medium=partner_link&gclid=EAIaIQobChMI9r6z3fj5AhVUXvAAHVSc1HcREAAYASAAEgLxvfD_BwE" +
+            "&session_token=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0";
+
+        function makeInventory(items) {
+            return {
+                schemaVersion: 1,
+                currency: "USD",
+                categories: [
+                    {
+                        id: "cat-1",
+                        name: "Desk",
+                        templateId: null,
+                        sortOrder: 0,
+                        items
+                    }
+                ]
+            };
+        }
+
+        function baseItem(overrides = {}) {
+            return {
+                id: "item-1",
+                title: null,
+                originalUrl: null,
+                retailerName: null,
+                listedPriceCents: null,
+                listedPriceCurrency: null,
+                metadataFetchedAt: null,
+                pricePaid: { cents: null, isFree: false },
+                sourceType: "other",
+                sourceName: null,
+                sortOrder: 0,
+                ...overrides
+            };
+        }
+
+        const container = document.getElementById("buildSetupInventory");
+        const section = document.getElementById("buildSetupInventorySection");
+        const hostCard = document.getElementById("hostCard");
+
+        // --- Case 1: a title that IS the long URL (live testing's exact
+        // scenario — a builder pasted the link into the product-name
+        // field before the editor's own link field was easy to find). ------
+        renderSetupInventory(makeInventory([
+            baseItem({ id: "item-1", title: LONG_IKEA_URL, originalUrl: LONG_IKEA_URL, pricePaid: { cents: 45000, isFree: false } })
+        ]));
+
+        const titleEl = container.querySelector(".setup-item-public-title");
+        const linkEl = container.querySelector(".setup-item-public-link");
+
+        // normalizeInventory() clamps title to LIMITS.MAX_ITEM_TITLE_LENGTH
+        // (120 chars, js/utils/setupInventory.js) — pre-existing, correct
+        // validation behavior, unrelated to this fix. What matters here is
+        // that whatever text does render is safe/wrapped and the *link*
+        // (the actual overflow bug) never carries the URL as its label.
+        test("the product name is plain text, not a link", titleEl?.tagName === "SPAN");
+        test(
+            "the title element carries the (validation-clamped) pasted text, not something else",
+            titleEl?.textContent === LONG_IKEA_URL.slice(0, 120),
+            titleEl?.textContent
+        );
+        test("a separate outbound link element exists", !!linkEl);
+        test("the link's visible label is the fixed \"View product\" text, never the URL", linkEl?.textContent.trim().replace(/\s+/g, " ").startsWith("View product"), linkEl?.textContent);
+        test("the link's visible label never contains the tracking query string", !linkEl?.textContent.includes("session_token"), linkEl?.textContent);
+        test("the href carries the exact original URL, untouched — nothing stripped", linkEl?.getAttribute("href") === LONG_IKEA_URL, linkEl?.getAttribute("href"));
+        test("the link opens in a new tab", linkEl?.getAttribute("target") === "_blank");
+        test("the link uses safe rel (noopener noreferrer)", linkEl?.getAttribute("rel") === "noopener noreferrer", linkEl?.getAttribute("rel"));
+
+        test(
+            "the 320px host card never scrolls horizontally with a long unbroken URL as the title",
+            hostCard.scrollWidth <= hostCard.clientWidth + 1,
+            `scrollWidth=${hostCard.scrollWidth} clientWidth=${hostCard.clientWidth}`
+        );
+
+        const titleStyle = getComputedStyle(titleEl);
+        test("the title has defensive wrap CSS (overflow-wrap: anywhere)", titleStyle.overflowWrap === "anywhere", titleStyle.overflowWrap);
+
+        // --- Case 2: a very long, single unbroken source name — same
+        // overflow risk, different field. -------------------------------------
+        const LONG_SOURCE_NAME = "Goodwill" + "x".repeat(80);
+        renderSetupInventory(makeInventory([
+            baseItem({ id: "item-1", title: "Desk Lamp", sourceType: "thrift_store", sourceName: LONG_SOURCE_NAME })
+        ]));
+
+        const sourceEl = container.querySelector(".setup-item-public-source");
+        // Also clamped by normalizeInventory() (MAX_SOURCE_NAME_LENGTH: 80).
+        test("a very long, unbroken source name is rendered", sourceEl?.textContent.includes(LONG_SOURCE_NAME.slice(0, 80)), sourceEl?.textContent);
+        test(
+            "the host card still doesn't overflow with a long unbroken source name",
+            hostCard.scrollWidth <= hostCard.clientWidth + 1,
+            `scrollWidth=${hostCard.scrollWidth} clientWidth=${hostCard.clientWidth}`
+        );
+        const sourceStyle = getComputedStyle(sourceEl);
+        test("the source name has defensive wrap CSS too", sourceStyle.overflowWrap === "anywhere", sourceStyle.overflowWrap);
+
+        // --- Case 3: legacy item — no title, no URL (pre-dates this
+        // feature, or a fully manual entry with nothing but a price). -------
+        renderSetupInventory(makeInventory([
+            baseItem({ id: "item-1", pricePaid: { cents: 1999, isFree: false } })
+        ]));
+
+        test("a legacy item with no title falls back to \"Untitled product\"", container.querySelector(".setup-item-public-title")?.textContent === "Untitled product");
+        test("a legacy item with no URL renders no outbound link at all", !container.querySelector(".setup-item-public-link"));
+
+        // --- Case 4: a normal, short, real-world item — the common case,
+        // must still render exactly as expected (name + link + price). -----
+        renderSetupInventory(makeInventory([
+            baseItem({
+                id: "item-1",
+                title: "IKEA IDÅSEN Desk",
+                originalUrl: "https://www.ikea.com/us/en/p/idasen-desk-79280461/",
+                pricePaid: { cents: 45000, isFree: false },
+                sourceType: "retailer",
+                sourceName: "IKEA"
+            })
+        ]));
+
+        test("a normal short title renders correctly", container.querySelector(".setup-item-public-title")?.textContent === "IKEA IDÅSEN Desk");
+        test("a normal item's link href is exactly the product URL", container.querySelector(".setup-item-public-link")?.getAttribute("href") === "https://www.ikea.com/us/en/p/idasen-desk-79280461/");
+        test("a normal item's price renders", container.querySelector(".setup-item-public-price")?.textContent.includes("450.00"));
+        test("a normal item's source renders", container.querySelector(".setup-item-public-source")?.textContent.includes("IKEA"));
+
+        // --- Case 5: HTML-special characters in the title are escaped,
+        // not interpreted — this restructure must not reopen an XSS gap. ---
+        renderSetupInventory(makeInventory([
+            baseItem({ id: "item-1", title: `<img src=x onerror=alert(1)>` })
+        ]));
+
+        test(
+            "HTML-special characters in the title are escaped, not rendered as markup",
+            !container.querySelector(".setup-item-public-title img"),
+            container.querySelector(".setup-item-public-title")?.innerHTML
+        );
+        test(
+            "the escaped title's visible text still reads correctly",
+            container.querySelector(".setup-item-public-title")?.textContent === `<img src=x onerror=alert(1)>`
+        );
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`renderSetupInventory.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

@@ -51,9 +51,25 @@
     color: var(--text);
 }
 
-.search-bar {
+/* Milestone 23 polish — the scope <select> that used to live here
+   (beside .search-bar) was removed: it duplicated the scope filter that
+   already exists on the results page itself (css/pages/search/search.css's
+   .search-scope-wrap), and having it beside the search field on every
+   page — including the homepage — was confusing rather than useful.
+   The navbar now carries only the query; scope is chosen after landing
+   on search.html. .navbar-search still wraps just .search-bar so the
+   input keeps its own max-width budget without a sibling to share it
+   with. */
+.navbar-search {
+    display: flex;
     flex: 1;
     max-width: 520px;
+    gap: var(--space-1);
+}
+
+.search-bar {
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 /* form.css's generic `input:focus-visible` rule (outline: none +
@@ -150,7 +166,7 @@
         order: 2;
     }
 
-    .search-bar {
+    .navbar-search {
         order: 3;
         max-width: none;
         width: 100%;

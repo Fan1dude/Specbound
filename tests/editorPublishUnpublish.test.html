@@ -98,6 +98,11 @@
         const overviewSrc = `export function renderOverviewSection() { return { applyFields() {} }; }`;
         const specSrc = `export function renderSpecificationsSection() { return { applyFields() {} }; }`;
         const resourcesSrc = `export function renderResourcesSection() { return { applyFields() {} }; }`;
+        // Milestone 23 addition to app.js — mocked the same way as the
+        // pre-existing overview/specifications/resources sections above:
+        // this test doesn't exercise the Setup-inventory editor UI at all,
+        // it just needs app.js's module graph to resolve.
+        const setupInventorySrc = `export function renderSetupInventorySection() { return { applyFields() {} }; }`;
         const gallerySrc = `
             export async function renderGallerySection(draft, onMediaChange) {
                 globalThis.__mock.triggerMediaChange = onMediaChange;
@@ -138,6 +143,7 @@
             '"./renderOverviewSection.js"': blobUrl(overviewSrc),
             '"./renderSpecificationsSection.js"': blobUrl(specSrc),
             '"./renderResourcesSection.js"': blobUrl(resourcesSrc),
+            '"./renderSetupInventorySection.js"': blobUrl(setupInventorySrc),
             '"./renderGallerySection.js"': blobUrl(gallerySrc),
             '"./editorTabs.js"': blobUrl(tabsSrc),
             '"./editorStatus.js"': blobUrl(statusSrc),

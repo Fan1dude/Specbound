@@ -98,12 +98,14 @@ export async function loadNavbar(pathPrefix = "") {
                 </svg>
             </button>
 
-            <input
-                class="search-bar"
-                type="text"
-                placeholder="Search builds, builders, parts..."
-                aria-label="Search builds, builders, parts"
-            >
+            <div class="navbar-search">
+                <input
+                    class="search-bar"
+                    type="text"
+                    placeholder="Search builds, builders, parts..."
+                    aria-label="Search builds, builders, parts"
+                >
+            </div>
 
             <div class="nav-links" id="navLinks">
                 <a href="${pathPrefix}pages/explore.html">Explore</a>
@@ -140,6 +142,9 @@ export async function loadNavbar(pathPrefix = "") {
             const value = search.value.trim();
             if (!value) return;
 
+            // Milestone 23 polish — the navbar carries only the query now;
+            // scope is chosen on the results page itself (search.html),
+            // which defaults to "all" when none is supplied.
             window.location.href =
                 `${pathPrefix}pages/search.html?q=${encodeURIComponent(value)}`;
         });

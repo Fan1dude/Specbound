@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 23 — renderSetupInventorySection.js (product card render)</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 23 — Setup Inventory editor: product card renders without throwing</h1>
+    <p>
+        Regression coverage for a real bug found in live PR #17 manual
+        verification: <code>renderSetupInventorySection.js</code> called
+        <code>icon(name, 14)</code> for the per-product move/delete
+        controls, but <code>js/utils/icons.js</code> only allows sizes
+        16/20/24/32 — <code>icon()</code> threw synchronously while
+        building the section's HTML template, which silently aborted the
+        <em>entire</em> <code>container.innerHTML = ...</code> assignment.
+        The section rendered as a permanently empty, cleanly-hidden-looking
+        `&lt;div&gt;` the moment a draft's setup_inventory contained even
+        one product — no visible error, no product link/price/free/source
+        fields anywhere, exactly what manual testing reported ("where do I
+        even type the link", "wheres the option to add the price").
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <!-- Fixture DOM — must match pages/build/edit.html's real ids. -->
+    <select id="fieldCategory">
+        <option value="setup" selected>Desk Setups</option>
+    </select>
+    <div id="setupInventorySection" hidden></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function absUrl(path) {
+            return new URL(path, location.href).href;
+        }
+
+        async function loadPatched(realPath, map) {
+            const src = await (await fetch(realPath)).text();
+            let rewritten = src;
+            for (const [from, to] of Object.entries(map)) {
+                rewritten = rewritten.replaceAll(`"${from}"`, `"${to}"`);
+            }
+            return blobUrl(rewritten);
+        }
+
+        // --- Mocks: only the two network-touching modules. Everything
+        // else (setupInventory.js, escapeHtml.js, icons.js, toast.js,
+        // modal.js) is real — icons.js in particular must be real, since
+        // exercising it for real against every icon() call site is
+        // exactly what this regression test exists to do. ------------------
+        const savedCategoryRepoMockUrl = blobUrl(`
+            export async function getMySavedSetupCategories() { return []; }
+            export async function createSavedSetupCategory() { throw new Error("not used in this test"); }
+        `);
+
+        // Controllable via globalThis.__metadataFetchImpl, set per-case
+        // below — a bare closed-over variable wouldn't survive being
+        // transplanted into this separate blob module.
+        globalThis.__metadataFetchImpl = async () => { throw new Error("not used in this test"); };
+        const productMetadataMockUrl = blobUrl(`
+            export async function fetchProductMetadata(url) { return globalThis.__metadataFetchImpl(url); }
+        `);
+
+        const renderSetupInventorySectionUrl = await loadPatched("../js/pages/editor/renderSetupInventorySection.js", {
+            "../../repositories/savedSetupCategoryRepository.js": savedCategoryRepoMockUrl,
+            "../../services/productMetadata.js": productMetadataMockUrl,
+            "../../utils/setupInventory.js": absUrl("../js/utils/setupInventory.js"),
+            "../../utils/escapeHtml.js": absUrl("../js/utils/escapeHtml.js"),
+            "../../utils/icons.js": absUrl("../js/utils/icons.js"),
+            "../../core/toast.js": absUrl("../js/core/toast.js"),
+            "../../utils/modal.js": absUrl("../js/utils/modal.js")
+        });
+
+        const { renderSetupInventorySection } = await import(renderSetupInventorySectionUrl);
+
+        // --- Catch the exact failure class this test guards against:
+        // icon()'s synchronous throw during template-literal evaluation
+        // surfaces as an uncaught error / unhandled rejection, never a
+        // caught exception the module itself handles. -----------------------
+        const caughtErrors = [];
+        window.addEventListener("error", e => caughtErrors.push(String(e.error || e.message)));
+        window.addEventListener("unhandledrejection", e => caughtErrors.push(String(e.reason)));
+
+        const container = document.getElementById("setupInventorySection");
+        const autosaveMock = { scheduleSave() {} };
+
+        function makeDraftWithOneProduct() {
+            return {
+                id: "draft-1",
+                user_id: "user-1",
+                category: "setup",
+                setup_inventory: {
+                    schemaVersion: 1,
+                    currency: "USD",
+                    categories: [
+                        {
+                            id: "cat-1",
+                            name: "Desk",
+                            templateId: null,
+                            sortOrder: 0,
+                            items: [
+                                {
+                                    id: "item-1",
+                                    title: "Standing Desk",
+                                    originalUrl: "https://www.ikea.com/",
+                                    retailerName: "IKEA",
+                                    listedPriceCents: null,
+                                    listedPriceCurrency: null,
+                                    metadataFetchedAt: null,
+                                    pricePaid: { cents: 45000, isFree: false },
+                                    sourceType: "retailer",
+                                    sourceName: "IKEA",
+                                    sortOrder: 0
+                                }
+                            ]
+                        }
+                    ]
+                }
+            };
+        }
+
+        // --- Case 1: a draft loaded with an already-saved product (the
+        // exact real-world condition that triggered the bug — a fresh
+        // page load, not a freshly-added-in-session item). -------------------
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        renderSetupInventorySection(makeDraftWithOneProduct(), autosaveMock);
+
+        test(
+            "rendering an inventory with an existing product throws no error/unhandled rejection",
+            caughtErrors.length === 0,
+            JSON.stringify(caughtErrors)
+        );
+        test("the section is unhidden for a Setup-technology draft", container.hidden === false);
+        test("the section's innerHTML is non-empty (this is what stayed permanently blank under the bug)", container.innerHTML.length > 0, `length=${container.innerHTML.length}`);
+
+        const productLinkInput = container.querySelector('[data-action="edit-item-url"]');
+        test("product link field is present", !!productLinkInput);
+        test("product link field carries the item's existing URL", productLinkInput?.value === "https://www.ikea.com/");
+        test("product link field placeholder reads \"Paste a retailer product link\"", productLinkInput?.placeholder === "Paste a retailer product link");
+
+        const linkLabel = container.querySelector(".setup-item-link-label");
+        test("product link field has a real, visible label reading \"Product link (optional)\"", linkLabel?.textContent.trim().startsWith("Product link (optional)"));
+        test("the link label wraps the link input (real <label>, not just aria-label)", linkLabel?.contains(productLinkInput));
+
+        const fetchButton = container.querySelector('[data-action="fetch-metadata"]');
+        test("\"Fill details from link\" control is present", !!fetchButton);
+        test("\"Fill details from link\" is enabled when a URL is already present", fetchButton?.disabled === false);
+        test("the fetch button reads \"Fill details from link\", not \"Get product details\" / \"import\"", fetchButton?.textContent.trim() === "Fill details from link");
+
+        const titleInput = container.querySelector('[data-action="edit-item-title"]');
+        test("product title field is present", !!titleInput);
+        test("product title field carries the item's existing title", titleInput?.value === "Standing Desk");
+
+        const priceInput = container.querySelector('[data-action="edit-item-price"]');
+        test("price paid field is present", !!priceInput);
+        test("price paid field shows the existing price ($450.00 stored as 45000 cents)", priceInput?.value === "450.00");
+
+        const freeToggle = container.querySelector('[data-action="toggle-item-free"]');
+        test("the Free option (checkbox) is present", !!freeToggle && freeToggle.type === "checkbox");
+        test("Free is unchecked for a priced item", freeToggle?.checked === false);
+
+        const sourceTypeSelect = container.querySelector('[data-action="edit-item-source-type"]');
+        test("source type control is present", !!sourceTypeSelect && sourceTypeSelect.tagName === "SELECT");
+        test("source type reflects the item's existing value", sourceTypeSelect?.value === "retailer");
+
+        const sourceNameInput = container.querySelector('[data-action="edit-item-source-name"]');
+        test("source name field is present", !!sourceNameInput);
+        test("source name field carries the item's existing value", sourceNameInput?.value === "IKEA");
+        test("source name field placeholder reads \"e.g. Goodwill, Best Buy\"", sourceNameInput?.placeholder === "e.g. Goodwill, Best Buy");
+
+        const sourceNameLabel = container.querySelector(".setup-item-source-name-label");
+        test("source name field has a real, visible label reading \"Source name\"", sourceNameLabel?.textContent.trim().startsWith("Source name"));
+        test("the source name label wraps the source name input (real <label>, not just aria-label)", sourceNameLabel?.contains(sourceNameInput));
+
+        test("move-item-up control is present", !!container.querySelector('[data-action="move-item-up"]'));
+        test("move-item-down control is present", !!container.querySelector('[data-action="move-item-down"]'));
+        test("delete-item control is present", !!container.querySelector('[data-action="delete-item"]'));
+
+        // --- "Add a product" copy: replaces the old, confusing "Import
+        // your own product" wording. Lives once per category, immediately
+        // above the Add Product button. ---------------------------------
+        const addProductHeading = container.querySelector(".setup-add-product-heading");
+        const addProductDescription = container.querySelector(".setup-add-product-description");
+        test("the \"Add a product\" heading is present", addProductHeading?.textContent.trim() === "Add a product");
+        test(
+            "the \"Add a product\" description gives the correct manual-or-link explanation",
+            addProductDescription?.textContent.trim() === "Enter the product details yourself, or paste a product link and we'll fill in what we can."
+        );
+        test("the old \"Import your own product\" wording is gone", !container.textContent.includes("Import your own product"));
+
+        // --- All six product controls the request calls out must be
+        // visible at once for a real, non-empty item: product name, product
+        // link, price paid, free status, source type, source name. -----------
+        test("required product controls are all visible for an existing item: name, link, price, free, source type, source name", [
+            container.querySelector('[data-action="edit-item-title"]'),
+            container.querySelector('[data-action="edit-item-url"]'),
+            container.querySelector('[data-action="edit-item-price"]'),
+            container.querySelector('[data-action="toggle-item-free"]'),
+            container.querySelector('[data-action="edit-item-source-type"]'),
+            container.querySelector('[data-action="edit-item-source-name"]')
+        ].every(el => !!el && el.offsetParent !== null));
+
+        // --- Case 2: an item with no URL — manual entry, "Get product
+        // details" must be present but disabled, never hidden. ----------------
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        const manualDraft = makeDraftWithOneProduct();
+        manualDraft.setup_inventory.categories[0].items[0].originalUrl = null;
+        manualDraft.setup_inventory.categories[0].items[0].retailerName = null;
+        manualDraft.setup_inventory.categories[0].items[0].sourceType = "thrift_store";
+        manualDraft.setup_inventory.categories[0].items[0].sourceName = "Goodwill";
+        manualDraft.setup_inventory.categories[0].items[0].pricePaid = { cents: null, isFree: true };
+
+        renderSetupInventorySection(manualDraft, autosaveMock);
+
+        test("a manually-entered (no-URL) product also renders without throwing", caughtErrors.length === 0, JSON.stringify(caughtErrors));
+
+        const manualFetchButton = container.querySelector('[data-action="fetch-metadata"]');
+        test("\"Fill details from link\" is present but disabled when there's no URL yet", !!manualFetchButton && manualFetchButton.disabled === true);
+
+        const manualPriceInput = container.querySelector('[data-action="edit-item-price"]');
+        test("price paid field is disabled when the item is marked Free", manualPriceInput?.disabled === true);
+
+        const manualFreeToggle = container.querySelector('[data-action="toggle-item-free"]');
+        test("Free is checked for a free item", manualFreeToggle?.checked === true);
+
+        const manualSourceType = container.querySelector('[data-action="edit-item-source-type"]');
+        test("source type reflects a non-\"retailer\" value correctly (thrift_store)", manualSourceType?.value === "thrift_store");
+
+        // --- Case 3: two products in one category — move-up/move-down
+        // disabled states are sane (first can't move up, last can't move down),
+        // and rendering multiple items still doesn't throw. --------------------
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        const twoItemDraft = makeDraftWithOneProduct();
+        twoItemDraft.setup_inventory.categories[0].items.push({
+            id: "item-2",
+            title: "Monitor Arm",
+            originalUrl: null,
+            retailerName: null,
+            listedPriceCents: null,
+            listedPriceCurrency: null,
+            metadataFetchedAt: null,
+            pricePaid: { cents: null, isFree: false },
+            sourceType: "other",
+            sourceName: null,
+            sortOrder: 1
+        });
+
+        renderSetupInventorySection(twoItemDraft, autosaveMock);
+
+        test("two products in one category render without throwing", caughtErrors.length === 0, JSON.stringify(caughtErrors));
+
+        const moveUpButtons = container.querySelectorAll('[data-action="move-item-up"]');
+        const moveDownButtons = container.querySelectorAll('[data-action="move-item-down"]');
+        test("exactly two products rendered", container.querySelectorAll('[data-action="edit-item-title"]').length === 2);
+        test("the first product's move-up is disabled", moveUpButtons[0]?.disabled === true);
+        test("the second product's move-up is enabled", moveUpButtons[1]?.disabled === false);
+        test("the first product's move-down is enabled", moveDownButtons[0]?.disabled === false);
+        test("the second product's move-down is disabled", moveDownButtons[1]?.disabled === true);
+
+        // --- Case 4: Add Product behavior. A click must create exactly
+        // one new blank card, scroll/focus it, and give visible feedback.
+        // A second click while that card is still completely blank must
+        // reuse it instead of piling up a second blank card, per the live
+        // testing report that repeated clicks could spam empty products. ---
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        renderSetupInventorySection(makeDraftWithOneProduct(), autosaveMock);
+
+        test("Add Product flow: initial render throws no error", caughtErrors.length === 0, JSON.stringify(caughtErrors));
+        test("starts with exactly one product", container.querySelectorAll('[data-action="edit-item-title"]').length === 1);
+
+        container.querySelector('[data-action="add-item"]').click();
+
+        let addFlowTitleInputs = container.querySelectorAll('[data-action="edit-item-title"]');
+        test("clicking Add Product once creates exactly one new blank product (two total)", addFlowTitleInputs.length === 2);
+        test("focus moves to the newly created product's title field", document.activeElement === addFlowTitleInputs[1]);
+
+        let addFlowToastMessages = Array.from(document.querySelectorAll(".toast .toast-message")).map(el => el.textContent);
+        test("a \"Product added.\" confirmation toast is shown", addFlowToastMessages.includes("Product added."));
+
+        test("no error/unhandled rejection after the first Add Product click", caughtErrors.length === 0, JSON.stringify(caughtErrors));
+
+        // Second click, while the just-created card is still completely
+        // blank — must reuse it, not create a third card.
+        container.querySelector('[data-action="add-item"]').click();
+
+        addFlowTitleInputs = container.querySelectorAll('[data-action="edit-item-title"]');
+        test("clicking Add Product again while a blank product exists does not create a third product", addFlowTitleInputs.length === 2);
+        test("focus is returned to the existing blank product's title field, not a new one", document.activeElement === addFlowTitleInputs[1]);
+
+        addFlowToastMessages = Array.from(document.querySelectorAll(".toast .toast-message")).map(el => el.textContent);
+        test(
+            "a \"Finish adding this product first.\" message is shown instead of creating another blank product",
+            addFlowToastMessages.includes("Finish adding this product first.")
+        );
+
+        // Filling in the blank card's title should let a subsequent click
+        // create a genuinely new second blank card again (proves the dedup
+        // check is based on live field state, not a one-time flag).
+        addFlowTitleInputs[1].value = "Chair";
+        addFlowTitleInputs[1].dispatchEvent(new Event("change", { bubbles: true }));
+
+        container.querySelector('[data-action="add-item"]').click();
+        addFlowTitleInputs = container.querySelectorAll('[data-action="edit-item-title"]');
+        test("once the blank product is filled in, Add Product creates a genuine third product", addFlowTitleInputs.length === 3);
+
+        // --- Case 5: metadata fetch outcomes. Regression coverage for the
+        // real bug found in live manual testing — the failure message was
+        // being set on the status <p>, then immediately wiped out because
+        // the very next line called updateItem()/commit(), which
+        // re-renders the whole section from scratch. ------------------------
+        const NOTHING_FOUND = "We couldn't fill in details from this link. You can enter them manually below.";
+        const PARTIAL_SUCCESS = "We filled in what we found. Complete any missing details below.";
+
+        function metadataStatusEl(itemId) {
+            return container.querySelector(`[data-metadata-status="${itemId}"]`);
+        }
+
+        function fetchButtonFor(itemId) {
+            return container.querySelector(`[data-action="fetch-metadata"][data-item-id="${itemId}"]`);
+        }
+
+        // -- 5a: failure — message appears, survives an unrelated re-render,
+        // never clears what the builder already typed, never fabricates a
+        // price, and the button recovers. -------------------------------------
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        const failureDraft = makeDraftWithOneProduct();
+        failureDraft.setup_inventory.categories[0].items[0].pricePaid = { cents: null, isFree: false };
+        renderSetupInventorySection(failureDraft, autosaveMock);
+
+        globalThis.__metadataFetchImpl = async () => {
+            throw new Error("Enter a valid http:// or https:// URL.");
+        };
+
+        let fetchBtn = fetchButtonFor("item-1");
+        fetchBtn.click();
+        test("while a fetch is pending, the button is disabled and reads a loading state", fetchBtn.disabled === true && fetchBtn.textContent.trim() === "Filling in details...");
+
+        await new Promise(r => setTimeout(r, 50));
+
+        let statusEl = metadataStatusEl("item-1");
+        test("failure: an inline message appears next to the link field", statusEl.textContent.includes("Enter a valid http:// or https:// URL."), statusEl.textContent);
+        test("failure: the status paragraph is an accessible alert (assistive tech announces it)", statusEl.getAttribute("role") === "alert");
+        test("failure: the message isn't color-only — it carries an icon", !!statusEl.querySelector(".setup-item-metadata-status-icon"));
+
+        fetchBtn = fetchButtonFor("item-1");
+        test("failure: the fetch button re-enables and its label is restored", fetchBtn.disabled === false && fetchBtn.textContent.trim() === "Fill details from link");
+
+        test("failure: the product's title field is untouched (still \"Standing Desk\")", container.querySelector('[data-action="edit-item-title"]').value === "Standing Desk");
+        test("failure: the product's URL field is untouched", container.querySelector('[data-action="edit-item-url"]').value === "https://www.ikea.com/");
+        test("failure: no price was fabricated — still empty, not $0", container.querySelector('[data-action="edit-item-price"]').value === "");
+        test("failure: Free was not turned on as a side effect", container.querySelector('[data-action="toggle-item-free"]').checked === false);
+        test("failure: no error/unhandled rejection was thrown", caughtErrors.length === 0, JSON.stringify(caughtErrors));
+
+        // An unrelated action elsewhere (renaming the category) forces a
+        // full commit()/render() — the failure message must still be there
+        // afterward, proving it's read from state, not just left over in
+        // a stale DOM node the next render should have replaced.
+        const categoryNameInput = container.querySelector('[data-action="rename-category"]');
+        categoryNameInput.value = "Desk (renamed)";
+        categoryNameInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+        statusEl = metadataStatusEl("item-1");
+        test("failure message survives an unrelated full re-render", statusEl?.textContent.includes("Enter a valid http:// or https:// URL."), statusEl?.textContent);
+
+        // Editing the link again clears the stale failure message.
+        const urlInput = container.querySelector('[data-action="edit-item-url"]');
+        urlInput.value = "https://www.target.com/p/desk";
+        urlInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+        statusEl = metadataStatusEl("item-1");
+        test("editing the link clears the previous failure message", statusEl?.textContent.trim() === "");
+
+        // -- 5b: success but the retailer returned nothing usable — treated
+        // like a failure from the builder's point of view (same message,
+        // same alert role), not silently ignored. -----------------------------
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        renderSetupInventorySection(makeDraftWithOneProduct(), autosaveMock);
+        globalThis.__metadataFetchImpl = async () => ({ title: null, retailerName: null, priceCents: null, currency: null });
+
+        fetchButtonFor("item-1").click();
+        await new Promise(r => setTimeout(r, 50));
+
+        statusEl = metadataStatusEl("item-1");
+        test("nothing-found success: shows the same friendly fallback message", statusEl.textContent.includes(NOTHING_FOUND), statusEl.textContent);
+        test("nothing-found success: still an accessible alert", statusEl.getAttribute("role") === "alert");
+        test("nothing-found success: no error/unhandled rejection", caughtErrors.length === 0, JSON.stringify(caughtErrors));
+
+        // -- 5c: partial success — a distinct, non-error message. -------------
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        const partialDraft = makeDraftWithOneProduct();
+        partialDraft.setup_inventory.categories[0].items[0].title = "";
+        partialDraft.setup_inventory.categories[0].items[0].pricePaid = { cents: null, isFree: false };
+        renderSetupInventorySection(partialDraft, autosaveMock);
+        globalThis.__metadataFetchImpl = async () => ({ title: "Standing Desk", retailerName: "IKEA", priceCents: null, currency: null });
+
+        fetchButtonFor("item-1").click();
+        await new Promise(r => setTimeout(r, 50));
+
+        statusEl = metadataStatusEl("item-1");
+        test("partial success: shows the \"filled in what we found\" message, not the failure one", statusEl.textContent.includes(PARTIAL_SUCCESS), statusEl.textContent);
+        test("partial success: is a polite status, not an alert", statusEl.getAttribute("role") === "status");
+        test("partial success: the found title was filled in", container.querySelector('[data-action="edit-item-title"]').value === "Standing Desk");
+        test("partial success: the missing price stayed empty, never defaulted to $0", container.querySelector('[data-action="edit-item-price"]').value === "");
+        test("partial success: no error/unhandled rejection", caughtErrors.length === 0, JSON.stringify(caughtErrors));
+
+        // -- 5d: full success — title and price both found, no status shown. --
+        caughtErrors.length = 0;
+        container.innerHTML = "";
+        container.hidden = true;
+
+        const fullSuccessDraft = makeDraftWithOneProduct();
+        fullSuccessDraft.setup_inventory.categories[0].items[0].title = "";
+        fullSuccessDraft.setup_inventory.categories[0].items[0].pricePaid = { cents: null, isFree: false };
+        renderSetupInventorySection(fullSuccessDraft, autosaveMock);
+        globalThis.__metadataFetchImpl = async () => ({ title: "Standing Desk", retailerName: "IKEA", priceCents: 45000, currency: "USD" });
+
+        fetchButtonFor("item-1").click();
+        await new Promise(r => setTimeout(r, 50));
+
+        statusEl = metadataStatusEl("item-1");
+        test("full success: no status message is shown once everything was found", statusEl.textContent.trim() === "", statusEl.textContent);
+        test("full success: title was filled in", container.querySelector('[data-action="edit-item-title"]').value === "Standing Desk");
+        test("full success: price was filled in", container.querySelector('[data-action="edit-item-price"]').value === "450.00");
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`renderSetupInventorySection.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

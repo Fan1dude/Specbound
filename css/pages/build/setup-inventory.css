@@ -1,0 +1,457 @@
+/* Milestone 23 — Setup Inventory editor. Lives inside the existing
+   .card.card-padding wrapper in #panel-specifications (see edit.html).
+
+   Milestone 23 polish — layered dark-surface hierarchy (see the comment
+   above .editor-page .card in editor.css for the full rationale). The
+   section itself steps up from the panel's --surface-card to
+   --surface-raised; category cards and product cards each step up
+   again via color-mix() off that same --surface-raised base rather
+   than inventing new literal colors, so a category card is always a
+   little lighter than the section and a product card a little lighter
+   still — the same "closer to the light = more raised" logic the
+   dark-workspace scale already uses between page/card/raised. Borders
+   are dimmed throughout since the tonal steps now carry the separation
+   that used to be the border's job alone. */
+#setupInventorySection {
+    margin-top: var(--space-3);
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+}
+
+.setup-inventory-total {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-1);
+    flex-wrap: wrap;
+    margin: var(--space-2) 0 var(--space-3);
+    padding: var(--space-2);
+    border: 1px solid color-mix(in srgb, var(--color-primary-strong) 30%, transparent);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--color-primary-strong) 10%, var(--surface-raised));
+}
+
+.setup-inventory-total-label {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+}
+
+.setup-inventory-total-value {
+    color: var(--text);
+    font-size: var(--font-size-xl);
+    font-weight: 800;
+}
+
+.setup-inventory-total-note {
+    flex-basis: 100%;
+    color: var(--color-warning);
+    font-size: var(--font-size-xs);
+}
+
+.setup-inventory-categories {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.setup-category {
+    border: 1px solid color-mix(in srgb, var(--color-border) 35%, transparent);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2);
+    background: color-mix(in srgb, white 4%, var(--surface-raised));
+}
+
+.setup-category-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-bottom: var(--space-2);
+}
+
+.setup-category-name-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-weight: 700;
+    font-size: var(--font-size-lg);
+}
+
+.setup-category-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-0);
+    flex: 0 0 auto;
+}
+
+/* Compact icon-only buttons for keyboard-accessible move controls —
+   explicit requirement: drag-and-drop must not be the only reordering
+   method, so every reorder action here is a real, focusable, labeled
+   <button>. */
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+
+.btn-icon:hover:not(:disabled) {
+    color: var(--text);
+    border-color: var(--color-border-strong);
+}
+
+.btn-icon:focus-visible {
+    outline: 2px solid transparent;
+    box-shadow: var(--focus-ring);
+}
+
+.btn-icon:disabled {
+    opacity: .35;
+    cursor: not-allowed;
+}
+
+.setup-items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.setup-item {
+    padding: var(--space-2);
+    border: 1px solid color-mix(in srgb, var(--color-border) 25%, transparent);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, white 8%, var(--surface-raised));
+    transition: background 900ms var(--ease-standard);
+}
+
+.setup-item-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-0-5);
+}
+
+.setup-item-title-input {
+    flex: 1 1 220px;
+    min-width: 0;
+    font-weight: 700;
+}
+
+.setup-item-move-controls {
+    display: flex;
+    gap: var(--space-0);
+    flex: 0 0 auto;
+}
+
+/* A product's own fields (link, price, free, source, move-to-category) —
+   a real desktop GRID, not one long stacked column, so the extra width
+   freed up by editor.css's wider .editor-panel-wide actually gets used.
+   3 columns by default; the link field spans 2 of them since it also
+   carries the "Fill details from link" button and status/suggestion
+   text beneath it. Collapses to 2 columns at tablet widths and 1 at
+   mobile — see the media queries below. */
+.setup-item-fields-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-2) var(--space-3);
+    align-items: start;
+}
+
+.setup-item-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-0-5);
+    min-width: 0;
+}
+
+.setup-item-field-link {
+    grid-column: span 2;
+}
+
+.setup-item-link-label,
+.setup-item-price-label,
+.setup-item-source-type-label,
+.setup-item-source-name-label,
+.setup-item-move-category-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    color: var(--text-secondary);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    min-width: 0;
+}
+
+.setup-item-field-link .btn {
+    align-self: flex-start;
+}
+
+.setup-item-metadata-status {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-0-5);
+    margin: var(--space-0-5) 0 0;
+    font-size: var(--font-size-xs);
+}
+
+.setup-item-metadata-status:empty {
+    display: none;
+}
+
+.setup-item-metadata-status-icon {
+    flex: 0 0 auto;
+    display: flex;
+    margin-top: 1px;
+}
+
+.setup-item-metadata-status-error {
+    color: var(--text-secondary);
+}
+
+.setup-item-metadata-status-error .setup-item-metadata-status-icon {
+    color: var(--color-warning-strong);
+}
+
+.setup-item-metadata-status-info {
+    color: var(--text-secondary);
+}
+
+.setup-item-metadata-status-info .setup-item-metadata-status-icon {
+    color: var(--color-info);
+}
+
+.setup-item-suggested {
+    margin: var(--space-0-5) 0 0;
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+}
+
+.setup-item-price-input {
+    max-width: 160px;
+}
+
+/* Overrides form.css's global `input { width: 100%; padding: ...; }` —
+   written for text inputs, never meant to reach a checkbox. Same fix,
+   same reasoning, as the Community Guidelines acceptance dialog's
+   checkbox (css/components/modal.css .guidelines-accept-row) —
+   independently rediscovered here for the Free toggle. */
+.setup-item-free-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-0);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    /* Sibling fields carry a small label above their control; Free is a
+       single-line checkbox with no separate label row above it — this
+       margin roughly lines its checkbox up with the other fields'
+       inputs instead of sitting noticeably higher in the grid row. */
+    margin-top: 20px;
+}
+
+.setup-item-free-toggle input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 0;
+    margin: 0;
+}
+
+/* A just-added product card — a brief, decorative highlight fade so a
+   builder who clicked "Add Product" sees clear visible confirmation
+   something happened, beyond the focus ring alone (which can be subtle
+   at a glance, especially when the click scrolled the new card into
+   view from off-screen). Purely cosmetic — never gates any behavior. */
+.setup-item-just-added {
+    background: var(--color-primary-soft);
+    transition: background 900ms var(--ease-standard);
+}
+
+.setup-add-product-intro {
+    margin-top: var(--space-3);
+}
+
+.setup-add-product-heading {
+    margin: 0;
+    color: var(--text);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+}
+
+.setup-add-product-description {
+    margin: 2px 0 0;
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+}
+
+.setup-category-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    margin-top: var(--space-2);
+}
+
+.setup-category-subtotal {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.setup-add-category-controls {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin-top: var(--space-3);
+}
+
+.setup-add-category-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-0-5);
+}
+
+.setup-add-category-chip {
+    cursor: pointer;
+    background: transparent;
+}
+
+.setup-add-category-chip:hover {
+    border-color: var(--color-primary-strong);
+    color: var(--text);
+}
+
+.setup-add-category-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-2);
+    border: 1px solid color-mix(in srgb, var(--color-border) 35%, transparent);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, white 4%, var(--surface-raised));
+}
+
+.setup-add-category-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+}
+
+.setup-inventory-note {
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+}
+
+/* --- Public setup inventory display (build.html) ------------------------
+   Lives in the same #buildSetupInventorySection .build-section as every
+   other public build section — no card/border of its own beyond what
+   .setup-category already provides, and deliberately compact (no product
+   images, no oversized cards — Milestone 23 §4). */
+
+.setup-category-name {
+    margin: 0 0 var(--space-1);
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text);
+}
+
+.setup-items-public {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.setup-item-public {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+}
+
+.setup-item-public-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-weight: 600;
+    color: var(--text);
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.setup-item-public-price {
+    flex: 0 0 auto;
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+}
+
+/* A fixed, short label ("View product") — never the URL itself, so its
+   width never depends on the link's length. Own element, not part of
+   the title, so a very long product name/URL-shaped title can wrap
+   freely without dragging this control along with it. */
+.setup-item-public-link {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--color-primary);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    transition: text-decoration-color var(--duration-fast) var(--ease-standard);
+}
+
+.setup-item-public-link:hover,
+.setup-item-public-link:focus-visible {
+    text-decoration-color: currentColor;
+}
+
+.setup-item-public-link svg {
+    flex: 0 0 auto;
+}
+
+.setup-item-public-source {
+    flex-basis: 100%;
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+@media (max-width: 900px) {
+    .setup-item-fields-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .setup-item-field-link {
+        grid-column: span 2;
+    }
+}
+
+@media (max-width: 640px) {
+    .setup-category-name-input {
+        font-size: var(--font-size-md);
+    }
+
+    .setup-item-fields-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .setup-item-field-link {
+        grid-column: auto;
+    }
+
+    .setup-item-price-input {
+        max-width: none;
+    }
+
+    .setup-item-free-toggle {
+        margin-top: 0;
+    }
+}

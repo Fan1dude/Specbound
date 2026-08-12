@@ -336,9 +336,15 @@
    as one run-on fact instead of four distinct, scannable ones. Still
    quiet — no borders/fills, same restraint as the sentence version had —
    just structured instead of punctuation-separated. */
+/* auto-fit rather than a hardcoded repeat(4, ...) — Milestone 23 §6 adds
+   a 5th, optional "Building Since" tile for builders who've set one; a
+   fixed 4-column grid would leave that 5th tile alone on its own row
+   under column 1, with columns 2-4 empty beside it. auto-fit renders 4
+   (or 5) even columns depending on how many tiles are actually present,
+   with no visual change for the always-4-tile case. */
 .overview-metrics {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
     gap: var(--space-2);
 }
 
@@ -694,15 +700,6 @@
     color: var(--primary);
     text-decoration: underline;
     margin-left: 6px;
-}
-
-.about-builder-since {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--text-muted);
-    font-size: var(--font-size-sm);
-    margin-top: var(--space-2);
 }
 
 /* ---------- Responsive ---------- */

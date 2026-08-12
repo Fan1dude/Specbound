@@ -11,7 +11,7 @@ This is Specbound's current production deployment and operations guide — how t
 - **Hosting:** Cloudflare Pages, deploying directly from this GitHub repository
 - **Architecture:** static HTML/CSS/JavaScript — no framework, no bundler, no root-level application build step
 
-The site is live, HTTPS is active, and Cloudflare preview deployments on pull requests have been observed working. Supabase Auth's Site URL, Redirect URLs, and Discord provider are configured for this domain, and the Discord account-linking flow has been manually verified end-to-end in production (see §8). This document does not claim every operational item below is finished — §13 lists what's genuinely still open.
+The site is live, HTTPS is active, and Cloudflare preview deployments on pull requests have been observed working. Supabase Auth's Site URL, Redirect URLs, and Discord provider are configured for this domain, and the Discord account-linking flow has been manually verified end-to-end in production (see §9). This document does not claim every operational item below is finished — §14 lists what's genuinely still open.
 
 ---
 
@@ -45,7 +45,7 @@ A Cloudflare WAF custom rule, **"Block developer and CI paths,"** additionally b
 
 Together these are two independent pieces of evidence for two independent mechanisms, not one check standing in for both. Neither round tested every file under every directory — only representative tracked files.
 
-`design-system.html` (an unlinked internal style-guide page) is deliberately **not** pruned — it's harmless to publish and is already covered by `robots.txt`'s disallow list (§10).
+`design-system.html` (an unlinked internal style-guide page) is deliberately **not** pruned — it's harmless to publish and is already covered by `robots.txt`'s disallow list (§11).
 
 ---
 
@@ -71,7 +71,7 @@ The production domain, `specboundapp.com`, is live and already connected to this
 
 A read-only check today confirmed: `http://specboundapp.com/` redirects to `https://specboundapp.com/` (200 after redirect), and a direct HTTPS request to the homepage returns 200. SSL is auto-provisioned and auto-renewed by Cloudflare Pages for both the production domain and the `*.pages.dev` subdomain — no manual certificate management.
 
-**HSTS (`Strict-Transport-Security`) is not currently present** in `_headers`, and a live header check today confirmed it's absent from the production response — consistent with the repository's own documented decision to add it only after the domain has run correctly on HTTPS for a burn-in period, since HSTS is hard to undo quickly once browsers cache it. See §13.
+**HSTS (`Strict-Transport-Security`) is not currently present** in `_headers`, and a live header check today confirmed it's absent from the production response — consistent with the repository's own documented decision to add it only after the domain has run correctly on HTTPS for a burn-in period, since HSTS is hard to undo quickly once browsers cache it. See §14.
 
 ---
 
@@ -85,11 +85,38 @@ A read-only check today confirmed: `http://specboundapp.com/` redirects to `http
 - **Redirect URLs** includes `https://specboundapp.com/pages/settings.html` — the exact URL `js/pages/settings/app.js` passes as `redirectTo` when a user links Discord (`window.location.href` at the moment "Connect Discord" is clicked). The password-reset flow (`js/pages/forgotPassword/app.js`) builds its own `redirectTo` dynamically from the current origin, so it doesn't require a separate allowlist entry beyond the Site URL itself.
 - **Discord provider:** enabled, with manual identity linking enabled (`GOTRUE_SECURITY_MANUAL_LINKING_ENABLED`) — required for `supabase.auth.linkIdentity()` to attach Discord to an already-signed-in account rather than only supporting first-time sign-in.
 
-No RLS, storage policy, or schema change is required as part of deployment — those are managed through this repository's tracked migrations (`supabase/migrations/`, currently 34 files, `0000`–`0033`) and applied independently via the Supabase CLI, not through Cloudflare Pages. Repository presence of a migration file is not the same fact as production application; the most recent live preflight check (`supabase migration list --linked`) confirmed production's migration history matches local through `0033`.
+No RLS, storage policy, or schema change is required as part of deployment — those are managed through this repository's tracked migrations (`supabase/migrations/`, currently 36 files, `0000`–`0035`) and applied independently via the Supabase CLI, not through Cloudflare Pages. Repository presence of a migration file is not the same fact as production application; the most recent live preflight check (`supabase migration list --linked`) confirmed production's migration history matches local through `0033` — **`0034` and `0035` are not yet applied to the shared/production project** (confirmed live during Milestone 23: a real Builder Portfolio page load returns `42703 column profiles.building_since_year does not exist`, exactly the expected pre-migration state).
 
 ---
 
-## 8. Discord production configuration
+## 8. Supabase Edge Functions
+
+Milestone 23 introduces this app's first Supabase Edge Function — `supabase/functions/product-metadata` (best-effort product-page metadata extraction for the Setup-inventory link-assisted entry flow; see `docs/milestones/MILESTONE_23_SETUP_INVENTORY_SEARCH_SPECIFICATION.md` §5 for the full design and SSRF-defense rationale). **Not deployed as part of this task** — documented here so a future deploy follows the correct order, not executed.
+
+**Deploy command** (from the repository root, once linked to the target project):
+
+```
+supabase functions deploy product-metadata --project-ref <project-ref>
+```
+
+**Requires no new secrets** — the function reads only `SUPABASE_URL`/`SUPABASE_ANON_KEY` from its own Edge Function runtime environment (both auto-provided by Supabase for every deployed function) and verifies the caller's JWT itself; no service-role key is used anywhere in the function or in any browser code.
+
+**Required deployment order for Milestone 23** (documented, not executed — no migration was applied and no function or website was deployed as part of this task):
+
+1. Apply migration `0035_setup_inventory_and_builder_dates.sql` to the target project.
+2. Verify the migration and its RLS policies against the live project (e.g. re-run the relevant assertions from `supabase/tests/migration_0035_setup_inventory_and_builder_dates.test.sql` by hand, or a targeted spot-check of `saved_setup_categories`' policies and `profiles.building_since_year`'s CHECK constraint).
+3. Deploy the `product-metadata` Edge Function (command above).
+4. Verify the function is reachable and correctly requires authentication — an unauthenticated `supabase.functions.invoke("product-metadata", ...)` call should return the function's `auth_required` error, not a 404/500.
+5. Deploy the website (normal Cloudflare Pages flow, §4).
+6. Run production smoke tests: create a Setup-technology draft, add a manual (no-URL) product, add a URL-based product and confirm "Get product details" either fills in suggestions or shows the documented fallback message ("We couldn't fill in the details from this link. You can enter them manually."), publish, and confirm the public build page's Setup Inventory section renders correctly.
+
+Deploying the website **before** step 1 is what produces the exact `42703` error this section's §7 note describes — every `getBuilderPortfolioProfile()`-backed Builder Portfolio page load, and every setup-inventory read/write, would fail until the migration lands. This is the concrete, now-observed reason the order above is not optional.
+
+Metadata extraction is always best-effort — manual product entry (title, price paid, free toggle, source) works with or without the Edge Function deployed, is never blocked by a fetch failure, and never requires a successful metadata fetch to add or publish a product.
+
+---
+
+## 9. Discord production configuration
 
 Discord account linking (Settings → Connected Accounts) requires its own Supabase provider settings and a matching Discord Developer Portal redirect — the full checklist, troubleshooting table, and security notes live in **[`docs/DISCORD_SETUP.md`](DISCORD_SETUP.md)**; this section only records the current state, not the full procedure.
 
@@ -99,7 +126,7 @@ Discord account linking (Settings → Connected Accounts) requires its own Supab
 
 ---
 
-## 9. Security headers and caching
+## 10. Security headers and caching
 
 Verified directly against `_headers` and a live response check today.
 
@@ -113,7 +140,7 @@ If a caching issue is ever suspected beyond what `_headers` already addresses, t
 
 ---
 
-## 10. SEO and public platform files
+## 11. SEO and public platform files
 
 Verified directly against the repository source and, where noted, a live fetch today.
 
@@ -126,7 +153,7 @@ Verified directly against the repository source and, where noted, a live fetch t
 
 ---
 
-## 11. Deployment verification
+## 12. Deployment verification
 
 Kept deliberately separated by who or what actually performs each check, so nothing gets assumed covered by a layer that doesn't actually cover it.
 
@@ -139,13 +166,13 @@ Kept deliberately separated by who or what actually performs each check, so noth
 - View-source on a sample of pages shows `<title>`, `<meta name="description">`, and `og:*`/`twitter:*` tags in the raw HTML response
 - A real password-reset email test against production, confirming the emailed link points at `https://specboundapp.com`
 
-**Already completed, recorded here as verified (not re-performed today):** the full Discord production test in §8.
+**Already completed, recorded here as verified (not re-performed today):** the full Discord production test in §9.
 
 **Human dashboard checks — cannot be performed from this environment:** confirming the live Cloudflare Pages build/output/pruning settings actually match §3; confirming Supabase's Site URL/Redirect URLs/Discord provider match §7 by looking at the dashboard directly rather than relying on the verified starting state.
 
 ---
 
-## 12. Rollback procedure
+## 13. Rollback procedure
 
 Cloudflare Pages retains every deployment. To roll back:
 
@@ -154,24 +181,25 @@ Cloudflare Pages retains every deployment. To roll back:
 3. Open the three-dot actions menu for the desired previous production deployment, select **Rollback to this deployment**, and confirm.
 4. Once confirmed, the selected deployment becomes production immediately—no rebuild or git operation is required. Cloudflare's deployment history is independent of git history; a bad deploy can be undone without touching the repository.
 
-This describes Cloudflare Pages' documented rollback **capability**. **No live rollback drill has been performed and is not claimed here** — see §13. Reverting through git (`git revert` on the bad commit and pushing the resulting commit to `main`) is a separate, slower path that triggers a brand-new build rather than instantly restoring a prior one; the dashboard rollback above is the faster option for an active incident.
+This describes Cloudflare Pages' documented rollback **capability**. **No live rollback drill has been performed and is not claimed here** — see §14. Reverting through git (`git revert` on the bad commit and pushing the resulting commit to `main`) is a separate, slower path that triggers a brand-new build rather than instantly restoring a prior one; the dashboard rollback above is the faster option for an active incident.
 
 ---
 
-## 13. Remaining operational checks
+## 14. Remaining operational checks
 
 Genuinely open items — nothing here is marked complete without evidence:
 
 - SMTP/email provider configuration for production traffic — Supabase's default email service has strict rate limits, not recommended at scale. Not verified in this task.
 - Confirming the Supabase project's backup/point-in-time-recovery tier. Not verified in this task.
 - A real production password-reset email test, confirming the emailed link resolves to `https://specboundapp.com`.
-- A real rollback drill (§12) — capability is documented, a live test is not.
+- A real rollback drill (§13) — capability is documented, a live test is not.
 - Cross-browser/cross-device manual checks — not currently covered by any automated or manual process beyond ad hoc spot checks during development.
 - Revisiting HSTS (§6) once the domain has run stably on HTTPS for a burn-in period.
+- Milestone 23's migration (`0035`), Edge Function (`product-metadata`), and website changes have not been deployed to the shared/production project — see §8's deployment order.
 
 ---
 
-## 14. Related documentation
+## 15. Related documentation
 
 - [`docs/CI.md`](CI.md) — what runs automatically, what still needs manual/browser verification, and how to run the same checks locally
 - [`docs/DISCORD_SETUP.md`](DISCORD_SETUP.md) — full Discord account-linking configuration, troubleshooting, and manual test procedure

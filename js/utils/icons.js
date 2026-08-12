@@ -50,7 +50,17 @@ const PATHS = {
     // Filled dots (stroke="none"), same sub-pattern the decorative dots
     // in "warning"/"info" above already use, since a kebab glyph reads
     // as three solid points, not three stroked rings.
-    more: '<circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/>'
+    more: '<circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/>',
+
+    // Milestone 23 (Setup Inventory) additions — keyboard-accessible
+    // move-up/move-down/delete controls for category and product
+    // reordering (explicit requirement: drag-and-drop must not be the
+    // only reordering method). "chevron-up" mirrors "chevron-down"
+    // exactly (same polyline, flipped vertically) rather than a CSS
+    // transform on the existing icon, so both remain plain, cacheable,
+    // orientation-explicit glyphs.
+    "chevron-up": '<polyline points="6 15 12 9 18 15"/>',
+    trash: '<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>'
 };
 
 // Returns an inline <svg> string built to the shared standard. `size` must
