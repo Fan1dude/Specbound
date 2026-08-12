@@ -136,13 +136,51 @@
     flex: 0 0 auto;
 }
 
-.setup-item-link-row .setup-item-url-input {
-    flex: 1 1 220px;
+/* A product's own fields (link, price, free, source, move-to-category) —
+   a real desktop GRID, not one long stacked column, so the extra width
+   freed up by editor.css's wider .editor-panel-wide actually gets used.
+   3 columns by default; the link field spans 2 of them since it also
+   carries the "Fill details from link" button and status/suggestion
+   text beneath it. Collapses to 2 columns at tablet widths and 1 at
+   mobile — see the media queries below. */
+.setup-item-fields-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-2) var(--space-3);
+    align-items: start;
+}
+
+.setup-item-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-0-5);
     min-width: 0;
 }
 
+.setup-item-field-link {
+    grid-column: span 2;
+}
+
+.setup-item-link-label,
+.setup-item-price-label,
+.setup-item-source-type-label,
+.setup-item-source-name-label,
+.setup-item-move-category-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    color: var(--text-secondary);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    min-width: 0;
+}
+
+.setup-item-field-link .btn {
+    align-self: flex-start;
+}
+
 .setup-item-metadata-status {
-    margin: 0 0 var(--space-0-5);
+    margin: var(--space-0-5) 0 0;
     color: var(--color-warning);
     font-size: var(--font-size-xs);
 }
@@ -152,30 +190,13 @@
 }
 
 .setup-item-suggested {
-    margin: 0 0 var(--space-0-5);
+    margin: var(--space-0-5) 0 0;
     color: var(--text-muted);
     font-size: var(--font-size-xs);
 }
 
-.setup-item-price-row {
-    align-items: flex-end;
-}
-
-.setup-item-price-label,
-.setup-item-source-type-label,
-.setup-item-move-category-label {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    color: var(--text-secondary);
-    font-size: var(--font-size-xs);
-    font-weight: 700;
-    flex: 1 1 140px;
-    min-width: 0;
-}
-
 .setup-item-price-input {
-    max-width: 140px;
+    max-width: 160px;
 }
 
 /* Overrides form.css's global `input { width: 100%; padding: ...; }` —
@@ -187,11 +208,13 @@
     display: flex;
     align-items: center;
     gap: var(--space-0);
-    flex: 0 0 auto;
     color: var(--text-secondary);
     font-size: var(--font-size-sm);
-    align-self: flex-end;
-    padding-bottom: 6px;
+    /* Sibling fields carry a small label above their control; Free is a
+       single-line checkbox with no separate label row above it — this
+       margin roughly lines its checkbox up with the other fields'
+       inputs instead of sitting noticeably higher in the grid row. */
+    margin-top: 20px;
 }
 
 .setup-item-free-toggle input[type="checkbox"] {
@@ -201,13 +224,31 @@
     margin: 0;
 }
 
-.setup-item-source-row {
-    align-items: flex-end;
+/* A just-added product card — a brief, decorative highlight fade so a
+   builder who clicked "Add Product" sees clear visible confirmation
+   something happened, beyond the focus ring alone (which can be subtle
+   at a glance, especially when the click scrolled the new card into
+   view from off-screen). Purely cosmetic — never gates any behavior. */
+.setup-item-just-added {
+    background: var(--color-primary-soft);
+    transition: background 900ms var(--ease-standard);
 }
 
-.setup-item-source-name-input {
-    flex: 1 1 200px;
-    min-width: 0;
+.setup-add-product-intro {
+    margin-top: var(--space-3);
+}
+
+.setup-add-product-heading {
+    margin: 0;
+    color: var(--text);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+}
+
+.setup-add-product-description {
+    margin: 2px 0 0;
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
 }
 
 .setup-category-footer {
@@ -326,15 +367,27 @@
     font-size: var(--font-size-xs);
 }
 
+@media (max-width: 900px) {
+    .setup-item-fields-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .setup-item-field-link {
+        grid-column: span 2;
+    }
+}
+
 @media (max-width: 640px) {
     .setup-category-name-input {
         font-size: var(--font-size-md);
     }
 
-    .setup-item-price-row,
-    .setup-item-source-row {
-        flex-direction: column;
-        align-items: stretch;
+    .setup-item-fields-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .setup-item-field-link {
+        grid-column: auto;
     }
 
     .setup-item-price-input {
@@ -342,7 +395,6 @@
     }
 
     .setup-item-free-toggle {
-        align-self: flex-start;
-        padding-bottom: 0;
+        margin-top: 0;
     }
 }

@@ -155,17 +155,65 @@ export function renderSetupInventorySection(draft, autosave) {
     }
 
     // --- Item-level actions ---------------------------------------------
+    // A completely untouched item — exactly what createItem() produces by
+    // default. Deliberately doesn't check sourceType (defaults to "other"
+    // either way) so a stray selection there alone doesn't count as
+    // "filled in." Used to stop repeated Add Product clicks from piling
+    // up multiple blank cards — see addItem() below.
+    function isEffectivelyEmptyItem(item) {
+        return !item.title
+            && !item.originalUrl
+            && item.pricePaid.cents === null
+            && !item.pricePaid.isFree
+            && !item.sourceName;
+    }
+
+    function focusItem(itemId, { scroll = false, flash = false } = {}) {
+        const card = container.querySelector(`.setup-item[data-item-id="${cssEscape(itemId)}"]`);
+        if (!card) return;
+
+        if (scroll) card.scrollIntoView({ behavior: "smooth", block: "center" });
+
+        card.querySelector('[data-action="edit-item-title"]')?.focus();
+
+        if (flash) {
+            // requestAnimationFrame so the browser registers the
+            // pre-flash state first — same pattern already used for the
+            // toast "show" transition in core/toast.js.
+            requestAnimationFrame(() => {
+                card.classList.add("setup-item-just-added");
+                setTimeout(() => card.classList.remove("setup-item-just-added"), 1500);
+            });
+        }
+    }
+
     function addItem(categoryId) {
         const category = currentInventory.categories.find(c => c.id === categoryId);
         if (!category) return;
+
+        // A blank product card left over from an earlier click — reuse it
+        // instead of creating a second, third, ... blank card. This is
+        // what actually stops "Add Product" spam from producing a pile of
+        // empty products; the button itself stays a normal, always-
+        // enabled control (no artificial disable/debounce needed).
+        const existingBlank = category.items.find(isEffectivelyEmptyItem);
+        if (existingBlank) {
+            showToast("Finish adding this product first.", "info");
+            focusItem(existingBlank.id, { scroll: true });
+            return;
+        }
 
         if (category.items.length >= LIMITS.MAX_ITEMS_PER_CATEGORY) {
             showToast(`You can only have up to ${LIMITS.MAX_ITEMS_PER_CATEGORY} products per category.`, "warning");
             return;
         }
 
-        category.items.push(createItem({ sortOrder: category.items.length }));
+        const newItem = createItem({ sortOrder: category.items.length });
+        category.items.push(newItem);
         commit();
+
+        focusItem(newItem.id, { scroll: true, flash: true });
+        showToast("Product added.", "success");
     }
 
     function findItem(itemId) {
@@ -245,7 +293,7 @@ export function renderSetupInventorySection(draft, autosave) {
 
         if (button) {
             button.disabled = true;
-            button.textContent = "Getting details...";
+            button.textContent = "Filling in details...";
         }
         if (statusEl) statusEl.textContent = "";
 
@@ -284,7 +332,7 @@ export function renderSetupInventorySection(draft, autosave) {
         } finally {
             if (button) {
                 button.disabled = false;
-                button.textContent = "Get product details";
+                button.textContent = "Fill details from link";
             }
         }
     }
@@ -357,6 +405,11 @@ export function renderSetupInventorySection(draft, autosave) {
                     ${category.items.map((item, itemIndex) => renderItem(item, category, itemIndex)).join("")}
                 </div>
 
+                <div class="setup-add-product-intro">
+                    <p class="setup-add-product-heading">Add a product</p>
+                    <p class="setup-add-product-description">Enter the product details yourself, or paste a product link and we'll fill in what we can.</p>
+                </div>
+
                 <div class="setup-category-footer">
                     <button type="button" class="btn btn-secondary btn-small" data-action="add-item" data-category-id="${escapeAttribute(category.id)}">
                         Add Product
@@ -404,75 +457,87 @@ export function renderSetupInventorySection(draft, autosave) {
                     </div>
                 </div>
 
-                <div class="setup-item-row setup-item-link-row">
-                    <input
-                        type="url"
-                        class="setup-item-url-input"
-                        data-action="edit-item-url"
-                        data-item-id="${escapeAttribute(item.id)}"
-                        value="${escapeAttribute(item.originalUrl || "")}"
-                        placeholder="Product link (optional)"
-                        aria-label="Product link"
-                        maxlength="${LIMITS.MAX_URL_LENGTH}"
-                    >
-                    <button type="button" class="btn btn-secondary btn-small" data-action="fetch-metadata" data-item-id="${escapeAttribute(item.id)}" ${item.originalUrl ? "" : "disabled"}>
-                        Get product details
-                    </button>
-                </div>
-                <p class="setup-item-metadata-status" data-metadata-status="${escapeAttribute(item.id)}"></p>
-                ${item.retailerName
-                    ? `<p class="setup-item-suggested">Suggested from ${escapeHtml(item.retailerName)}${typeof item.listedPriceCents === "number" ? `: ${escapeHtml(formatCents(item.listedPriceCents, item.listedPriceCurrency || currentInventory.currency))}` : ""}</p>`
-                    : ""
-                }
+                <div class="setup-item-fields-grid">
+                    <div class="setup-item-field setup-item-field-link">
+                        <label class="setup-item-link-label">
+                            Product link (optional)
+                            <input
+                                type="url"
+                                class="setup-item-url-input"
+                                data-action="edit-item-url"
+                                data-item-id="${escapeAttribute(item.id)}"
+                                value="${escapeAttribute(item.originalUrl || "")}"
+                                placeholder="Paste a retailer product link"
+                                maxlength="${LIMITS.MAX_URL_LENGTH}"
+                            >
+                        </label>
+                        <button type="button" class="btn btn-secondary btn-small" data-action="fetch-metadata" data-item-id="${escapeAttribute(item.id)}" ${item.originalUrl ? "" : "disabled"}>
+                            Fill details from link
+                        </button>
+                        <p class="setup-item-metadata-status" data-metadata-status="${escapeAttribute(item.id)}"></p>
+                        ${item.retailerName
+                            ? `<p class="setup-item-suggested">Suggested from ${escapeHtml(item.retailerName)}${typeof item.listedPriceCents === "number" ? `: ${escapeHtml(formatCents(item.listedPriceCents, item.listedPriceCurrency || currentInventory.currency))}` : ""}</p>`
+                            : ""
+                        }
+                    </div>
 
-                <div class="setup-item-row setup-item-price-row">
-                    <label class="setup-item-price-label">
-                        Price paid
-                        <input
-                            type="text"
-                            inputmode="decimal"
-                            class="setup-item-price-input"
-                            data-action="edit-item-price"
-                            data-item-id="${escapeAttribute(item.id)}"
-                            value="${item.pricePaid.cents !== null ? escapeAttribute((item.pricePaid.cents / 100).toFixed(2)) : ""}"
-                            placeholder="0.00"
-                            ${item.pricePaid.isFree ? "disabled" : ""}
-                        >
-                    </label>
+                    <div class="setup-item-field setup-item-field-price">
+                        <label class="setup-item-price-label">
+                            Price paid
+                            <input
+                                type="text"
+                                inputmode="decimal"
+                                class="setup-item-price-input"
+                                data-action="edit-item-price"
+                                data-item-id="${escapeAttribute(item.id)}"
+                                value="${item.pricePaid.cents !== null ? escapeAttribute((item.pricePaid.cents / 100).toFixed(2)) : ""}"
+                                placeholder="0.00"
+                                ${item.pricePaid.isFree ? "disabled" : ""}
+                            >
+                        </label>
+                    </div>
 
-                    <label class="setup-item-free-toggle">
-                        <input type="checkbox" data-action="toggle-item-free" data-item-id="${escapeAttribute(item.id)}" ${item.pricePaid.isFree ? "checked" : ""}>
-                        Free
-                    </label>
-                </div>
+                    <div class="setup-item-field setup-item-field-free">
+                        <label class="setup-item-free-toggle">
+                            <input type="checkbox" data-action="toggle-item-free" data-item-id="${escapeAttribute(item.id)}" ${item.pricePaid.isFree ? "checked" : ""}>
+                            Free
+                        </label>
+                    </div>
 
-                <div class="setup-item-row setup-item-source-row">
-                    <label class="setup-item-source-type-label">
-                        Where I found it
-                        <select data-action="edit-item-source-type" data-item-id="${escapeAttribute(item.id)}">
-                            ${SOURCE_TYPES.map(type => `<option value="${escapeAttribute(type.value)}" ${item.sourceType === type.value ? "selected" : ""}>${escapeHtml(type.label)}</option>`).join("")}
-                        </select>
-                    </label>
+                    <div class="setup-item-field setup-item-field-source-type">
+                        <label class="setup-item-source-type-label">
+                            Where I found it
+                            <select data-action="edit-item-source-type" data-item-id="${escapeAttribute(item.id)}">
+                                ${SOURCE_TYPES.map(type => `<option value="${escapeAttribute(type.value)}" ${item.sourceType === type.value ? "selected" : ""}>${escapeHtml(type.label)}</option>`).join("")}
+                            </select>
+                        </label>
+                    </div>
 
-                    <input
-                        type="text"
-                        class="setup-item-source-name-input"
-                        data-action="edit-item-source-name"
-                        data-item-id="${escapeAttribute(item.id)}"
-                        value="${escapeAttribute(item.sourceName || "")}"
-                        placeholder="Source name (e.g. Goodwill, Best Buy)"
-                        aria-label="Source name"
-                        maxlength="${LIMITS.MAX_SOURCE_NAME_LENGTH}"
-                    >
+                    <div class="setup-item-field setup-item-field-source-name">
+                        <label class="setup-item-source-name-label">
+                            Source name
+                            <input
+                                type="text"
+                                class="setup-item-source-name-input"
+                                data-action="edit-item-source-name"
+                                data-item-id="${escapeAttribute(item.id)}"
+                                value="${escapeAttribute(item.sourceName || "")}"
+                                placeholder="e.g. Goodwill, Best Buy"
+                                maxlength="${LIMITS.MAX_SOURCE_NAME_LENGTH}"
+                            >
+                        </label>
+                    </div>
 
                     ${otherCategories.length
-                        ? `<label class="setup-item-move-category-label">
-                                Move to
-                                <select data-action="move-item-category" data-item-id="${escapeAttribute(item.id)}">
-                                    <option value="">Move to category...</option>
-                                    ${otherCategories.map(c => `<option value="${escapeAttribute(c.id)}">${escapeHtml(c.name)}</option>`).join("")}
-                                </select>
-                           </label>`
+                        ? `<div class="setup-item-field setup-item-field-move-category">
+                                <label class="setup-item-move-category-label">
+                                    Move to
+                                    <select data-action="move-item-category" data-item-id="${escapeAttribute(item.id)}">
+                                        <option value="">Move to category...</option>
+                                        ${otherCategories.map(c => `<option value="${escapeAttribute(c.id)}">${escapeHtml(c.name)}</option>`).join("")}
+                                    </select>
+                                </label>
+                           </div>`
                         : ""
                     }
                 </div>

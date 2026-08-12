@@ -1,5 +1,5 @@
 .editor-page {
-    width: min(var(--container-md), 92%);
+    width: min(1200px, 92%);
     margin: 0 auto;
     padding: var(--space-6) 0 var(--space-9);
 }
