@@ -1,0 +1,144 @@
+.my-feedback-page {
+    width: min(760px, 92%);
+    margin: 0 auto;
+    padding: 72px 0 120px;
+}
+
+.my-feedback-hero {
+    margin-bottom: 24px;
+}
+
+.my-feedback-hero h1 {
+    font-size: clamp(2.2rem, 5vw, 3rem);
+    line-height: 1;
+    letter-spacing: -.04em;
+    margin: 8px 0 16px;
+}
+
+.my-feedback-hero h1:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 4px;
+    border-radius: var(--radius-sm);
+}
+
+.my-feedback-hero p {
+    color: var(--text-secondary);
+}
+
+.my-feedback-legend {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--space-2);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 32px;
+}
+
+.my-feedback-legend dt {
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+}
+
+.my-feedback-legend dd {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.my-feedback-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.my-feedback-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+}
+
+.my-feedback-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-bottom: var(--space-1);
+}
+
+.my-feedback-item-status {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    padding: var(--space-0-5) var(--space-1);
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.my-feedback-item-message {
+    color: var(--text);
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    margin-bottom: var(--space-1);
+}
+
+.my-feedback-item-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: var(--space-1);
+    margin: 0 0 var(--space-1);
+}
+
+.my-feedback-item-meta-item dt {
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-bottom: 2px;
+}
+
+.my-feedback-item-meta-item dd {
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+}
+
+/* page_url is always plain text (see renderMyFeedback.js) — never a
+   link — matching css/pages/feedback/feedback.css's identical rule for
+   the reviewer card. */
+.my-feedback-page-context {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+}
+
+.my-feedback-page-context-empty {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.my-feedback-item-status-description {
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .my-feedback-item {
+        transition: none;
+    }
+}
+
+@media (max-width: 700px) {
+    .my-feedback-item-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .my-feedback-item-meta {
+        grid-template-columns: 1fr;
+    }
+}
