@@ -2,9 +2,9 @@
 
 Status: Implemented. Written after implementation as the design record —
 unlike Milestone 21's pre-implementation spec, this document describes
-what was actually built, not a proposal awaiting approval. Local-only
-verification against disposable Supabase test data; not yet deployed to
-production.
+what was actually built, not a proposal awaiting approval. Local
+verification against disposable Supabase test data, then merged (PR #19)
+and deployed to production.
 
 ## 1. Problem
 

@@ -2,9 +2,12 @@
 
 Status: Implemented. Written after implementation as the design record —
 describes what was actually built, not a proposal awaiting approval.
-Local-only verification against disposable Supabase test data, including
-two real accounts exercised through the live browser UI; not yet
-deployed to production.
+Local verification against disposable Supabase test data, including two
+real accounts exercised through the live browser UI, then merged
+(PR #20) and deployed to production — along with a same-cycle
+security-hardening follow-up (PR #21, migration `0038`, see that
+migration's own record in `supabase/migrations.md`) that also merged and
+deployed.
 
 ## 1. Problem
 

@@ -40,7 +40,7 @@ Everything below is implemented in this repository and backed by a real Supabase
 - A Community Guidelines acceptance gate before a builder's first publish or comment
 - In-app content reporting and a feedback-submission form
 
-Two features exist but are intentionally partial today, and this README won't claim otherwise: content reports and feedback are captured in the database with no in-app review/triage screen yet, and beta invite codes can be redeemed in-app but are currently generated outside the app. The legal pages (Terms, Privacy, Community Guidelines, Affiliate Disclosure) exist and are linked from every page's footer, but their content is still placeholder/draft text pending final legal review.
+Content reports and feedback both have moderator/staff-facing review screens (Moderation and Feedback), and a submitter sees their own feedback's status on a dedicated My Feedback page. One feature remains intentionally partial today, and this README won't claim otherwise: beta invite codes can be redeemed in-app but are currently generated outside the app. The legal pages (Terms, Privacy, Community Guidelines, Affiliate Disclosure) exist and are linked from every page's footer, but their content is still placeholder/draft text pending final legal review.
 
 ---
 
