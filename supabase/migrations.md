@@ -1291,3 +1291,68 @@ Every other migration still only ever moves forward from `0001`.
   `js/repositories/notificationRepository.js`.
 - **Context**: Milestone 25 (Follow Notifications) — see
   `docs/milestones/MILESTONE_25_FOLLOW_NOTIFICATIONS_SPECIFICATION.md`.
+
+## 0038_restrict_pre_0020_function_execute_permissions
+
+- **Status**: Applied to the local disposable Supabase/Docker stack only
+  (full `supabase db reset --local` through `0038`, plus an isolated
+  apply/rollback/reapply rehearsal), live-verified against both the
+  grant state and actual signed-in/signed-out call behavior. **Not
+  applied to production.**
+- **Purpose**: security-hardening follow-up from Milestone 25's
+  production release. `0033_restrict_function_execute_permissions.sql`
+  closed the "every function has a stray `anon` EXECUTE grant left by
+  Supabase's own default privileges, despite the migration's own `revoke
+  all ... from public` clearly intending `authenticated`-only" finding
+  for every function introduced by `0020`-`0032`. It was explicitly
+  scoped to that generation only and never re-examined the earlier
+  `0002`-`0012` functions, which predate it. A grant audit performed
+  during Milestone 25's production release found the identical pattern
+  still live on `set_follow(uuid, boolean)` (`0012`/`0037`) and, on
+  closer inspection, on nine sibling pre-`0020` functions.
+- **Change**: `revoke execute ... from anon` (only — `authenticated` is
+  completely untouched) on: `create_comment(uuid, text)`,
+  `delete_comment(uuid)`, `set_build_like(uuid, boolean)`,
+  `set_build_saved(uuid, boolean)`, `mark_notification_read(uuid)`,
+  `mark_all_notifications_read()`, `publish_draft(uuid, text, text)`,
+  `restore_revision_to_draft(uuid, timestamptz)`,
+  `set_build_visibility(uuid, text)`, `set_follow(uuid, boolean)`. Every
+  one of these already had an explicit `grant execute ... to
+  authenticated` in the migration that introduced it — none of them was
+  ever meant to be callable by `anon`. No function body is touched; no
+  new default-privilege statement is added (`0033` already closed that
+  gap for every function created after it).
+- **Deliberately not touched**: `get_activity_feed()` and
+  `record_build_view(uuid, uuid)` (both intentionally `anon` +
+  `authenticated` per their own `0013`/`0010` source — genuinely public
+  reads), `get_public_profile_roles(uuid)` (intentionally public per
+  `0032`, re-confirmed by `0033`), `create_notification()` and every
+  function `0033` already covers (confirmed unchanged by direct live
+  `proacl` inspection before writing this migration), and
+  `resolve_report()` (redefined again by `0036`, which reissued its own
+  authenticated-only grant — confirmed already `anon`-free).
+- **Not exploitable before this fix**: every one of the ten functions
+  has its own internal `auth.uid()`-null check that rejects an
+  unauthenticated caller before any read or write happens. This is
+  defense-in-depth, not a fix for a demonstrated access bypass. Verified
+  directly: before `0038`, calling `set_follow()` as `anon` failed
+  inside the function body (`'You must be signed in to follow a
+  builder.'`); after `0038`, the same call fails earlier, at the grant
+  layer itself (`permission denied for function set_follow`, Postgres
+  `42501`) — a strictly stronger failure mode, empirically confirmed,
+  not just asserted.
+- **Signed-in behavior confirmed unaffected**: `authenticated` grants
+  are completely untouched by this migration and no function body
+  changed, so there is no mechanism by which normal signed-in behavior
+  could regress. Verified directly against two disposable local
+  accounts: `set_follow()` and `mark_all_notifications_read()` both
+  still succeed identically as `authenticated`, before and after.
+- **Rollback**: `0038_restrict_pre_0020_function_execute_permissions_
+  rollback.sql` in `supabase/rollbacks/` — restores the exact pre-0038
+  (`anon`-inclusive) grant on all ten functions. Rehearsed locally:
+  applied, confirmed `anon` regained EXECUTE, then reapplied `0038`
+  forward again.
+- **Context**: Milestone 25 follow-up (security hardening) — see
+  `docs/milestones/MILESTONE_25_FOLLOW_NOTIFICATIONS_SPECIFICATION.md`
+  and the spawned follow-up task recorded during that milestone's
+  production release.
