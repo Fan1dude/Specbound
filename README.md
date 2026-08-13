@@ -150,7 +150,7 @@ This split is deliberate: the CI checks above need nothing but Node, while the S
 
 Specbound is live at https://specboundapp.com and under active, ongoing development. Account creation, project documentation, discovery, and the core community features listed above are built, deployed, and — for Discord account linking specifically — manually verified end-to-end in production (connect, OAuth return, username sync, public visibility toggle, refresh, and disconnect). Database migrations are current in production through the latest applied migration.
 
-Not everything is finished: in-app moderator tooling for reviewing content reports, in-app generation of beta invite codes, and final legal-page content are still open work, called out explicitly above rather than left implicit.
+Not everything is finished: in-app generation of beta invite codes and final legal-page content are still open work, called out explicitly above rather than left implicit. In-app moderator tooling for reviewing content reports is built and deployed (a moderator-only report queue, resolvable per-report).
 
 ---
 

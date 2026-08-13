@@ -1186,9 +1186,10 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0036_resolve_report_atomic_status_guard
 
-- **Status**: Applied to the local disposable Supabase/Docker stack only
-  (`npx supabase migration up --local`, 2026-08-12). **Not applied to
-  production.**
+- **Status**: Applied to the local disposable Supabase/Docker stack
+  (`npx supabase migration up --local`, 2026-08-12), verified live, then
+  applied to production the same day ahead of merging PR #19, per the
+  approved migration-first release order.
 - **Purpose**: closes a double-resolution race in `resolve_report()`
   (0028_moderation.sql, Milestone 22) found and empirically confirmed
   during PR #19 review for Milestone 24 — two moderator sessions could
@@ -1222,3 +1223,71 @@ Every other migration still only ever moves forward from `0001`.
   `docs/milestones/MILESTONE_24_MODERATOR_REPORT_QUEUE_SPECIFICATION.md`
   §4 for the full writeup, including the empirical before/after
   demonstration.
+
+## 0037_follow_notifications
+
+- **Status**: Applied to the local disposable Supabase/Docker stack only
+  (`npx supabase migration up --local`, 2026-08-13), live-verified
+  end-to-end via two real local accounts, plus a full rollback-and-
+  restore-forward rehearsal against real local notification rows.
+  **Not applied to production.**
+- **Purpose**: `set_follow()` (0012_follows.sql, Milestone 7C) has never
+  called `create_notification()` — that file's own header comment says
+  so explicitly, calling it out-of-scope at the time. Milestone 25
+  closes that gap: a builder is now notified when someone new follows
+  them.
+- **Change**: widens `notifications_type_check` to add `'follow'` to
+  the existing allowed set. `create or replace function
+  public.set_follow(...)` — identical signature, `SECURITY DEFINER`,
+  `search_path`, self-follow protection, and grants. Only the
+  `p_followed = true` branch changes: the `insert ... on conflict
+  (follower_id, following_id) do nothing` now captures the inserted
+  row's id via `returning id into v_inserted_id`, and
+  `create_notification(p_following_id, v_follower_id, 'follow')` is
+  called only when that id is non-null — i.e. only on a genuinely new
+  follow row, never on an already-existing follow (idempotent re-calls,
+  a duplicate button click) and never on unfollow. The `p_followed =
+  false` (unfollow) branch is untouched. Reuses the exact atomic
+  `INSERT ... ON CONFLICT ... RETURNING ... check not null` pattern
+  from `0036_resolve_report_atomic_status_guard.sql`.
+- **Stored notification shape**: `type = 'follow'`, `recipient_id` =
+  the followed user, `actor_id` = the follower, `build_id = null`,
+  `comment_id = null` — a follow has no associated build, same
+  shape as `report_resolved`.
+- **Rollback is intentionally behavioral, not a full schema reversal**
+  — this was a required correction before implementation began.
+  `0037_follow_notifications_rollback.sql` restores only `set_follow()`
+  to its exact pre-0037 body (future follows stop notifying). It
+  deliberately does **not** narrow `notifications_type_check` back to
+  its pre-0037 values, and never touches, deletes, or rewrites any
+  existing `'follow'`-typed notification row — narrowing the
+  constraint back would fail outright once any `'follow'` row exists,
+  or would require destroying legitimate user notifications to make it
+  succeed. An already-old (pre-Milestone-25) frontend encountering a
+  `'follow'` row it doesn't recognize already has a safe fallback path:
+  `notificationFormat.js`'s `default` case (the same fallback
+  `role_awarded` rows have relied on, unremarked, since migration
+  `0031`) — proven directly in this session, not assumed, by rolling
+  back locally with three real pre-rollback `'follow'` notifications
+  present, confirming all three survived unchanged and a post-rollback
+  follow created no fourth row, then restoring `0037` forward again.
+- **No table/column/index removal ever, in either direction.**
+- **Rollback**: `0037_follow_notifications_rollback.sql` in
+  `supabase/rollbacks/`.
+- **Related fix, same branch, different file**: live verification of
+  this migration surfaced a pre-existing bug in
+  `notificationRepository.js`'s `enrichNotifications()` — unrelated to
+  this migration's own SQL, but only actually exercised by a real
+  browser session once a notification with `build_id = null` existed
+  and its type wasn't filtered out before hitting `getBuildsByIds()`.
+  That helper does an unguarded `.in("id", ids)`; a raw `null` in that
+  array reaches PostgREST as the literal `id=in.(null)`, and Postgres
+  rejects `null` as a `uuid` (`22P02`), breaking the notification bell
+  and the notifications page entirely for the affected user. This
+  already affects `report_resolved` notifications live in production
+  today (`report_resolved` also always has `build_id = null`) — it
+  predates this milestone and was not introduced by it. Fixed by
+  filtering out falsy `build_id` values before the batch fetch. See
+  `js/repositories/notificationRepository.js`.
+- **Context**: Milestone 25 (Follow Notifications) — see
+  `docs/milestones/MILESTONE_25_FOLLOW_NOTIFICATIONS_SPECIFICATION.md`.
