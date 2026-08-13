@@ -382,14 +382,14 @@ reset role;
 rollback to savepoint test_12;
 
 -- ---------------------------------------------------------------------
--- Test 13: re-resolving the SAME report id a second time (the exact
--- scenario js/pages/moderation/renderModerationPage.js's client-side
--- freshness pre-check exists to avoid triggering in the first place —
--- see that file's own comment) still "succeeds" at the database layer,
--- confirming resolve_report() has no built-in idempotency guard against
--- double-resolution. Documented here as a known, accepted gap (this
--- milestone's final report explains why it's not being closed with a
--- new migration), not silently assumed away.
+-- Test 13: re-resolving the SAME report id a second time now FAILS,
+-- atomically, at the database layer — migration 0036 added an
+-- `and status = 'open'` guard to resolve_report()'s UPDATE, closing the
+-- double-resolution race this test previously documented as an accepted
+-- gap. See supabase/tests/milestone_24_resolve_report_atomic_guard.test.sql
+-- for the full dedicated coverage of this guard (both stored-outcome
+-- preservation and audit/notification de-duplication); this test stays
+-- here as the direct update of what this specific test used to assert.
 -- ---------------------------------------------------------------------
 savepoint test_13;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000203', true);
@@ -397,20 +397,26 @@ set local role authenticated;
 do $$
 declare
     v_report_id uuid;
-    v_second_resolution public.content_reports;
+    v_raised boolean := false;
+    v_message text;
 begin
     select id into v_report_id from public.content_reports
         where reporter_id = '00000000-0000-0000-0000-000000000201' limit 1;
 
-    -- Already 'dismissed' from test 9 above. resolve_report() matches
-    -- by id alone, so this succeeds and silently overwrites it —
-    -- confirming the gap this milestone's UI mitigates client-side.
-    select * into v_second_resolution from public.resolve_report(v_report_id, 'reviewed');
+    -- Already 'dismissed' from test 9 above. resolve_report()'s atomic
+    -- `and status = 'open'` guard (migration 0036) now rejects this
+    -- instead of silently overwriting it.
+    begin
+        perform public.resolve_report(v_report_id, 'reviewed');
+    exception when others then
+        v_raised := true;
+        get stacked diagnostics v_message = message_text;
+    end;
 
-    if v_second_resolution.status = 'reviewed' then
-        raise notice 'PASS (test 13, informational): resolve_report() has no server-side guard against re-resolving an already-resolved report — confirmed expected/known, not a surprise. UI-layer mitigation only, see this milestone''s final report.';
+    if v_raised and v_message ilike '%already%resolved%' then
+        raise notice 'PASS (test 13): resolve_report() now atomically rejects re-resolving an already-resolved report — the double-resolution race is closed';
     else
-        raise warning 'FAIL (test 13): expected resolve_report() to silently re-resolve (proving the known gap), got status=%', v_second_resolution.status;
+        raise warning 'FAIL (test 13): expected an already-resolved error, got raised=%, message=%', v_raised, v_message;
     end if;
 end $$;
 reset role;
