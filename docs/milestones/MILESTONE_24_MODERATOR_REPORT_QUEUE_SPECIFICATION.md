@@ -60,23 +60,63 @@ contract. The two approved user-facing outcomes map onto them:
 with a safe "Unknown status" fallback for any legacy or unrecognized
 stored value, so a future status value never crashes the history view.
 
-## 4. Known, deliberately unfixed gap
+## 4. Double-resolution race — found in PR review, closed by migration `0036`
 
-`resolve_report()` matches by report id alone — it has no server-side
-guard against two moderators resolving the same already-resolved report
-in quick succession (the second call would silently re-resolve it,
-overwriting `reviewed_by`/`reviewed_at`). Per the standing instruction
-to explain rather than invent a migration preemptively: this was not
-fixed with a new migration. It's mitigated client-side with a
-pre-resolve existence/status check in `resolveReport()`, which surfaces
-an honest "this report was already resolved" message instead of a
-silent double-resolution. The race window is narrow (concurrent
-moderator action on the same report within seconds) and the impact is
-UX-only, not a security or data-integrity issue — `moderation_actions`
-still records every successful resolution attempt. A future migration
-adding an `UPDATE ... WHERE status = 'open'` guard with a checked row
-count would close this properly; flagged here for that future work,
-not built speculatively now.
+**Originally shipped as a known, deliberately unfixed gap; no longer
+one.** The initial version of `resolve_report()` matched by report id
+alone, with no status guard — two moderators resolving the same report
+within moments of each other could both succeed, the second silently
+overwriting the first's decision. It was initially mitigated only
+client-side, with a pre-resolve status check in `resolveReport()` that
+gave honest feedback for the case where a check ran *after* someone else
+had already resolved the report.
+
+That mitigation was reviewed during PR #19 review and confirmed
+insufficient — it's a classic time-of-check-to-time-of-use gap. **This
+was empirically demonstrated**, not just reasoned about: two real,
+separately-authenticated database sessions were used to call
+`resolve_report()` against the same open report in immediate sequence.
+Both calls returned success. The second silently overwrote the first's
+`status`/`reviewed_by`. Two `moderation_actions` rows and two
+`report_resolved` notifications existed afterward for what should have
+been one decision. See the PR review notes for the exact commands and
+output.
+
+**Fixed by migration `0036_resolve_report_atomic_status_guard.sql`**
+(paired rollback: `0036_resolve_report_atomic_status_guard_rollback.sql`
+in `supabase/rollbacks/`). `resolve_report()` is unchanged in signature,
+security mode, authorization check, `moderation_actions` insert,
+notification call, and return shape — only its `UPDATE` now adds `and
+status = 'open'` to the `WHERE` clause and uses the `UPDATE ...
+RETURNING` itself as the atomic claim, rather than a separate check
+beforehand. Postgres's normal row-level locking under READ COMMITTED
+makes this safe with no new isolation level or advisory lock: a second,
+truly concurrent call blocks on the row, then — once the first commits —
+re-evaluates `status = 'open'` against the now-updated row and correctly
+matches nothing. A report that no longer matches now raises one of two
+distinct messages: `'Report not found.'` (unchanged, no such id) or
+`'This report has already been resolved.'` (new — exists, but wasn't
+`open` at claim time), so the client can distinguish and respond to each
+honestly instead of both surfacing as the same generic failure.
+
+`js/pages/moderation/renderModerationPage.js`'s client-side freshness
+check remains, but only as a fast path that skips an unnecessary RPC
+round trip in the common case — it is explicitly documented in its own
+comment as not the concurrency boundary. That boundary is the atomic
+guard in `resolve_report()` itself. Whichever path detects the conflict
+(the pre-check or the RPC's own rejection), the client responds
+identically: no success toast for the outcome that was attempted, no
+locally-guessed entry inserted into history, a full reload reconciling
+both the Open and Resolved views against the server (so whichever
+outcome the other moderator actually recorded is what's shown), and
+focus moved to the Open heading rather than silently dropped.
+
+Re-running the exact two-session demonstration above after the fix: the
+second call now raises `'This report has already been resolved.'`, the
+first decision is untouched, and exactly one `moderation_actions` row
+and one notification exist. See
+`supabase/tests/milestone_24_resolve_report_atomic_guard.test.sql` for
+the full automated regression coverage.
 
 ## 5. Authorization design
 
