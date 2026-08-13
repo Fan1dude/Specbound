@@ -132,16 +132,30 @@ export async function getFeedbackSubmitterProfiles(feedbackRows) {
     return new Map(profiles.map(profile => [profile.id, profile]));
 }
 
+// Bounded, not unbounded — same conservative closed-beta posture as
+// OPEN_FEEDBACK_LIMIT/HISTORY_FEEDBACK_LIMIT above. A single account's
+// own submission history is lower-risk than an unbounded admin queue,
+// but still shouldn't grow without limit — nothing in this app rate-
+// limits repeat calls to submit_feedback(). No pagination UI this
+// milestone; a user who genuinely hits this limit sees a restrained
+// note (renderMyFeedback.js) rather than a silently-truncated list
+// presented as complete.
+export const MY_FEEDBACK_LIMIT = 100;
+
 // Self-only — RLS ("Users can view their own feedback", 0029, unchanged)
 // is the actual boundary; no client-supplied user id is ever passed
 // here or needed, matching every other RLS-scoped read in this app
 // (e.g. getOpenReports() doesn't re-filter by moderator status
-// client-side either).
-export async function getMyFeedback() {
+// client-side either). Adding a limit() here narrows the RESULT SET
+// size only — it does not touch, weaken, or duplicate the RLS scoping
+// itself, which is enforced entirely server-side regardless of what
+// this query asks for.
+export async function getMyFeedback({ limit = MY_FEEDBACK_LIMIT } = {}) {
     const { data, error } = await supabase
         .from("feedback_submissions")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(limit);
 
     if (error) throw error;
 

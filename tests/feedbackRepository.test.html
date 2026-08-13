@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 26 — js/repositories/feedbackRepository.js</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 26 — feedbackRepository.js</h1>
+    <p>
+        A review-follow-up: proves getMyFeedback() applies a bound
+        (rather than an unbounded read) while still relying entirely on
+        RLS for self-scoping, not a client-supplied user id. Same
+        call-recording mock-supabase pattern as
+        moderationRepository.test.html.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        async function loadPatched(realPath, map) {
+            const src = await (await fetch(realPath)).text();
+            let rewritten = src;
+            for (const [from, to] of Object.entries(map)) {
+                rewritten = rewritten.replaceAll(`"${from}"`, `"${to}"`);
+            }
+            return blobUrl(rewritten);
+        }
+
+        // --- Mock supabase client — same builder-chain call-recording
+        // pattern already established by moderationRepository.test.html. ---
+        globalThis.__mock = {
+            calls: [],
+            tableResponse: { data: [], error: null },
+            rpcResponse: { data: null, error: null }
+        };
+
+        function makeBuilder(table) {
+            const builder = {
+                select(cols) { globalThis.__mock.calls.push([table, "select", cols]); return builder; },
+                eq(col, val) { globalThis.__mock.calls.push([table, "eq", col, val]); return builder; },
+                in(col, vals) { globalThis.__mock.calls.push([table, "in", col, vals]); return builder; },
+                order(col, opts) { globalThis.__mock.calls.push([table, "order", col, opts]); return builder; },
+                limit(n) { globalThis.__mock.calls.push([table, "limit", n]); return builder; },
+                single() { globalThis.__mock.calls.push([table, "single"]); return builder; },
+                then(resolve) {
+                    const resp = globalThis.__mock.tableResponse;
+                    resolve(typeof resp === "function" ? resp(table) : resp);
+                }
+            };
+            return builder;
+        }
+
+        const supabaseSrc = `
+            export const supabase = {
+                from(table) { return (${makeBuilder.toString()})(table); },
+                rpc(name, params) {
+                    globalThis.__mock.calls.push(["rpc", name, params]);
+                    const resp = globalThis.__mock.rpcResponse;
+                    return Promise.resolve(typeof resp === "function" ? resp(name, params) : resp);
+                }
+            };
+        `;
+
+        const profilesMockSrc = `
+            export async function getProfilesByIds(ids) {
+                globalThis.__mock.calls.push(["getProfilesByIds", ids]);
+                return globalThis.__fixtures.profiles.filter(p => ids.includes(p.id));
+            }
+        `;
+        globalThis.__fixtures = { profiles: [] };
+
+        const feedbackRepoUrl = await loadPatched("../js/repositories/feedbackRepository.js", {
+            "../core/supabase.js": blobUrl(supabaseSrc),
+            "./profileRepository.js": blobUrl(profilesMockSrc)
+        });
+
+        const {
+            getMyFeedback,
+            getOpenFeedback,
+            getHistoryFeedback,
+            updateFeedbackStatus,
+            getFeedbackSubmitterProfiles,
+            describeFeedbackCategory,
+            describeFeedbackStatus,
+            MY_FEEDBACK_LIMIT
+        } = await import(feedbackRepoUrl);
+
+        function reset() {
+            globalThis.__mock.calls = [];
+            globalThis.__mock.tableResponse = { data: [], error: null };
+            globalThis.__mock.rpcResponse = { data: null, error: null };
+        }
+
+        // --- getMyFeedback() — the review-follow-up under test ----------------
+        test("MY_FEEDBACK_LIMIT is exported and a sane positive number", typeof MY_FEEDBACK_LIMIT === "number" && MY_FEEDBACK_LIMIT > 0);
+
+        reset();
+        globalThis.__mock.tableResponse = { data: [{ id: "f1" }], error: null };
+        const myFeedback = await getMyFeedback();
+        test("getMyFeedback() queries feedback_submissions", globalThis.__mock.calls.some(c => c[0] === "feedback_submissions" && c[1] === "select"));
+        test("getMyFeedback() orders newest-first by created_at", globalThis.__mock.calls.some(c => c[1] === "order" && c[2] === "created_at" && c[3]?.ascending === false));
+        test(
+            "getMyFeedback() applies a bound (not an unbounded query) equal to MY_FEEDBACK_LIMIT by default",
+            globalThis.__mock.calls.some(c => c[1] === "limit" && c[2] === MY_FEEDBACK_LIMIT)
+        );
+        test(
+            "getMyFeedback() never filters by user_id (or any column) client-side — self-scoping is RLS-only, never a client-supplied id",
+            !globalThis.__mock.calls.some(c => c[1] === "eq")
+        );
+        test("getMyFeedback() returns the rows", Array.isArray(myFeedback) && myFeedback.length === 1);
+
+        reset();
+        globalThis.__mock.tableResponse = { data: [], error: null };
+        await getMyFeedback({ limit: 25 });
+        test("getMyFeedback() accepts a caller-supplied limit override (used by this test only — production always uses the default)", globalThis.__mock.calls.some(c => c[1] === "limit" && c[2] === 25));
+
+        reset();
+        globalThis.__mock.tableResponse = { data: null, error: { message: "boom" } };
+        let myFeedbackThrew = false;
+        try { await getMyFeedback(); } catch { myFeedbackThrew = true; }
+        test("getMyFeedback() propagates a repository failure instead of swallowing it", myFeedbackThrew);
+
+        // --- getOpenFeedback() / getHistoryFeedback() — unaffected regression --
+        reset();
+        globalThis.__mock.tableResponse = { data: [{ id: "o1", status: "open" }], error: null };
+        await getOpenFeedback();
+        test("getOpenFeedback() still filters to status = open", globalThis.__mock.calls.some(c => c[1] === "eq" && c[2] === "status" && c[3] === "open"));
+        test("getOpenFeedback() still applies its own bounded limit", globalThis.__mock.calls.some(c => c[1] === "limit" && typeof c[2] === "number"));
+
+        reset();
+        globalThis.__mock.tableResponse = { data: [{ id: "h1", status: "reviewed" }], error: null };
+        await getHistoryFeedback();
+        test("getHistoryFeedback() still filters to reviewed/closed", globalThis.__mock.calls.some(c => c[1] === "in" && c[2] === "status" && JSON.stringify(c[3]) === JSON.stringify(["reviewed", "closed"])));
+        test("getHistoryFeedback() still orders by status_updated_at desc nulls last, then created_at, then id", globalThis.__mock.calls.some(c => c[1] === "order" && c[2] === "status_updated_at" && c[3]?.ascending === false && c[3]?.nullsFirst === false));
+
+        // --- updateFeedbackStatus() — thin RPC wrapper, unaffected ------------
+        reset();
+        globalThis.__mock.rpcResponse = { data: { id: "f1", status: "reviewed" }, error: null };
+        await updateFeedbackStatus("f1", "open", "reviewed");
+        const rpcCall = globalThis.__mock.calls.find(c => c[0] === "rpc");
+        test("updateFeedbackStatus() calls the update_feedback_status RPC", rpcCall?.[1] === "update_feedback_status");
+        test("updateFeedbackStatus() sends the feedback id, expected status, and new status", rpcCall?.[2]?.p_feedback_id === "f1" && rpcCall?.[2]?.p_expected_status === "open" && rpcCall?.[2]?.p_new_status === "reviewed");
+
+        // --- getFeedbackSubmitterProfiles() — null-user_id handling -----------
+        globalThis.__fixtures.profiles = [{ id: "user-1", username: "alice" }];
+        const profiles = await getFeedbackSubmitterProfiles([{ user_id: "user-1" }, { user_id: null }]);
+        test("getFeedbackSubmitterProfiles() resolves a real submitter", profiles.get("user-1")?.username === "alice");
+        test("getFeedbackSubmitterProfiles() never sends a null user_id to the batch lookup", !globalThis.__mock.calls.some(c => c[0] === "getProfilesByIds" && c[1]?.includes(null)));
+
+        const noProfiles = await getFeedbackSubmitterProfiles([{ user_id: null }]);
+        test("getFeedbackSubmitterProfiles() with only deleted-account rows never calls the batch lookup", noProfiles.size === 0);
+
+        // --- Display-label helpers ---------------------------------------------
+        test("describeFeedbackCategory(\"bug\") labels it \"Bug\"", describeFeedbackCategory("bug") === "Bug");
+        test("describeFeedbackStatus(\"closed\") labels it \"Closed\"", describeFeedbackStatus("closed").label === "Closed");
+        test(
+            "describeFeedbackStatus() on an unknown/legacy status is handled safely, never throws",
+            describeFeedbackStatus("some_legacy_status").label === "Unknown status"
+        );
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`feedbackRepository.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

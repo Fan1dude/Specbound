@@ -116,6 +116,7 @@
                 closed: { label: "Closed", description: "The submission no longer needs review. This does not reveal whether it was implemented, declined, duplicated, or otherwise concluded." }
             };
             export function describeFeedbackStatus(status) { return STATUS_META[status] || { label: "Unknown status", description: "" }; }
+            export const MY_FEEDBACK_LIMIT = 3;
             export async function getMyFeedback() {
                 if (globalThis.__repo.failLoad) throw new Error("load failed");
                 return globalThis.__repo.rows;
@@ -213,6 +214,32 @@
             !byId("myFeedbackList").querySelector('a[href*="javascript:"]') && byId("myFeedbackList").textContent.includes(dangerousPageUrl)
         );
         test("missing page_url: honest \"Not recorded\" state", byId("myFeedbackList").textContent.includes("Not recorded"));
+
+        // -- Review-follow-up: getMyFeedback() is now bounded
+        // (MY_FEEDBACK_LIMIT). When the returned row count exactly equals
+        // the bound, a restrained note is shown — never a specific
+        // claimed hidden count, just that this may not be everything.
+        // Below the bound, no note (nothing to imply is missing). --------------
+        resetPageState();
+        globalThis.__repo.rows = [
+            makeRow({ id: "lim-1" }),
+            makeRow({ id: "lim-2" }),
+            makeRow({ id: "lim-3" })
+        ]; // exactly MY_FEEDBACK_LIMIT (3, per this file's mock)
+        await renderMyFeedback();
+        test(
+            "at the bound: a restrained \"most recent submissions\" note is shown",
+            byId("myFeedbackList").textContent.includes("Showing your 3 most recent submissions")
+        );
+        test("at the bound: all rows still render alongside the note", byId("myFeedbackList").querySelectorAll(".my-feedback-item").length === 3);
+
+        resetPageState();
+        globalThis.__repo.rows = [makeRow({ id: "under-1" }), makeRow({ id: "under-2" })]; // below the bound
+        await renderMyFeedback();
+        test(
+            "below the bound: no limit note is shown — nothing implies a hidden remainder",
+            !byId("myFeedbackList").textContent.includes("most recent submissions")
+        );
 
         // -- Live region present. -------------------------------------------------
         test("live region: list is announced via aria-live", byId("myFeedbackList").getAttribute("aria-live") === "polite");

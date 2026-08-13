@@ -178,6 +178,19 @@ export async function renderFeedbackPage() {
         // renderModerationPage.js's handleResolve() already documents.
         const wasFocusInsideCard = card?.contains(document.activeElement) ?? false;
 
+        // Position among the currently VISIBLE (i.e. already
+        // category-filtered) Open cards, captured from the live DOM
+        // rather than an index into the unfiltered openFeedback array.
+        // openList's current children are exactly what visibleOpen()
+        // rendered, so this position is filter-aware by construction —
+        // no separate filter-matching logic needed here, and it can
+        // never point at a card the active filter has hidden, since a
+        // hidden card was never one of these children in the first
+        // place. Only meaningful (and only used) for the Open-tab path.
+        const openCardPosition = expectedStatus === "open"
+            ? Array.from(openList.querySelectorAll(".feedback-card")).indexOf(card)
+            : -1;
+
         actionButtons.forEach(btn => { btn.disabled = true; });
 
         if (triggerButton) {
@@ -215,7 +228,7 @@ export async function renderFeedbackPage() {
             const updated = await updateFeedbackStatus(feedbackId, expectedStatus, newStatus);
 
             showToast(`Feedback marked "${newStatus === "reviewed" ? "Reviewed" : "Closed"}".`, "success");
-            applySuccessfulUpdate(row, updated, expectedStatus, wasFocusInsideCard);
+            applySuccessfulUpdate(row, updated, expectedStatus, wasFocusInsideCard, openCardPosition);
         } catch (error) {
             console.error("Update feedback status error:", error);
 
@@ -266,11 +279,20 @@ export async function renderFeedbackPage() {
     // within the History tab itself (Reviewed -> Closed is the only
     // action ever available there) — update the row in place instead of
     // moving it between lists.
-    function applySuccessfulUpdate(row, updated, expectedStatus, wasFocusInsideCard) {
+    //
+    // openCardPosition is the removed card's index among the Open cards
+    // that were actually VISIBLE (i.e. already category-filtered) at
+    // the moment it was removed — see its capture site in
+    // handleUpdateStatus() for why this is filter-aware by
+    // construction. remainingCards below is drawn from the same
+    // filtered rendering (renderOpen() re-applies the identical active
+    // filter), so both sides of this comparison are the same filtered
+    // space — never the unfiltered openFeedback array, which would
+    // misalign whenever a category filter narrows what's on screen.
+    function applySuccessfulUpdate(row, updated, expectedStatus, wasFocusInsideCard, openCardPosition) {
         const merged = { ...row, ...updated };
 
         if (expectedStatus === "open") {
-            const index = openFeedback.findIndex(item => item.id === row.id);
             openFeedback = openFeedback.filter(item => item.id !== row.id);
             historyFeedback = [merged, ...historyFeedback];
 
@@ -286,7 +308,14 @@ export async function renderFeedbackPage() {
                 return;
             }
 
-            const targetCard = remainingCards[Math.min(index, remainingCards.length - 1)];
+            // Clamping to the last remaining (visible) card is what
+            // gives "focus the next visible card at the same position,
+            // or the previous visible one if none follows" — both from
+            // the filtered position captured before removal, so a
+            // filter-hidden card can never be the target: it was never
+            // among openCardPosition's own candidates, and it's never
+            // among remainingCards either.
+            const targetCard = remainingCards[Math.min(Math.max(openCardPosition, 0), remainingCards.length - 1)];
             const targetButton = targetCard?.querySelector('[data-action="update-feedback-status"]');
 
             (targetButton || pageHeading)?.focus();

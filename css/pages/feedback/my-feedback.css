@@ -53,6 +53,12 @@
     gap: var(--space-2);
 }
 
+.my-feedback-limit-note {
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+    margin-bottom: var(--space-1);
+}
+
 .my-feedback-item {
     background: var(--surface);
     border: 1px solid var(--border);

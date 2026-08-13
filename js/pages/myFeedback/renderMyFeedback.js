@@ -1,4 +1,4 @@
-import { getMyFeedback, describeFeedbackCategory, describeFeedbackStatus } from "../../repositories/feedbackRepository.js";
+import { getMyFeedback, describeFeedbackCategory, describeFeedbackStatus, MY_FEEDBACK_LIMIT } from "../../repositories/feedbackRepository.js";
 import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
 import { formatDateTime } from "../../utils/formatDate.js";
 import { listSkeleton } from "../../utils/skeletons.js";
@@ -97,6 +97,15 @@ export async function renderMyFeedback() {
             return;
         }
 
-        listEl.innerHTML = rows.map(renderRow).join("");
+        // A rows.length exactly equal to the bound is the only signal
+        // available without a second count query — a reasonable proxy at
+        // this scale, not a precise "there are definitely more" check.
+        // Restrained on purpose: never claims a specific hidden count,
+        // just that this list may not be everything.
+        const reachedLimit = rows.length === MY_FEEDBACK_LIMIT;
+
+        listEl.innerHTML = (reachedLimit
+            ? `<p class="my-feedback-limit-note">Showing your ${MY_FEEDBACK_LIMIT} most recent submissions.</p>`
+            : "") + rows.map(renderRow).join("");
     }
 }

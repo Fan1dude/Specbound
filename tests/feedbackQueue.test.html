@@ -464,6 +464,121 @@
         test("success: an accessible success message was shown", globalThis.__toasts.some(t => t.type === "success"));
         test("success: focus never silently falls back to <body>", document.activeElement !== document.body, document.activeElement?.tagName);
 
+        // -- Review-follow-up: filtered focus restoration. Prior to this
+        // fix, the same-position replacement card was picked using an
+        // index into the UNFILTERED openFeedback array while the DOM
+        // being indexed into was already filtered — misaligned whenever
+        // a category filter was active. These four scenarios cover the
+        // fix directly. -------------------------------------------------
+
+        // -- Removing a MIDDLE filtered card: the card that slides into
+        // its position (not the unfiltered array's neighbor) gets focus. -----
+        resetPageState();
+        globalThis.__repo.open = [
+            makeFeedback({ id: "mid-1", category: "bug" }),
+            makeFeedback({ id: "mid-2", category: "bug" }),
+            makeFeedback({ id: "mid-3", category: "bug" }),
+            makeFeedback({ id: "mid-decoy-a", category: "suggestion" }),
+            makeFeedback({ id: "mid-decoy-b", category: "suggestion" })
+        ];
+        await renderFeedbackPage();
+        byId("feedbackCategoryFilter").value = "bug";
+        byId("feedbackCategoryFilter").dispatchEvent(new Event("change"));
+        test(
+            "filtered focus setup: exactly 3 bug cards visible (decoys hidden)",
+            byId("feedbackOpenList").querySelectorAll(".feedback-card").length === 3
+        );
+
+        const midBtn = byId("feedbackOpenList").querySelector('[data-feedback-id="mid-2"] [data-new-status="reviewed"]');
+        midBtn.focus();
+        midBtn.click();
+        await new Promise(r => setTimeout(r, 20));
+
+        const afterMidRemoval = Array.from(byId("feedbackOpenList").querySelectorAll(".feedback-card")).map(el => el.dataset.feedbackId);
+        test(
+            "middle filtered card removed: the two remaining filtered (bug) cards are mid-1 and mid-3, decoys never appear",
+            JSON.stringify(afterMidRemoval) === JSON.stringify(["mid-1", "mid-3"])
+        );
+        test(
+            "middle filtered card removed: focus lands on mid-3 — the card that slid into the removed card's filtered position",
+            document.activeElement?.closest(".feedback-card")?.dataset.feedbackId === "mid-3"
+        );
+
+        // -- Removing the LAST filtered card: focus falls back to the
+        // previous visible card, never a filter-hidden one. -------------------
+        resetPageState();
+        globalThis.__repo.open = [
+            makeFeedback({ id: "last-1", category: "bug" }),
+            makeFeedback({ id: "last-2", category: "bug" }),
+            makeFeedback({ id: "last-decoy", category: "suggestion" })
+        ];
+        await renderFeedbackPage();
+        byId("feedbackCategoryFilter").value = "bug";
+        byId("feedbackCategoryFilter").dispatchEvent(new Event("change"));
+
+        const lastBtn = byId("feedbackOpenList").querySelector('[data-feedback-id="last-2"] [data-new-status="closed"]');
+        lastBtn.focus();
+        lastBtn.click();
+        await new Promise(r => setTimeout(r, 20));
+
+        test(
+            "last filtered card removed: focus lands on the previous visible (bug) card, last-1",
+            document.activeElement?.closest(".feedback-card")?.dataset.feedbackId === "last-1"
+        );
+        test(
+            "last filtered card removed: the filter-hidden decoy is never the focus target",
+            document.activeElement?.closest(".feedback-card")?.dataset.feedbackId !== "last-decoy"
+        );
+
+        // -- Filtered list becoming EMPTY: focus falls back to the page
+        // heading, even though unfiltered openFeedback still has rows. -------
+        resetPageState();
+        globalThis.__repo.open = [
+            makeFeedback({ id: "empty-1", category: "bug" }),
+            makeFeedback({ id: "empty-decoy", category: "suggestion" })
+        ];
+        await renderFeedbackPage();
+        byId("feedbackCategoryFilter").value = "bug";
+        byId("feedbackCategoryFilter").dispatchEvent(new Event("change"));
+
+        const emptyBtn = byId("feedbackOpenList").querySelector('[data-feedback-id="empty-1"] [data-new-status="reviewed"]');
+        emptyBtn.focus();
+        emptyBtn.click();
+        await new Promise(r => setTimeout(r, 20));
+
+        test(
+            "filtered list becomes empty: the Open list shows its (filtered) empty state",
+            byId("feedbackOpenList").textContent.includes("No open feedback") || byId("feedbackOpenList").textContent.includes("No submissions match")
+        );
+        test(
+            "filtered list becomes empty: focus lands on the page heading, not a filter-hidden decoy and not <body>",
+            document.activeElement === byId("feedbackPageHeading")
+        );
+
+        byId("feedbackCategoryFilter").value = "all";
+        byId("feedbackCategoryFilter").dispatchEvent(new Event("change"));
+
+        // -- No-filter regression: with no category filter active, removing
+        // a middle card still focuses the card that slides into its
+        // position — unchanged behavior from before this fix. -----------------
+        resetPageState();
+        globalThis.__repo.open = [
+            makeFeedback({ id: "nofilter-1", category: "bug" }),
+            makeFeedback({ id: "nofilter-2", category: "suggestion" }),
+            makeFeedback({ id: "nofilter-3", category: "feature_request" })
+        ];
+        await renderFeedbackPage();
+
+        const nfBtn = byId("feedbackOpenList").querySelector('[data-feedback-id="nofilter-2"] [data-new-status="closed"]');
+        nfBtn.focus();
+        nfBtn.click();
+        await new Promise(r => setTimeout(r, 20));
+
+        test(
+            "no filter (regression): removing the middle card focuses the card that slid into its position, nofilter-3",
+            document.activeElement?.closest(".feedback-card")?.dataset.feedbackId === "nofilter-3"
+        );
+
         // -- Reviewed -> Closed performed from WITHIN History: card stays in
         // History, updates in place, loses its remaining action. --------------
         resetPageState();
