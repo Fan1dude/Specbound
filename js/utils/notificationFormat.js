@@ -34,6 +34,17 @@ export function formatNotificationText(notification) {
         case "report_resolved":
             return "A moderator reviewed a report you submitted.";
 
+        // Milestone 25 — set_follow() (supabase/migrations/0012_follows.sql,
+        // Milestone 7C) never called create_notification() until
+        // 0037_follow_notifications.sql added it. build_id is always null
+        // here too (a follow has no associated build), same shape as
+        // report_resolved above — but unlike that type, a follow DOES
+        // have a specific, safe destination: the follower's own profile
+        // (see getNotificationUrl() below), since actor_id is always the
+        // follower.
+        case "follow":
+            return `${actorName} followed you.`;
+
         default:
             return `${actorName} interacted with ${buildTitle}`;
     }
@@ -47,6 +58,15 @@ export function getNotificationUrl(notification, pathPrefix = "") {
     // nothing more specific to point at.
     if (notification.type === "report_resolved") {
         return `${pathPrefix}pages/notifications.html`;
+    }
+
+    // A follow notification's actor_id IS the follower — built from the
+    // trusted, server-set column on the notification row itself, never
+    // from the joined profile's username or any other user-controlled
+    // text, matching this app's existing profile-URL convention
+    // (pages/profile.html?user=<uuid>) exactly.
+    if (notification.type === "follow") {
+        return `${pathPrefix}pages/profile.html?user=${encodeURIComponent(notification.actor_id)}`;
     }
 
     const slug = notification.build?.slug || "";

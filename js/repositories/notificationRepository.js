@@ -80,7 +80,12 @@ export async function enrichNotifications(notifications) {
     if (!notifications.length) return [];
 
     const uniqueActorIds = [...new Set(notifications.map(n => n.actor_id))];
-    const uniqueBuildIds = [...new Set(notifications.map(n => n.build_id))];
+    // report_resolved and follow notifications always have build_id null
+    // (see notificationFormat.js) — getBuildsByIds() does an unfiltered
+    // .in("id", ids), and PostgREST/Postgres reject a null in that list
+    // ("invalid input syntax for type uuid: null"), so null must never
+    // reach it.
+    const uniqueBuildIds = [...new Set(notifications.map(n => n.build_id).filter(Boolean))];
 
     const [profiles, builds] = await Promise.all([
         getProfilesByIds(uniqueActorIds),
