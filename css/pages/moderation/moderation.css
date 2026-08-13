@@ -1,0 +1,206 @@
+.moderation-page {
+    width: min(880px, 92%);
+    margin: 0 auto;
+    padding: 72px 0 120px;
+}
+
+.moderation-gate {
+    padding: 120px 0;
+    text-align: center;
+}
+
+.moderation-hero {
+    margin-bottom: 32px;
+}
+
+.moderation-hero h1 {
+    font-size: clamp(2.2rem, 5vw, 3rem);
+    line-height: 1;
+    letter-spacing: -.04em;
+    margin: 8px 0 16px;
+}
+
+.moderation-hero h1:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 4px;
+    border-radius: var(--radius-sm);
+}
+
+.moderation-hero p {
+    max-width: 640px;
+    color: var(--text-secondary);
+}
+
+.moderation-open-count {
+    margin-left: var(--space-0-5);
+}
+
+#moderationBody {
+    margin-top: 24px;
+}
+
+.moderation-report-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.report-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+}
+
+.report-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-bottom: var(--space-1);
+}
+
+.report-card-target {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+    min-width: 0;
+}
+
+.report-card-type-badge {
+    flex: 0 0 auto;
+}
+
+.report-card-target-link,
+.report-card-target-label {
+    font-weight: 700;
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+
+.report-card-target-link:hover,
+.report-card-target-link:focus-visible {
+    text-decoration: underline;
+}
+
+.report-card-target-unavailable {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.report-card-target-id {
+    font-style: normal;
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+}
+
+.report-card-status {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-0-5);
+    padding: var(--space-0-5) var(--space-1);
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+/* Icon + text, never color alone — same convention as
+   .setup-item-metadata-status (css/pages/build/setup-inventory.css). */
+.report-card-status-icon {
+    display: flex;
+}
+
+.report-card-status-open {
+    color: var(--text-secondary);
+}
+
+.report-card-status-open .report-card-status-icon {
+    color: var(--color-info);
+}
+
+.report-card-status-dismissed {
+    color: var(--text-secondary);
+}
+
+.report-card-status-dismissed .report-card-status-icon {
+    color: var(--color-success-strong);
+}
+
+.report-card-status-reviewed {
+    color: var(--text-secondary);
+}
+
+.report-card-status-reviewed .report-card-status-icon {
+    color: var(--color-warning-strong);
+}
+
+.report-card-reason {
+    color: var(--text);
+    overflow-wrap: anywhere;
+    margin-bottom: var(--space-1);
+}
+
+.report-card-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: var(--space-1);
+    margin: 0 0 var(--space-1);
+}
+
+.report-card-meta-item dt {
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-bottom: 2px;
+}
+
+.report-card-meta-item dd {
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+}
+
+.report-card-note {
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+    margin-bottom: var(--space-1);
+}
+
+.report-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .report-card {
+        transition: none;
+    }
+}
+
+@media (max-width: 700px) {
+    .report-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .report-card-meta {
+        grid-template-columns: 1fr;
+    }
+
+    .report-card-actions {
+        flex-direction: column;
+    }
+
+    .report-card-actions .btn {
+        width: 100%;
+    }
+}

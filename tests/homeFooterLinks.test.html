@@ -86,6 +86,10 @@
                 '"./auth.js"': blobUrl(authMockSrc),
                 '"./notificationBell.js"': blobUrl("export async function initNotificationBell() {}"),
                 '"./onboarding.js"': blobUrl("export function maybeShowWelcome() {}"),
+                // Milestone 24 — layout.js now also checks the viewer's
+                // roles for the moderator-only "Moderation" link. Not what
+                // this file tests, so a plain non-moderator stub.
+                '"../repositories/communityRepository.js"': blobUrl("export async function getProfileRoles() { return []; }"),
                 '"../components/FeedbackModal.js"': blobUrl(feedbackModalMockSrc),
                 '"../utils/escapeHtml.js"': escapeHtmlUrl,
                 '"../utils/icons.js"': iconsUrl

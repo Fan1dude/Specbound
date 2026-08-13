@@ -1183,3 +1183,42 @@ Every other migration still only ever moves forward from `0001`.
 - **Context**: Milestone 23 (Setup Inventory, Search & Builder History) —
   see `docs/milestones/MILESTONE_23_SETUP_INVENTORY_SEARCH_SPECIFICATION.md`
   for the full architecture, JSON contract, and security rationale.
+
+## 0036_resolve_report_atomic_status_guard
+
+- **Status**: Applied to the local disposable Supabase/Docker stack only
+  (`npx supabase migration up --local`, 2026-08-12). **Not applied to
+  production.**
+- **Purpose**: closes a double-resolution race in `resolve_report()`
+  (0028_moderation.sql, Milestone 22) found and empirically confirmed
+  during PR #19 review for Milestone 24 — two moderator sessions could
+  both successfully resolve the same report, the second silently
+  overwriting the first's decision and producing duplicate
+  `moderation_actions`/notification rows for one event.
+- **Change**: `create or replace function public.resolve_report(...)` —
+  identical signature, security mode, `search_path`, authorization
+  check, `moderation_actions` insert, notification call, and grants.
+  Only the `UPDATE`'s `WHERE` clause changes, adding `and status =
+  'open'`, with `UPDATE ... RETURNING` itself as the atomic claim (no
+  new locking primitive or isolation level — ordinary Postgres
+  row-level UPDATE locking under READ COMMITTED is sufficient). A
+  report that no longer matches now raises a distinct `'This report has
+  already been resolved.'` message, separate from the pre-existing
+  `'Report not found.'` case.
+- **No table/column/index change** — this migration touches only one
+  function's body and its grants.
+- **Rollback**: `0036_resolve_report_atomic_status_guard_rollback.sql`
+  in `supabase/rollbacks/` restores the exact pre-0036 function body,
+  verbatim from 0028. No data is touched by either direction.
+- **Local verification**: the exact two-session sequence that produced
+  conflicting/duplicate rows before this migration was re-run
+  immediately after applying it — the second call now raises the
+  already-resolved error, the first decision is untouched, and exactly
+  one `moderation_actions` row and one notification remain. See
+  `supabase/tests/milestone_24_resolve_report_atomic_guard.test.sql`
+  (10 assertions, all passing) plus the corrected Test 13 in
+  `supabase/tests/milestone_24_moderator_report_queue.test.sql`.
+- **Context**: Milestone 24 (Moderator Report Queue) — see
+  `docs/milestones/MILESTONE_24_MODERATOR_REPORT_QUEUE_SPECIFICATION.md`
+  §4 for the full writeup, including the empirical before/after
+  demonstration.

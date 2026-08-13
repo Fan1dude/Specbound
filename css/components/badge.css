@@ -28,3 +28,11 @@
     background: transparent;
     border-color: var(--color-border-strong);
 }
+
+/* Same specificity trap as .btn[hidden] (css/components/button.css):
+   .badge sets display: inline-flex at equal specificity to the browser's
+   built-in [hidden] { display: none }, so without this override a
+   hidden badge (Milestone 24's open-report count) stays visible. */
+.badge[hidden] {
+    display: none;
+}

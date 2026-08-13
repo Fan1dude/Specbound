@@ -19,7 +19,12 @@ This is a live pointer to the approved milestone plan, not a third copy of it. D
 | 16 | Documentation and changelog completion — backfill Milestones 5–10 | Complete |
 | 17 | Minimal CI and automated test execution | Complete |
 | 18 | Formal WCAG 2.1 AA accessibility audit | Complete |
-| 19 | Structured parts catalog, moderated submissions, paste-list import, and affiliate-link schema | Architecture and application code approved; schema audit complete (`docs/milestones/MILESTONE_19_SQL_SECURITY_AUDIT.md`); migrations not yet applied, nothing committed |
+| 19 | Structured parts catalog, moderated submissions, paste-list import, and affiliate-link schema | Complete — merged to main |
+| 20 | Builder Portfolio — redefined public profile page | Complete — merged to main |
+| 21 | First-time builder experience — Welcome dialog, onboarding, contextual editor hints | Complete — merged to main |
+| 22 | Community foundation — Discord linking, roles, reporting, feedback, beta invites, Community Guidelines | Complete — merged to main |
+| 23 | Setup Inventory, scoped search, builder dates | Complete — merged to main, deployed to production |
+| 24 | Moderator Report Queue — moderator-facing interface for content reports filed since Milestone 22 | Complete — see `docs/milestones/MILESTONE_24_MODERATOR_REPORT_QUEUE_SPECIFICATION.md`; local-only verification, not yet deployed to production |
 
 ---
 

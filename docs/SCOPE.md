@@ -38,6 +38,10 @@ Approved:
 - **Project-focused comments and feedback**
 - **Following builders or projects**
 - **Meaningful notifications**
+- **Discord account linking** — an optional, builder-controlled identity connection (Settings, Builder Archive), not a forums/chat integration. Approved 2026-08-12, shipped as part of Milestone 22.
+- **Likes, as lightweight appreciation only** — a single low-friction signal of "I saw this and it mattered," not a ranking input, not surfaced as a leaderboard or popularity statistic anywhere. Approved 2026-08-12, formally reversing this document's prior blanket "likes" prohibition below.
+- **Activity Feed, redefined around meaningful builder activity** — project milestones, publishes, and comparable build-log progress, not raw engagement counts (likes/views) and not an algorithmic ranking. Approved 2026-08-12, formally reversing this document's prior "engagement-first activity feeds" prohibition below for this specific, redefined shape only — an engagement-ranked feed remains out of scope.
+- **Content moderation** — user-submitted reports (Milestone 22) and a moderator-only review queue to act on them (Milestone 24, `pages/moderation.html`). Resolving a report records a decision only; it does not itself unpublish or delete content, suspend an account, or notify anyone beyond the reporter that a decision was made.
 
 The Workshop must remain focused on continuing work, not consuming social content — community features are a supporting layer, never the home screen.
 
@@ -59,21 +63,20 @@ The Workshop must remain focused on continuing work, not consuming social conten
 - stories
 - infinite scrolling
 - real-time collaborative cursors
-- **likes**
-- **popularity rankings**
-- **engagement-first activity feeds**
-- **vanity counters**
-- **gamification**
+- **popularity rankings** (leaderboards, "top builder" framing, follower count as status)
+- **engagement-first activity feeds** (ranked by like/view counts rather than by meaningful activity — see the redefined Activity Feed under Community Features above, which is the approved exception)
+- **vanity counters** (raw counts displayed as a status symbol, e.g. a public follower-count leaderboard)
+- **gamification** (streaks, XP, badges-as-status)
+
+`likes` was removed from this list on 2026-08-12 — see Community Features above; it remains approved only as a lightweight appreciation signal, never as a ranking input or a displayed popularity statistic.
 
 Nothing above is approved unless explicitly re-approved in writing.
 
 ---
 
-# Known Gap: Existing Features Ahead of This Decision
+# Resolved: Likes and Activity Feed (formerly "Known Gap")
 
-Some non-approved features already exist in the live schema and UI, predating this document: `likes` (a table and UI), and an "Activity Feed" homepage section that currently behaves as an engagement feed rather than a Build Timeline.
-
-This document does not order their removal. Per the approved decision: **do not delete social tables yet unless they are completely unused.** The next step is a dependency review — identify every place `likes` and the current activity-feed behavior are read or written — followed by a proposed dormancy or removal plan, presented for approval before any deletion. Until that review happens, their existence is a tracked gap against this document, not a contradiction of it.
+As of 2026-08-12, `likes` and the homepage Activity Feed are formally approved (see Community Features above) — not merely tolerated pre-existing features. This section previously flagged them as predating this document with their removal or dormancy still open; that review concluded in favor of keeping both, redefined: likes stay a lightweight appreciation signal, and the Activity Feed is redefined around meaningful builder activity (project milestones, publishes, build-log progress) rather than raw engagement counts. Any future work that makes the Activity Feed read as an engagement-ranked or like/view-count-sorted feed is a regression against this decision, not a continuation of it.
 
 ---
 
