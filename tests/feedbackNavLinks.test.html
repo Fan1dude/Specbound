@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 26 — Feedback nav entries (js/core/layout.js)</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 26 — Feedback nav entries</h1>
+    <p>
+        Two distinct nav entries: "My Feedback" (every signed-in user, unconditional)
+        and "Feedback" (moderator/staff only, reusing the same isModerator check the
+        existing "Moderation" link already relies on).
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <nav class="navbar" id="navbar"></nav>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function absUrl(path) {
+            return new URL(path, location.href).href;
+        }
+
+        async function loadPatched(realPath, map) {
+            const src = await (await fetch(realPath)).text();
+            let rewritten = src;
+            for (const [from, to] of Object.entries(map)) {
+                rewritten = rewritten.replaceAll(`"${from}"`, `"${to}"`);
+            }
+            return blobUrl(rewritten);
+        }
+
+        globalThis.__nav = { user: null, profile: { username: "builder1", onboarding_welcomed_at: "2026-01-01T00:00:00Z" }, roles: [] };
+
+        const authMockSrc = `
+            export async function getCurrentUser() { return globalThis.__nav.user; }
+            export function clearCurrentUserCache() {}
+        `;
+        const supabaseMockSrc = `
+            export const supabase = {
+                from(table) {
+                    return {
+                        select() { return this; },
+                        eq() { return this; },
+                        single: async () => ({ data: globalThis.__nav.profile, error: null })
+                    };
+                },
+                auth: { signOut: async () => ({ error: null }) }
+            };
+        `;
+        const communityMockSrc = `
+            export async function getProfileRoles() { return globalThis.__nav.roles; }
+        `;
+        const notificationBellMockSrc = `export async function initNotificationBell() {}`;
+        const onboardingMockSrc = `export function maybeShowWelcome() {}`;
+
+        const layoutUrl = await loadPatched("../js/core/layout.js", {
+            "./supabase.js": blobUrl(supabaseMockSrc),
+            "./auth.js": blobUrl(authMockSrc),
+            "./notificationBell.js": blobUrl(notificationBellMockSrc),
+            "./onboarding.js": blobUrl(onboardingMockSrc),
+            "../repositories/communityRepository.js": blobUrl(communityMockSrc),
+            "../utils/escapeHtml.js": absUrl("../js/utils/escapeHtml.js"),
+            "../utils/icons.js": absUrl("../js/utils/icons.js")
+        });
+        const { loadNavbar } = await import(layoutUrl);
+
+        function mobileLinkTexts() {
+            return Array.from(document.querySelectorAll(".mobile-account-link")).map(a => a.textContent.trim());
+        }
+
+        // -- Signed-out visitor: neither link exists anywhere. -------------------
+        globalThis.__nav.user = null;
+        await loadNavbar();
+        test("signed-out visitor: no My Feedback link anywhere", !document.getElementById("navbar").innerHTML.includes("My Feedback"));
+        test("signed-out visitor: no Feedback (reviewer) link anywhere", !mobileLinkTexts().includes("Feedback") && !document.getElementById("navbar").innerHTML.includes("pages/feedback.html"));
+
+        // -- Ordinary signed-in user (no moderator/staff role): My Feedback
+        // is present (every signed-in user), the reviewer Feedback link is
+        // absent (same as Moderation). -------------------------------------
+        globalThis.__nav.user = { id: "user-1" };
+        globalThis.__nav.roles = ["community_builder"];
+        await loadNavbar();
+        test("ordinary user: My Feedback link present in the desktop dropdown", document.getElementById("builderDropdown").innerHTML.includes("My Feedback"));
+        test("ordinary user: My Feedback link present in the mobile account list", mobileLinkTexts().includes("My Feedback"));
+        test("ordinary user: My Feedback points at pages/my-feedback.html", document.getElementById("builderDropdown").innerHTML.includes("pages/my-feedback.html"));
+        test("ordinary user: no reviewer Feedback link in the desktop dropdown", !/>Feedback<\/a>/.test(document.getElementById("builderDropdown").innerHTML));
+        test("ordinary user: no reviewer Feedback link in the mobile account list", !mobileLinkTexts().includes("Feedback"));
+        test("ordinary user: never sees pages/feedback.html anywhere in the navbar", !document.getElementById("navbar").innerHTML.includes("pages/feedback.html"));
+
+        // -- Moderator: BOTH links present — My Feedback (unconditional) and
+        // the reviewer Feedback link (moderator-gated), alongside
+        // Moderation. --------------------------------------------------------
+        globalThis.__nav.roles = ["moderator"];
+        await loadNavbar();
+        test("moderator: My Feedback still present", document.getElementById("builderDropdown").innerHTML.includes("My Feedback"));
+        test("moderator: reviewer Feedback link present in the desktop dropdown", document.getElementById("builderDropdown").innerHTML.includes("pages/feedback.html"));
+        test("moderator: reviewer Feedback link present in the mobile account list", mobileLinkTexts().includes("Feedback"));
+        test("moderator: Moderation link is also still present (both moderator-only links coexist)", document.getElementById("builderDropdown").innerHTML.includes("Moderation"));
+
+        // -- Staff: also gets the reviewer link (is_platform_moderator()
+        // covers staff too — same contract update_feedback_status() itself
+        // enforces server-side). ---------------------------------------------
+        globalThis.__nav.roles = ["staff"];
+        await loadNavbar();
+        test("staff: reviewer Feedback link present too", document.getElementById("builderDropdown").innerHTML.includes("pages/feedback.html"));
+        test("staff: My Feedback still present", document.getElementById("builderDropdown").innerHTML.includes("My Feedback"));
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`feedbackNavLinks.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

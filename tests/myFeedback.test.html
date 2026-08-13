@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 26 — My Feedback page</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/pages/feedback/my-feedback.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+        #fixtureHost { width: 390px; border: 1px solid #333; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 26 — My Feedback page</h1>
+    <p>
+        Self-only rendering itself is an RLS guarantee (getMyFeedback() passes no
+        client-supplied user id at all — see
+        supabase/tests/milestone_26_feedback_status_workflow.test.sql tests 5-6 for
+        the actual self-read/cross-user-denial coverage). This file covers what the
+        client controls: rendering, empty/loading/error/retry states, the status
+        legend, and page_url safety.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <!-- Fixture DOM — must match pages/my-feedback.html's real ids exactly. -->
+    <div id="fixtureHost">
+        <h1 tabindex="-1" id="myFeedbackHeading">My Feedback</h1>
+
+        <div id="myFeedbackError" hidden>
+            <h3>Could not load your feedback</h3>
+            <button type="button" id="myFeedbackRetryBtn">Try again</button>
+        </div>
+
+        <div id="myFeedbackBody">
+            <div id="myFeedbackList" aria-live="polite"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function absUrl(path) {
+            return new URL(path, location.href).href;
+        }
+
+        async function loadPatched(realPath, map) {
+            const src = await (await fetch(realPath)).text();
+            let rewritten = src;
+            for (const [from, to] of Object.entries(map)) {
+                rewritten = rewritten.replaceAll(`"${from}"`, `"${to}"`);
+            }
+            return blobUrl(rewritten);
+        }
+
+        function byId(id) { return document.getElementById(id); }
+
+        // =====================================================================
+        // Part A — js/pages/myFeedback/loadMyFeedback.js: no role check, just
+        // sign-in.
+        // =====================================================================
+
+        globalThis.__authMock = { user: { id: "user-1" } };
+        globalThis.__renderCalls = 0;
+
+        const authMockSrc = `
+            export async function requireAuth() {
+                return globalThis.__authMock.user;
+            }
+        `;
+        const renderMockSrc = `
+            export async function renderMyFeedback() {
+                globalThis.__renderCalls++;
+            }
+        `;
+
+        const loadUrl = await loadPatched("../js/pages/myFeedback/loadMyFeedback.js", {
+            "../../core/auth.js": blobUrl(authMockSrc),
+            "./renderMyFeedback.js": blobUrl(renderMockSrc)
+        });
+        const { loadMyFeedback } = await import(loadUrl);
+
+        globalThis.__authMock.user = null;
+        globalThis.__renderCalls = 0;
+        await loadMyFeedback();
+        test("signed-out visitor: My Feedback is never rendered (requireAuth redirects)", globalThis.__renderCalls === 0);
+
+        globalThis.__authMock.user = { id: "user-1" };
+        globalThis.__renderCalls = 0;
+        await loadMyFeedback();
+        test("signed-in user: My Feedback renders — no role check required", globalThis.__renderCalls === 1);
+
+        // =====================================================================
+        // Part B — js/pages/myFeedback/renderMyFeedback.js
+        // =====================================================================
+
+        globalThis.__repo = { rows: [], failLoad: false };
+
+        const feedbackRepoMockSrc = `
+            const CATEGORY_LABELS = { bug: "Bug", confusing: "Confusing", suggestion: "Suggestion", feature_request: "Feature Request" };
+            export function describeFeedbackCategory(category) { return CATEGORY_LABELS[category] || "Feedback"; }
+            const STATUS_META = {
+                open: { label: "Open", description: "Awaiting review." },
+                reviewed: { label: "Reviewed", description: "A moderator or staff member has read and acknowledged it. This does not promise action." },
+                closed: { label: "Closed", description: "The submission no longer needs review. This does not reveal whether it was implemented, declined, duplicated, or otherwise concluded." }
+            };
+            export function describeFeedbackStatus(status) { return STATUS_META[status] || { label: "Unknown status", description: "" }; }
+            export async function getMyFeedback() {
+                if (globalThis.__repo.failLoad) throw new Error("load failed");
+                return globalThis.__repo.rows;
+            }
+        `;
+
+        const escapeRealUrl = absUrl("../js/utils/escapeHtml.js");
+        const formatDateRealUrl = absUrl("../js/utils/formatDate.js");
+        const skeletonsRealUrl = absUrl("../js/utils/skeletons.js");
+        const iconsRealUrl = absUrl("../js/utils/icons.js");
+
+        const renderUrl = await loadPatched("../js/pages/myFeedback/renderMyFeedback.js", {
+            "../../repositories/feedbackRepository.js": blobUrl(feedbackRepoMockSrc),
+            "../../utils/escapeHtml.js": escapeRealUrl,
+            "../../utils/formatDate.js": formatDateRealUrl,
+            "../../utils/skeletons.js": skeletonsRealUrl,
+            "../../utils/icons.js": iconsRealUrl
+        });
+        const { renderMyFeedback } = await import(renderUrl);
+
+        function makeRow(overrides = {}) {
+            return {
+                id: "mf-1",
+                category: "bug",
+                message: "It's broken.",
+                page_url: "https://specboundapp.com/pages/workshop.html",
+                status: "open",
+                status_updated_at: null,
+                created_at: "2026-01-01T00:00:00Z",
+                ...overrides
+            };
+        }
+
+        function resetPageState() {
+            globalThis.__repo.rows = [];
+            globalThis.__repo.failLoad = false;
+            byId("myFeedbackList").innerHTML = "";
+            byId("myFeedbackError").hidden = true;
+            byId("myFeedbackBody").hidden = false;
+        }
+
+        // -- Empty state. -------------------------------------------------------
+        resetPageState();
+        await renderMyFeedback();
+        test("empty: shows an honest empty state", byId("myFeedbackList").textContent.includes("haven't submitted"));
+
+        // -- Load failure -> error + retry. --------------------------------------
+        resetPageState();
+        globalThis.__repo.failLoad = true;
+        await renderMyFeedback();
+        test("load failure: shows the error state, not the body", byId("myFeedbackError").hidden === false && byId("myFeedbackBody").hidden === true);
+        globalThis.__repo.failLoad = false;
+        byId("myFeedbackRetryBtn").click();
+        await new Promise(r => setTimeout(r, 20));
+        test("retry: recovers once the underlying load succeeds again", byId("myFeedbackError").hidden === true && byId("myFeedbackBody").hidden === false);
+
+        // -- Multiple rows, no actions rendered anywhere (fully read-only),
+        // no editing/deleting/replying/reopening controls of any kind. -------
+        resetPageState();
+        globalThis.__repo.rows = [
+            makeRow({ id: "r1", category: "bug", status: "open" }),
+            makeRow({ id: "r2", category: "suggestion", status: "reviewed", status_updated_at: "2026-01-02T00:00:00Z" }),
+            makeRow({ id: "r3", category: "feature_request", status: "closed", status_updated_at: "2026-01-03T00:00:00Z" })
+        ];
+        await renderMyFeedback();
+        test("multiple rows: all three render", byId("myFeedbackList").querySelectorAll(".my-feedback-item").length === 3);
+        test("multiple rows: categories shown as human labels", byId("myFeedbackList").textContent.includes("Bug") && byId("myFeedbackList").textContent.includes("Suggestion") && byId("myFeedbackList").textContent.includes("Feature Request"));
+        test("multiple rows: statuses shown", byId("myFeedbackList").textContent.includes("Open") && byId("myFeedbackList").textContent.includes("Reviewed") && byId("myFeedbackList").textContent.includes("Closed"));
+        test("multiple rows: status-change date shown when available", byId("myFeedbackList").querySelector('[data-status="reviewed"]').textContent.includes("2026"));
+        test("read-only: no button of any kind is rendered anywhere in the list (no edit/delete/reply/reopen)", byId("myFeedbackList").querySelectorAll("button").length === 0);
+
+        // -- Status legend explains all three states. ----------------------------
+        test("status legend: explains Open", document.body.textContent.includes("Awaiting review") || byId("myFeedbackList").textContent.includes("Awaiting review"));
+
+        // -- page_url safety: plain text, never a link; long/malicious content
+        // escaped, wraps without overflow. ---------------------------------------
+        resetPageState();
+        const longMessage = "y".repeat(400);
+        const xssMessage = `<img src=x onerror=alert(1)>`;
+        const dangerousPageUrl = `javascript:alert(1)`;
+        globalThis.__repo.rows = [
+            makeRow({ id: "r4", message: longMessage, page_url: dangerousPageUrl }),
+            makeRow({ id: "r5", message: xssMessage, page_url: null })
+        ];
+        await renderMyFeedback();
+        test("long message: full text present", byId("myFeedbackList").textContent.includes(longMessage));
+        test(
+            "long message: no horizontal overflow at 390px",
+            byId("fixtureHost").scrollWidth <= byId("fixtureHost").clientWidth + 1,
+            `scrollWidth=${byId("fixtureHost").scrollWidth} clientWidth=${byId("fixtureHost").clientWidth}`
+        );
+        test("XSS message: escaped, never rendered as markup", !byId("myFeedbackList").querySelector("img") && byId("myFeedbackList").innerHTML.includes("&lt;img"));
+        test(
+            "dangerous page_url: never becomes a clickable href",
+            !byId("myFeedbackList").querySelector('a[href*="javascript:"]') && byId("myFeedbackList").textContent.includes(dangerousPageUrl)
+        );
+        test("missing page_url: honest \"Not recorded\" state", byId("myFeedbackList").textContent.includes("Not recorded"));
+
+        // -- Live region present. -------------------------------------------------
+        test("live region: list is announced via aria-live", byId("myFeedbackList").getAttribute("aria-live") === "polite");
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`myFeedback.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 26 — Reviewer Feedback Queue (page + authorization)</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/pages/feedback/feedback.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+        #fixtureHost { width: 390px; border: 1px solid #333; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 26 — Reviewer Feedback Queue</h1>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <!-- Fixture DOM — must match pages/feedback.html's real ids exactly. -->
+    <div id="fixtureHost">
+        <div id="feedbackGate" role="status" aria-live="polite">
+            <p>Checking access...</p>
+        </div>
+
+        <div id="feedbackDenied" hidden>
+            <h1>You don't have access to this page</h1>
+            <p>Feedback review is only available to Specbound moderators and staff.</p>
+        </div>
+
+        <div id="feedbackContent" hidden>
+            <section>
+                <h1 tabindex="-1" id="feedbackPageHeading">Feedback</h1>
+            </section>
+
+            <div class="feedback-filters">
+                <label for="feedbackCategoryFilter">
+                    Category
+                    <select id="feedbackCategoryFilter"></select>
+                </label>
+            </div>
+
+            <div class="tabs" id="feedbackTabs" role="tablist">
+                <button type="button" class="tab is-active" role="tab" id="feedbackOpenTab" aria-selected="true" aria-controls="feedbackOpenPanel">
+                    Open <span id="feedbackOpenCount" class="badge" hidden></span>
+                </button>
+                <button type="button" class="tab" role="tab" id="feedbackHistoryTab" aria-selected="false" aria-controls="feedbackHistoryPanel">
+                    History
+                </button>
+            </div>
+
+            <div id="feedbackError" class="empty-state" hidden>
+                <h3>Could not load feedback</h3>
+                <button type="button" id="feedbackRetryBtn">Try again</button>
+            </div>
+
+            <div id="feedbackBody">
+                <div id="feedbackOpenPanel" class="tab-panel" role="tabpanel">
+                    <div id="feedbackOpenList" aria-live="polite"></div>
+                </div>
+                <div id="feedbackHistoryPanel" class="tab-panel" role="tabpanel" hidden>
+                    <label for="feedbackHistoryStatusFilter">
+                        Status
+                        <select id="feedbackHistoryStatusFilter">
+                            <option value="all">All</option>
+                            <option value="reviewed">Reviewed</option>
+                            <option value="closed">Closed</option>
+                        </select>
+                    </label>
+                    <div id="feedbackHistoryList" aria-live="polite"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function absUrl(path) {
+            return new URL(path, location.href).href;
+        }
+
+        async function loadPatched(realPath, map) {
+            const src = await (await fetch(realPath)).text();
+            let rewritten = src;
+            for (const [from, to] of Object.entries(map)) {
+                rewritten = rewritten.replaceAll(`"${from}"`, `"${to}"`);
+            }
+            return blobUrl(rewritten);
+        }
+
+        function byId(id) { return document.getElementById(id); }
+
+        // =====================================================================
+        // Part A — js/pages/feedback/loadFeedbackQueue.js: authorization
+        // =====================================================================
+
+        globalThis.__authMock = { user: { id: "user-1" }, roles: [], rolesError: null };
+
+        const authMockSrc = `
+            export async function requireAuth() {
+                return globalThis.__authMock.user;
+            }
+        `;
+        const communityMockSrc = `
+            export async function getProfileRoles() {
+                if (globalThis.__authMock.rolesError) throw globalThis.__authMock.rolesError;
+                return globalThis.__authMock.roles;
+            }
+        `;
+        globalThis.__renderCalls = 0;
+        const renderPageMockSrc = `
+            export async function renderFeedbackPage() {
+                globalThis.__renderCalls++;
+            }
+        `;
+
+        const loadQueueUrl = await loadPatched("../js/pages/feedback/loadFeedbackQueue.js", {
+            "../../core/auth.js": blobUrl(authMockSrc),
+            "../../repositories/communityRepository.js": blobUrl(communityMockSrc),
+            "./renderFeedbackPage.js": blobUrl(renderPageMockSrc)
+        });
+        const { loadFeedbackQueue } = await import(loadQueueUrl);
+
+        function resetGateDom() {
+            byId("feedbackGate").hidden = false;
+            byId("feedbackContent").hidden = true;
+            byId("feedbackDenied").hidden = true;
+            globalThis.__renderCalls = 0;
+        }
+
+        resetGateDom();
+        globalThis.__authMock.user = null;
+        await loadFeedbackQueue();
+        test("signed-out visitor: #feedbackContent stays hidden", byId("feedbackContent").hidden === true);
+        test("signed-out visitor: #feedbackDenied stays hidden (requireAuth already redirected)", byId("feedbackDenied").hidden === true);
+        test("signed-out visitor: the feedback queue is never rendered", globalThis.__renderCalls === 0);
+
+        resetGateDom();
+        globalThis.__authMock.user = { id: "user-1" };
+        globalThis.__authMock.roles = ["community_builder"];
+        globalThis.__authMock.rolesError = null;
+        await loadFeedbackQueue();
+        test("ordinary user: #feedbackContent is never unhidden", byId("feedbackContent").hidden === true);
+        test("ordinary user: #feedbackDenied becomes visible", byId("feedbackDenied").hidden === false);
+        test("ordinary user: feedback data is never rendered", globalThis.__renderCalls === 0);
+
+        resetGateDom();
+        globalThis.__authMock.roles = [];
+        globalThis.__authMock.rolesError = new Error("network error");
+        await loadFeedbackQueue();
+        test("role-check error: fails closed (denied shown, not content)", byId("feedbackDenied").hidden === false && byId("feedbackContent").hidden === true);
+        globalThis.__authMock.rolesError = null;
+
+        resetGateDom();
+        globalThis.__authMock.roles = ["moderator"];
+        await loadFeedbackQueue();
+        test("moderator: #feedbackContent becomes visible", byId("feedbackContent").hidden === false);
+        test("moderator: #feedbackDenied stays hidden", byId("feedbackDenied").hidden === true);
+        test("moderator: the feedback queue is rendered", globalThis.__renderCalls === 1);
+
+        resetGateDom();
+        globalThis.__authMock.roles = ["staff"];
+        await loadFeedbackQueue();
+        test("staff: #feedbackContent becomes visible (staff counts as moderator)", byId("feedbackContent").hidden === false);
+        test("staff: the feedback queue is rendered", globalThis.__renderCalls === 1);
+
+        // =====================================================================
+        // Part B — js/pages/feedback/renderFeedbackPage.js
+        // =====================================================================
+
+        globalThis.__repo = {
+            open: [],
+            history: [],
+            submitterProfiles: new Map(),
+            failLoad: false,
+            updateImpl: null // (id, expected, next) => row | throws
+        };
+        globalThis.__updateCalls = [];
+        globalThis.__toasts = [];
+        globalThis.__confirmResult = true;
+        globalThis.__freshnessStatus = "open";
+
+        const CATEGORY_LABELS_SRC = `{
+            bug: "Bug",
+            confusing: "Confusing",
+            suggestion: "Suggestion",
+            feature_request: "Feature Request"
+        }`;
+
+        const feedbackRepoMockSrc = `
+            export const CATEGORY_LABELS = ${CATEGORY_LABELS_SRC};
+            export function describeFeedbackCategory(category) {
+                return CATEGORY_LABELS[category] || "Feedback";
+            }
+            const STATUS_META = {
+                open: { label: "Open", description: "Awaiting review." },
+                reviewed: { label: "Reviewed", description: "A moderator or staff member has read and acknowledged it. This does not promise action." },
+                closed: { label: "Closed", description: "The submission no longer needs review. This does not reveal whether it was implemented, declined, duplicated, or otherwise concluded." }
+            };
+            export function describeFeedbackStatus(status) {
+                return STATUS_META[status] || { label: "Unknown status", description: "Stored status \\"" + status + "\\" does not match a known state." };
+            }
+            export async function getOpenFeedback() {
+                if (globalThis.__repo.failLoad) throw new Error("load failed");
+                return globalThis.__repo.open;
+            }
+            export async function getHistoryFeedback() {
+                if (globalThis.__repo.failLoad) throw new Error("load failed");
+                return globalThis.__repo.history;
+            }
+            export async function getFeedbackSubmitterProfiles() {
+                return globalThis.__repo.submitterProfiles;
+            }
+            export async function updateFeedbackStatus(id, expected, next) {
+                globalThis.__updateCalls.push([id, expected, next]);
+                if (globalThis.__repo.updateImpl) return globalThis.__repo.updateImpl(id, expected, next);
+                return { id, status: next, status_updated_at: "2026-01-01T00:00:00Z" };
+            }
+        `;
+
+        const modalMockSrc = `
+            export function confirmDialog() {
+                return Promise.resolve(globalThis.__confirmResult);
+            }
+        `;
+        const toastMockSrc = `
+            export function showToast(message, type) {
+                globalThis.__toasts.push({ message, type });
+            }
+        `;
+        const supabaseFreshnessMockSrc = `
+            export const supabase = {
+                from() {
+                    return {
+                        select() { return this; },
+                        eq() { return this; },
+                        single: async () => ({ data: { status: globalThis.__freshnessStatus }, error: null })
+                    };
+                }
+            };
+        `;
+
+        const iconsRealUrl = absUrl("../js/utils/icons.js");
+        const escapeRealUrl = absUrl("../js/utils/escapeHtml.js");
+        const formatDateRealUrl = absUrl("../js/utils/formatDate.js");
+        const skeletonsRealUrl = absUrl("../js/utils/skeletons.js");
+
+        const feedbackCardUrl = await loadPatched("../js/components/FeedbackCard.js", {
+            "../utils/escapeHtml.js": escapeRealUrl,
+            "../utils/formatDate.js": formatDateRealUrl,
+            "../repositories/feedbackRepository.js": blobUrl(feedbackRepoMockSrc),
+            "../utils/icons.js": iconsRealUrl
+        });
+
+        const renderPageUrl = await loadPatched("../js/pages/feedback/renderFeedbackPage.js", {
+            "../../repositories/feedbackRepository.js": blobUrl(feedbackRepoMockSrc),
+            "../../core/supabase.js": blobUrl(supabaseFreshnessMockSrc),
+            "../../components/FeedbackCard.js": feedbackCardUrl,
+            "../../utils/modal.js": blobUrl(modalMockSrc),
+            "../../core/toast.js": blobUrl(toastMockSrc),
+            "../../utils/skeletons.js": skeletonsRealUrl,
+            "../../utils/icons.js": iconsRealUrl
+        });
+        const { renderFeedbackPage } = await import(renderPageUrl);
+
+        byId("feedbackContent").hidden = false;
+
+        function makeFeedback(overrides = {}) {
+            return {
+                id: "f-1",
+                user_id: "user-alice",
+                category: "bug",
+                message: "Something is broken.",
+                page_url: "https://specboundapp.com/pages/workshop.html",
+                status: "open",
+                status_updated_at: null,
+                created_at: "2026-01-01T00:00:00Z",
+                ...overrides
+            };
+        }
+
+        function resetPageState() {
+            globalThis.__repo.open = [];
+            globalThis.__repo.history = [];
+            globalThis.__repo.submitterProfiles = new Map();
+            globalThis.__repo.failLoad = false;
+            globalThis.__repo.updateImpl = null;
+            globalThis.__updateCalls = [];
+            globalThis.__toasts = [];
+            globalThis.__confirmResult = true;
+            globalThis.__freshnessStatus = "open";
+            byId("feedbackOpenList").innerHTML = "";
+            byId("feedbackHistoryList").innerHTML = "";
+            byId("feedbackError").hidden = true;
+            byId("feedbackBody").hidden = false;
+            // A prior test may have switched to the History tab and never
+            // switched back (e.g. the "action buttons per status" test
+            // below deliberately ends there) — restore Open as the visible
+            // panel directly, rather than relying on a click through
+            // whichever stale tab listener happens to still be attached.
+            // Left un-reset, a later test's explicit .focus() calls would
+            // silently no-op on a button inside a hidden panel (a real
+            // browser only fails a hidden element's focus() silently, it
+            // doesn't throw), which is a test-isolation bug, not something
+            // any real user journey could trigger.
+            byId("feedbackOpenPanel").hidden = false;
+            byId("feedbackHistoryPanel").hidden = true;
+            byId("feedbackOpenTab").classList.add("is-active");
+            byId("feedbackOpenTab").setAttribute("aria-selected", "true");
+            byId("feedbackHistoryTab").classList.remove("is-active");
+            byId("feedbackHistoryTab").setAttribute("aria-selected", "false");
+        }
+
+        // -- Empty open queue. ----------------------------------------------
+        resetPageState();
+        await renderFeedbackPage();
+        test("empty open queue: shows an empty state", byId("feedbackOpenList").textContent.includes("No open feedback"));
+        test("empty open queue: the count badge stays hidden", byId("feedbackOpenCount").hidden === true);
+        test("empty history: shows an empty state", byId("feedbackHistoryList").textContent.includes("No feedback history"));
+
+        // -- Category filter populated from CATEGORY_LABELS. -----------------
+        const categoryOptions = Array.from(byId("feedbackCategoryFilter").querySelectorAll("option")).map(o => o.textContent);
+        test("category filter: includes All Categories plus all four categories", categoryOptions.includes("All Categories") && categoryOptions.includes("Bug") && categoryOptions.includes("Feature Request"));
+
+        // -- Repository failure -> error state + retry. -----------------------
+        resetPageState();
+        globalThis.__repo.failLoad = true;
+        await renderFeedbackPage();
+        test("load failure: shows the error state, not the body", byId("feedbackError").hidden === false && byId("feedbackBody").hidden === true);
+        globalThis.__repo.failLoad = false;
+        byId("feedbackRetryBtn").click();
+        await new Promise(r => setTimeout(r, 20));
+        test("retry: recovers once the underlying load succeeds again", byId("feedbackError").hidden === true && byId("feedbackBody").hidden === false);
+
+        // -- Multiple submissions render, submitter link uses trusted
+        // profile id, category badge shows a human label. --------------------
+        resetPageState();
+        globalThis.__repo.open = [
+            makeFeedback({ id: "f1", user_id: "user-alice", category: "bug" }),
+            makeFeedback({ id: "f2", user_id: "user-bob", category: "suggestion" })
+        ];
+        globalThis.__repo.submitterProfiles = new Map([
+            ["user-alice", { id: "user-alice", username: "alice", display_name: "Alice" }],
+            ["user-bob", { id: "user-bob", username: "bob" }]
+        ]);
+        await renderFeedbackPage();
+        test("multiple submissions: both render", byId("feedbackOpenList").querySelectorAll(".feedback-card").length === 2);
+        test("multiple submissions: category shown as a human label", byId("feedbackOpenList").textContent.includes("Bug") && byId("feedbackOpenList").textContent.includes("Suggestion"));
+        test("multiple submissions: submitter link points at the trusted profile id, not raw text", byId("feedbackOpenList").innerHTML.includes("profile.html?user=user-alice"));
+        test("multiple submissions: the open count badge shows 2 and is visible", byId("feedbackOpenCount").textContent === "2" && byId("feedbackOpenCount").hidden === false);
+
+        // -- Deleted-account submitter (user_id null). ------------------------
+        resetPageState();
+        globalThis.__repo.open = [makeFeedback({ id: "f3", user_id: null })];
+        let threwOnDeletedSubmitter = false;
+        try { await renderFeedbackPage(); } catch { threwOnDeletedSubmitter = true; }
+        test("deleted submitter: rendering never throws", threwOnDeletedSubmitter === false);
+        test("deleted submitter: shows an honest \"Deleted account\" label", byId("feedbackOpenList").textContent.includes("Deleted account"));
+        test("deleted submitter: never renders a broken profile link (no href with an empty/null user id)", !byId("feedbackOpenList").innerHTML.includes("user=null") && !byId("feedbackOpenList").innerHTML.includes("user=undefined"));
+
+        // -- page_url safety: always plain text, never a clickable link,
+        // messages/usernames escaped, no overflow at 390px. -------------------
+        resetPageState();
+        const longMessage = "x".repeat(400);
+        const xssMessage = `<img src=x onerror=alert(1)>`;
+        const dangerousPageUrl = `javascript:alert(1)`;
+        globalThis.__repo.open = [
+            makeFeedback({ id: "f4", message: longMessage, page_url: dangerousPageUrl }),
+            makeFeedback({ id: "f5", message: xssMessage, page_url: null })
+        ];
+        await renderFeedbackPage();
+        test("long message: the full text is present in the DOM", byId("feedbackOpenList").textContent.includes(longMessage));
+        test(
+            "long message: no horizontal overflow at 390px",
+            byId("fixtureHost").scrollWidth <= byId("fixtureHost").clientWidth + 1,
+            `scrollWidth=${byId("fixtureHost").scrollWidth} clientWidth=${byId("fixtureHost").clientWidth}`
+        );
+        test(
+            "XSS message: rendered as escaped text, never as markup",
+            !byId("feedbackOpenList").querySelector("img"),
+            byId("feedbackOpenList").innerHTML.includes("&lt;img")
+        );
+        test(
+            "dangerous page_url: never becomes a clickable href — no <a> tag wraps it, appears only as escaped plain text",
+            !byId("feedbackOpenList").querySelector('a[href*="javascript:"]') && byId("feedbackOpenList").textContent.includes(dangerousPageUrl)
+        );
+        test("missing page_url: shows an honest \"Not recorded\" state, not blank", byId("feedbackOpenList").textContent.includes("Not recorded"));
+
+        // -- Action buttons per status: Open shows both, Reviewed (in
+        // History) shows only Mark Closed, Closed shows none. -----------------
+        resetPageState();
+        globalThis.__repo.open = [makeFeedback({ id: "f6", status: "open" })];
+        globalThis.__repo.history = [
+            makeFeedback({ id: "f7", status: "reviewed", status_updated_at: "2026-01-02T00:00:00Z" }),
+            makeFeedback({ id: "f8", status: "closed", status_updated_at: "2026-01-03T00:00:00Z" })
+        ];
+        await renderFeedbackPage();
+        const openCard = byId("feedbackOpenList").querySelector('[data-feedback-id="f6"]');
+        test("open card: shows both Mark Reviewed and Mark Closed", openCard.querySelectorAll('[data-action="update-feedback-status"]').length === 2);
+
+        byId("feedbackHistoryTab").click();
+        const reviewedCard = byId("feedbackHistoryList").querySelector('[data-feedback-id="f7"]');
+        const closedCard = byId("feedbackHistoryList").querySelector('[data-feedback-id="f8"]');
+        test("reviewed card in History: shows exactly one action (Mark Closed)", reviewedCard.querySelectorAll('[data-action="update-feedback-status"]').length === 1);
+        test("reviewed card in History: the one action has data-expected-status=reviewed and data-new-status=closed", reviewedCard.querySelector('[data-action="update-feedback-status"]').dataset.expectedStatus === "reviewed" && reviewedCard.querySelector('[data-action="update-feedback-status"]').dataset.newStatus === "closed");
+        test("closed card: shows zero actions — genuinely terminal", closedCard.querySelectorAll('[data-action="update-feedback-status"]').length === 0);
+
+        // -- Category filter narrows both Open and History; History status
+        // filter narrows only History. ----------------------------------------
+        resetPageState();
+        globalThis.__repo.open = [
+            makeFeedback({ id: "fc1", category: "bug" }),
+            makeFeedback({ id: "fc2", category: "suggestion" })
+        ];
+        globalThis.__repo.history = [
+            makeFeedback({ id: "fc3", category: "bug", status: "reviewed", status_updated_at: "2026-01-02T00:00:00Z" }),
+            makeFeedback({ id: "fc4", category: "bug", status: "closed", status_updated_at: "2026-01-03T00:00:00Z" })
+        ];
+        await renderFeedbackPage();
+        byId("feedbackCategoryFilter").value = "bug";
+        byId("feedbackCategoryFilter").dispatchEvent(new Event("change"));
+        test("category filter: Open list narrows to the selected category", byId("feedbackOpenList").querySelectorAll(".feedback-card").length === 1 && byId("feedbackOpenList").querySelector('[data-feedback-id="fc1"]') !== null);
+        test("category filter: History list also narrows to the selected category", byId("feedbackHistoryList").querySelectorAll(".feedback-card").length === 2);
+
+        byId("feedbackHistoryStatusFilter").value = "closed";
+        byId("feedbackHistoryStatusFilter").dispatchEvent(new Event("change"));
+        test("history status filter: narrows to Closed only, Open list unaffected", byId("feedbackHistoryList").querySelectorAll(".feedback-card").length === 1 && byId("feedbackOpenList").querySelectorAll(".feedback-card").length === 1);
+        byId("feedbackCategoryFilter").value = "all";
+        byId("feedbackCategoryFilter").dispatchEvent(new Event("change"));
+        byId("feedbackHistoryStatusFilter").value = "all";
+        byId("feedbackHistoryStatusFilter").dispatchEvent(new Event("change"));
+
+        // -- Confirmation required + cancel path leaves everything
+        // unchanged; success moves the card from Open to History. -------------
+        resetPageState();
+        globalThis.__repo.open = [makeFeedback({ id: "f9" })];
+        await renderFeedbackPage();
+
+        globalThis.__confirmResult = false;
+        byId("feedbackOpenList").querySelector('[data-new-status="reviewed"]').click();
+        await new Promise(r => setTimeout(r, 20));
+        test("cancelled at the confirmation dialog: stays open, updateFeedbackStatus() never called", globalThis.__updateCalls.length === 0 && byId("feedbackOpenList").querySelectorAll(".feedback-card").length === 1);
+
+        globalThis.__confirmResult = true;
+        const reviewedBtn = byId("feedbackOpenList").querySelector('[data-new-status="reviewed"]');
+        reviewedBtn.focus();
+        reviewedBtn.click();
+        await new Promise(r => setTimeout(r, 20));
+
+        test("confirmed: updateFeedbackStatus() called with expected/new status open/reviewed", globalThis.__updateCalls.some(c => c[0] === "f9" && c[1] === "open" && c[2] === "reviewed"));
+        test("success: the card leaves the Open list", byId("feedbackOpenList").querySelectorAll(".feedback-card").length === 0);
+        test("success: the Open list shows its empty state again", byId("feedbackOpenList").textContent.includes("No open feedback"));
+        test("success: the card now appears in History as Reviewed", byId("feedbackHistoryList").querySelector('[data-feedback-id="f9"][data-status="reviewed"]') !== null);
+        test("success: an accessible success message was shown", globalThis.__toasts.some(t => t.type === "success"));
+        test("success: focus never silently falls back to <body>", document.activeElement !== document.body, document.activeElement?.tagName);
+
+        // -- Reviewed -> Closed performed from WITHIN History: card stays in
+        // History, updates in place, loses its remaining action. --------------
+        resetPageState();
+        globalThis.__repo.history = [makeFeedback({ id: "f10", status: "reviewed", status_updated_at: "2026-01-02T00:00:00Z" })];
+        // The freshness pre-check compares against the row's ACTUAL current
+        // status, not the default "open" resetPageState() leaves in place —
+        // this fixture starts at "reviewed", so the pre-check's mocked
+        // response must match that, or the pre-check itself (correctly)
+        // treats this as stale before the click is even attempted.
+        globalThis.__freshnessStatus = "reviewed";
+        await renderFeedbackPage();
+        byId("feedbackHistoryTab").click();
+
+        const closeFromHistoryBtn = byId("feedbackHistoryList").querySelector('[data-new-status="closed"]');
+        closeFromHistoryBtn.focus();
+        closeFromHistoryBtn.click();
+        await new Promise(r => setTimeout(r, 20));
+
+        test("reviewed->closed from History: updateFeedbackStatus() called with expected=reviewed, new=closed", globalThis.__updateCalls.some(c => c[0] === "f10" && c[1] === "reviewed" && c[2] === "closed"));
+        test("reviewed->closed from History: the SAME card is still present, now closed", byId("feedbackHistoryList").querySelectorAll(".feedback-card").length === 1 && byId("feedbackHistoryList").querySelector('[data-feedback-id="f10"][data-status="closed"]') !== null);
+        test("reviewed->closed from History: the card now has zero actions", byId("feedbackHistoryList").querySelector('[data-feedback-id="f10"]').querySelectorAll('[data-action="update-feedback-status"]').length === 0);
+        test("reviewed->closed from History: focus lands on the page heading, not silently dropped", document.activeElement === byId("feedbackPageHeading"));
+
+        // -- Duplicate-click suppression. --------------------------------------
+        resetPageState();
+        globalThis.__repo.open = [makeFeedback({ id: "f11" })];
+        let updateGate;
+        globalThis.__repo.updateImpl = () => new Promise(resolve => { updateGate = resolve; });
+        await renderFeedbackPage();
+
+        const dupReviewed = byId("feedbackOpenList").querySelector('[data-new-status="reviewed"]');
+        const dupClosed = byId("feedbackOpenList").querySelector('[data-new-status="closed"]');
+        dupReviewed.click();
+        await new Promise(r => setTimeout(r, 20));
+        test("duplicate-click suppression: both action buttons on the card are disabled while pending", dupReviewed.disabled === true && dupClosed.disabled === true);
+        updateGate({ id: "f11", status: "reviewed", status_updated_at: "2026-01-01T00:00:00Z" });
+        await new Promise(r => setTimeout(r, 20));
+        globalThis.__repo.updateImpl = null;
+
+        // -- Generic failure preserves state and re-enables controls. ---------
+        resetPageState();
+        globalThis.__repo.open = [makeFeedback({ id: "f12" })];
+        globalThis.__repo.updateImpl = () => { throw new Error("network blip"); };
+        await renderFeedbackPage();
+        byId("feedbackOpenList").querySelector('[data-new-status="reviewed"]').click();
+        await new Promise(r => setTimeout(r, 20));
+        test("generic failure: the submission is still in the Open list", byId("feedbackOpenList").querySelectorAll(".feedback-card").length === 1);
+        test("generic failure: the action buttons are re-enabled", byId("feedbackOpenList").querySelector('[data-new-status="reviewed"]').disabled === false);
+        test("generic failure: an accessible error message was shown", globalThis.__toasts.some(t => t.type === "error"));
+        globalThis.__repo.updateImpl = null;
+
+        // -- Stale conflict caught by the freshness PRE-CHECK. -----------------
+        resetPageState();
+        globalThis.__repo.open = [makeFeedback({ id: "f13" })];
+        await renderFeedbackPage();
+
+        globalThis.__freshnessStatus = "reviewed"; // world moved on since render
+        globalThis.__repo.open = [];
+        globalThis.__repo.history = [makeFeedback({ id: "f13", status: "reviewed", status_updated_at: "2026-01-02T00:00:00Z" })];
+
+        byId("feedbackOpenList").querySelector('[data-new-status="closed"]').click();
+        await new Promise(r => setTimeout(r, 20));
+
+        test("pre-check conflict: updateFeedbackStatus() (the actual write) is never called", globalThis.__updateCalls.length === 0);
+        test("pre-check conflict: the submission leaves the Open list", byId("feedbackOpenList").querySelectorAll(".feedback-card").length === 0);
+        test("pre-check conflict: no success toast for the attempted outcome", !globalThis.__toasts.some(t => t.type === "success"));
+        test("pre-check conflict: honest, specific feedback", globalThis.__toasts.some(t => t.type === "info" && /already updated/i.test(t.message)));
+        test("pre-check conflict: History reconciles against the server's real state (Reviewed)", byId("feedbackHistoryList").querySelector('[data-feedback-id="f13"][data-status="reviewed"]') !== null);
+        test("pre-check conflict: focus lands on the page heading", document.activeElement === byId("feedbackPageHeading"));
+
+        // -- The SAME conflict, but arriving from the RPC itself. --------------
+        resetPageState();
+        globalThis.__repo.open = [makeFeedback({ id: "f14" })];
+        globalThis.__freshnessStatus = "open"; // pre-check sees it as still open — genuinely overlapping
+        globalThis.__repo.updateImpl = () => { throw new Error("This feedback was already updated. Refresh to see its current status."); };
+        await renderFeedbackPage();
+
+        globalThis.__repo.open = [];
+        globalThis.__repo.history = [makeFeedback({ id: "f14", status: "closed", status_updated_at: "2026-01-02T00:00:00Z" })];
+
+        byId("feedbackOpenList").querySelector('[data-new-status="reviewed"]').click();
+        await new Promise(r => setTimeout(r, 20));
+
+        test("RPC-level conflict: updateFeedbackStatus() WAS called — this is the atomic-guard path, not the pre-check", globalThis.__updateCalls.some(c => c[0] === "f14"));
+        test("RPC-level conflict: no success toast for the attempted outcome", !globalThis.__toasts.some(t => t.type === "success"));
+        test("RPC-level conflict: honest, specific feedback, same wording as the pre-check path", globalThis.__toasts.some(t => t.type === "info" && /already updated/i.test(t.message)));
+        test("RPC-level conflict: History reconciles against the server's real state (Closed)", byId("feedbackHistoryList").querySelector('[data-feedback-id="f14"][data-status="closed"]') !== null);
+        globalThis.__repo.updateImpl = null;
+
+        // -- Not-found error stays distinct from the stale-conflict path. -----
+        resetPageState();
+        globalThis.__repo.open = [makeFeedback({ id: "f15" })];
+        globalThis.__repo.updateImpl = () => { throw new Error("Feedback submission not found."); };
+        await renderFeedbackPage();
+        byId("feedbackOpenList").querySelector('[data-new-status="reviewed"]').click();
+        await new Promise(r => setTimeout(r, 20));
+        test("not-found error: updateFeedbackStatus() was called", globalThis.__updateCalls.some(c => c[0] === "f15"));
+        test(
+            "not-found error: shown as its own distinct message, never the already-updated wording",
+            globalThis.__toasts.some(t => /no longer available/i.test(t.message)) && !globalThis.__toasts.some(t => /already updated/i.test(t.message))
+        );
+        globalThis.__repo.updateImpl = null;
+
+        // -- Live regions present on both lists. -------------------------------
+        test("live regions: Open list is announced via aria-live", byId("feedbackOpenList").getAttribute("aria-live") === "polite");
+        test("live regions: History list is announced via aria-live", byId("feedbackHistoryList").getAttribute("aria-live") === "polite");
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`feedbackQueue.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>
