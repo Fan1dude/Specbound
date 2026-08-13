@@ -222,6 +222,62 @@
 
         pageError = null;
 
+        // --- Case 8 (Milestone 25): a 'follow' notification renders correctly
+        // on the dedicated page too — same shared notificationFormat.js as
+        // the bell dropdown, exercised through this page's own renderer. -----
+        pages = [[makeNotification("nfollow", {
+            type: "follow",
+            actor_id: "user-b",
+            build_id: null,
+            comment_id: null,
+            actor: { id: "user-b", username: "bob" },
+            build: null
+        })]];
+        calls.length = 0;
+
+        await renderNotifications();
+
+        const followRow = document.querySelector('.notification-row[data-id="nfollow"]');
+
+        test("follow notification renders a row on the dedicated page", followRow !== null);
+        test(
+            "follow notification: exact copy on the dedicated page",
+            followRow?.querySelector(".notification-row-text")?.textContent === "bob followed you.",
+            followRow?.querySelector(".notification-row-text")?.textContent
+        );
+        test(
+            "follow notification: links to the follower's profile from the dedicated page (pathPrefix aware)",
+            followRow?.getAttribute("href") === "../pages/profile.html?user=user-b",
+            followRow?.getAttribute("href")
+        );
+
+        // --- Case 9 (Milestone 25): "Someone" fallback — a follow row whose
+        // actor profile failed to enrich (join miss) still renders safely. --
+        pages = [[makeNotification("nfollowfallback", {
+            type: "follow",
+            actor_id: "user-gone",
+            build_id: null,
+            comment_id: null,
+            actor: null,
+            build: null
+        })]];
+        calls.length = 0;
+
+        await renderNotifications();
+
+        const fallbackRow = document.querySelector('.notification-row[data-id="nfollowfallback"]');
+
+        test(
+            "follow notification: 'Someone' fallback when the actor profile didn't enrich",
+            fallbackRow?.querySelector(".notification-row-text")?.textContent === "Someone followed you.",
+            fallbackRow?.querySelector(".notification-row-text")?.textContent
+        );
+        test(
+            "follow notification: the link still targets the correct actor_id even without an enriched actor",
+            fallbackRow?.getAttribute("href") === "../pages/profile.html?user=user-gone",
+            fallbackRow?.getAttribute("href")
+        );
+
         // --- Render + report ------------------------------------------------
         const resultsEl = document.getElementById("results");
         resultsEl.innerHTML = results

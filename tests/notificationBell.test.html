@@ -268,6 +268,49 @@
 
         test("zero notifications shows an empty-state message", document.getElementById("notificationDropdownList").textContent.includes("You're all caught up"));
 
+        // --- Case 8 (Milestone 25): a 'follow' notification renders with the
+        // exact copy, links to the follower's profile (built from actor_id,
+        // never from the joined username), and escapes a malicious actor
+        // username as literal text rather than executing it as markup. ------
+        container.innerHTML = "";
+        mockUnreadCount = 1;
+        mockRecent = [makeNotification({
+            id: "nfollow",
+            type: "follow",
+            actor_id: "user-evil",
+            build_id: null,
+            comment_id: null,
+            read_at: null,
+            actor: { id: "user-evil", username: `<img src=x onerror="window.__xssFired = true">` },
+            build: null
+        })];
+        calls.length = 0;
+
+        await initNotificationBell(container, { user, pathPrefix: "../" });
+        document.getElementById("notificationBellButton").click();
+        await waitFor(() => document.querySelectorAll(".notification-item").length === 1);
+
+        const followItem = document.querySelector('.notification-item[data-id="nfollow"]');
+
+        test(
+            "follow notification: exact copy, ending in 'followed you.'",
+            followItem.querySelector(".notification-item-text").textContent.endsWith("followed you."),
+            followItem.querySelector(".notification-item-text").textContent
+        );
+        test(
+            "follow notification: links to the follower's profile, built from actor_id",
+            followItem.getAttribute("href") === "../pages/profile.html?user=user-evil",
+            followItem.getAttribute("href")
+        );
+        test(
+            "follow notification: a malicious actor username is escaped as literal text, never executed",
+            window.__xssFired !== true && !followItem.querySelector("img")
+        );
+        test(
+            "follow notification: the raw markup contains the escaped entity, not a live <img> tag",
+            document.getElementById("notificationDropdownList").innerHTML.includes("&lt;img")
+        );
+
         // --- Render + report ------------------------------------------------
         const resultsEl = document.getElementById("results");
         resultsEl.innerHTML = results

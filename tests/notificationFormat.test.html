@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Milestone 24 — js/utils/notificationFormat.js (report_resolved)</title>
+    <title>Milestones 24-25 — js/utils/notificationFormat.js (report_resolved, follow)</title>
     <style>
         body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
         .case { padding: 4px 0; border-bottom: 1px solid #222; }
@@ -12,7 +12,7 @@
     </style>
 </head>
 <body>
-    <h1>Milestone 24 — notificationFormat.js: report_resolved</h1>
+    <h1>Milestones 24-25 — notificationFormat.js: report_resolved, follow</h1>
     <p>
         resolve_report() (supabase/migrations/0028_moderation.sql, Milestone 22)
         has always notified the reporter with this type on resolution — it just
@@ -77,6 +77,71 @@
         test(
             "report_resolved: ignores an actor/build even if present, by design",
             formatNotificationText(reportResolvedWithExtra) === "A moderator reviewed a report you submitted."
+        );
+
+        // --- follow (Milestone 25) -----------------------------------------
+        // set_follow() (supabase/migrations/0012_follows.sql, Milestone 7C)
+        // never called create_notification() until
+        // 0037_follow_notifications.sql added it — this case never actually
+        // fired before either, same situation as report_resolved above.
+        const follow = { type: "follow", actor_id: "user-alice-id", actor: { username: "alice" }, build: null };
+
+        test(
+            "follow: exact copy",
+            formatNotificationText(follow) === "alice followed you."
+        );
+        test(
+            "follow: URL is built from the trusted actor_id column, not the joined username or any other user-controlled text",
+            getNotificationUrl(follow, "../") === "../pages/profile.html?user=user-alice-id"
+        );
+        test(
+            "follow: URL is never the build-link fallback (no build exists for a follow)",
+            !getNotificationUrl(follow, "../").includes("build.html")
+        );
+
+        // "Someone" fallback — the actor profile failed to enrich (e.g. a
+        // join miss), same fallback every other type already relies on.
+        const followNoActor = { type: "follow", actor_id: "user-ghost-id", actor: null, build: null };
+        test(
+            "follow: falls back to \"Someone\" when the actor didn't enrich, same as every other type",
+            formatNotificationText(followNoActor) === "Someone followed you."
+        );
+        test(
+            "follow: the link still uses actor_id even when the enriched actor object is null",
+            getNotificationUrl(followNoActor, "../") === "../pages/profile.html?user=user-ghost-id"
+        );
+
+        // A follow notification with an encodeURIComponent-sensitive
+        // actor_id (defense in depth — actor_id is always a server-generated
+        // uuid in practice, never attacker-controlled text, but the URL
+        // builder itself should still encode safely regardless).
+        const followSpecialId = { type: "follow", actor_id: "not a real uuid?&=", actor: { username: "eve" }, build: null };
+        test(
+            "follow: the actor_id is percent-encoded into the URL, never interpolated raw",
+            getNotificationUrl(followSpecialId, "../") === `../pages/profile.html?user=${encodeURIComponent("not a real uuid?&=")}`
+        );
+
+        // Proves the safety net a genuinely-old (pre-Milestone-25) frontend
+        // would have relied on if it encountered a 'follow' row — and what
+        // the behavioral rollback (0037_follow_notifications_rollback.sql)
+        // continues to rely on: an unrecognized type still falls through to
+        // the generic default, never throws, never renders as markup.
+        const unrecognizedType = { type: "some_future_type_this_client_has_never_heard_of", actor: { username: "alice" }, build: { title: "Cool Build" } };
+        let unrecognizedThrew = false;
+        let unrecognizedText = "";
+        try {
+            unrecognizedText = formatNotificationText(unrecognizedType);
+        } catch {
+            unrecognizedThrew = true;
+        }
+        test(
+            "unrecognized type (e.g. what an old frontend would see for 'follow' pre-Milestone-25): never throws",
+            unrecognizedThrew === false
+        );
+        test(
+            "unrecognized type: falls through to the generic, safe default text",
+            unrecognizedText === "alice interacted with Cool Build",
+            unrecognizedText
         );
 
         // --- Render + report ------------------------------------------------

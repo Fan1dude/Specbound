@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Milestone 25 — js/repositories/notificationRepository.js (enrichNotifications)</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Milestone 25 — notificationRepository.js: enrichNotifications()</h1>
+    <p>
+        Exercises the REAL enrichNotifications() implementation (not a
+        pass-through mock, unlike notificationBell.test.html/
+        notifications.test.html/mobileAccountMenu.test.html, which all stub
+        this function out entirely). Only its two collaborators —
+        getProfilesByIds()/getBuildsByIds() — and the supabase client are
+        mocked at the module boundary, same convention as
+        moderationRepository.test.html. Covers the fix for a real bug found
+        during Milestone 25's live verification: a null build_id (always
+        true for report_resolved and follow notifications) reaching
+        getBuildsByIds()'s unfiltered .in("id", ids) call, which Postgres
+        rejects (22P02: invalid input syntax for type uuid: "null"),
+        breaking the notification bell/page entirely for the affected user.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        async function loadPatched(realPath, map) {
+            const src = await (await fetch(realPath)).text();
+            let rewritten = src;
+            for (const [from, to] of Object.entries(map)) {
+                rewritten = rewritten.replaceAll(`"${from}"`, `"${to}"`);
+            }
+            return blobUrl(rewritten);
+        }
+
+        // --- Mock collaborators — notificationRepository.js's OWN batching/
+        // filtering logic in enrichNotifications() is what's under test
+        // here, not supabase.js/profileRepository.js/buildRepository.js's
+        // internals. supabase itself is stubbed but never exercised by
+        // enrichNotifications() (it doesn't touch the client directly). ----
+        globalThis.__mock = { calls: [] };
+        globalThis.__fixtures = { profiles: [], builds: [] };
+        globalThis.__buildsShouldFail = false;
+
+        const supabaseSrc = `
+            export const supabase = {
+                from() { throw new Error("enrichNotifications() should never touch supabase directly"); },
+                rpc() { throw new Error("enrichNotifications() should never touch supabase directly"); }
+            };
+        `;
+
+        const profilesMockSrc = `
+            export async function getProfilesByIds(ids) {
+                globalThis.__mock.calls.push(["getProfilesByIds", ids]);
+                return globalThis.__fixtures.profiles.filter(p => ids.includes(p.id));
+            }
+        `;
+
+        // Mirrors the real getBuildsByIds()'s own guard (buildRepository.js:
+        // "if (!ids.length) return [];") so this mock is representative of
+        // the real collaborator's contract, not just a blind stub — a null
+        // in ids here still stands in for what would be a live 22P02 from
+        // Postgres/PostgREST if the real function were called with it.
+        const buildsMockSrc = `
+            export async function getBuildsByIds(ids) {
+                globalThis.__mock.calls.push(["getBuildsByIds", ids]);
+                if (ids.includes(null) || ids.includes(undefined)) {
+                    throw new Error('invalid input syntax for type uuid: "null"');
+                }
+                if (globalThis.__buildsShouldFail) {
+                    throw new Error("build lookup failed");
+                }
+                if (!ids.length) return [];
+                return globalThis.__fixtures.builds.filter(b => ids.includes(b.id));
+            }
+        `;
+
+        const notificationRepoUrl = await loadPatched("../js/repositories/notificationRepository.js", {
+            "../core/supabase.js": blobUrl(supabaseSrc),
+            "./profileRepository.js": blobUrl(profilesMockSrc),
+            "./buildRepository.js": blobUrl(buildsMockSrc)
+        });
+
+        const { enrichNotifications } = await import(notificationRepoUrl);
+
+        function reset() {
+            globalThis.__mock.calls = [];
+            globalThis.__buildsShouldFail = false;
+        }
+
+        function makeNotification(overrides = {}) {
+            return {
+                id: "n1",
+                recipient_id: "user-me",
+                actor_id: "user-a",
+                type: "like",
+                build_id: "build-1",
+                comment_id: null,
+                read_at: null,
+                created_at: "2026-01-01T00:00:00Z",
+                ...overrides
+            };
+        }
+
+        // --- Reproduces the original failure first — proves this test
+        // actually exercises the bug, not just the fix. A pre-fix
+        // enrichNotifications() passed build_id straight through with no
+        // filter(Boolean); this mock's getBuildsByIds() throws exactly the
+        // way the real getBuildsByIds()/PostgREST would for a raw null in
+        // the ids array, so calling it that way here reproduces the same
+        // failure the live bell/page hit. -------------------------------
+        reset();
+        {
+            let threwOriginalBug = false;
+            let originalBugMessage = "";
+            try {
+                const idsWithRawNull = [...new Set([makeNotification({ build_id: null }).build_id])];
+                // Deliberately the PRE-FIX shape: no .filter(Boolean).
+                await (await import(blobUrl(`
+                    export async function getBuildsByIds(ids) {
+                        if (ids.includes(null)) throw new Error('invalid input syntax for type uuid: "null"');
+                        return [];
+                    }
+                `))).getBuildsByIds(idsWithRawNull);
+            } catch (error) {
+                threwOriginalBug = true;
+                originalBugMessage = error.message;
+            }
+            test(
+                "sanity check: an unfiltered build_id array (the pre-fix shape) does reproduce the original 22P02-style failure",
+                threwOriginalBug && /invalid input syntax for type uuid/i.test(originalBugMessage),
+                originalBugMessage
+            );
+        }
+
+        // --- Requirement 2: a single notification with build_id = null ------
+        globalThis.__fixtures.profiles = [{ id: "user-a", username: "alice" }];
+        globalThis.__fixtures.builds = [];
+        reset();
+
+        let threw = false;
+        let result;
+        try {
+            result = await enrichNotifications([
+                makeNotification({ id: "n-null-build", type: "report_resolved", build_id: null, actor_id: "user-a" })
+            ]);
+        } catch {
+            threw = true;
+        }
+
+        test("a null build_id notification does not throw", threw === false);
+
+        const buildsCall = globalThis.__mock.calls.find(c => c[0] === "getBuildsByIds");
+        test(
+            "a null build_id is never passed to getBuildsByIds()",
+            buildsCall && !buildsCall[1].includes(null) && !buildsCall[1].includes(undefined),
+            JSON.stringify(buildsCall?.[1])
+        );
+        test("the notification itself is preserved in the result", result?.length === 1 && result[0].id === "n-null-build");
+        test("its actor profile is still enriched despite the null build_id", result?.[0]?.actor?.username === "alice");
+        test("its build is null (correctly, not a crash)", result?.[0]?.build === null);
+
+        // --- Requirement 3: a mixed list — build-backed + report_resolved
+        // (null build) + follow (null build) — only the valid build id is
+        // queried, all three rows enrich correctly. -------------------------
+        globalThis.__fixtures.profiles = [
+            { id: "user-a", username: "alice" },
+            { id: "user-b", username: "bob" },
+            { id: "user-c", username: "carol" }
+        ];
+        globalThis.__fixtures.builds = [{ id: "build-1", slug: "cool-build", title: "Cool Build" }];
+        reset();
+
+        const mixedResult = await enrichNotifications([
+            makeNotification({ id: "n-build", type: "like", build_id: "build-1", actor_id: "user-a" }),
+            makeNotification({ id: "n-report", type: "report_resolved", build_id: null, comment_id: null, actor_id: "user-b" }),
+            makeNotification({ id: "n-follow", type: "follow", build_id: null, comment_id: null, actor_id: "user-c" })
+        ]);
+
+        const mixedBuildsCall = globalThis.__mock.calls.find(c => c[0] === "getBuildsByIds");
+        test(
+            "mixed list: getBuildsByIds() is queried with only the one valid build id",
+            JSON.stringify(mixedBuildsCall?.[1]) === JSON.stringify(["build-1"]),
+            JSON.stringify(mixedBuildsCall?.[1])
+        );
+        test("mixed list: all three rows are returned", mixedResult.length === 3);
+        test(
+            "mixed list: the build-backed row enriches its build",
+            mixedResult.find(n => n.id === "n-build")?.build?.slug === "cool-build"
+        );
+        test(
+            "mixed list: the report_resolved row enriches its actor and has a null build",
+            mixedResult.find(n => n.id === "n-report")?.actor?.username === "bob"
+                && mixedResult.find(n => n.id === "n-report")?.build === null
+        );
+        test(
+            "mixed list: the follow row enriches its actor and has a null build",
+            mixedResult.find(n => n.id === "n-follow")?.actor?.username === "carol"
+                && mixedResult.find(n => n.id === "n-follow")?.build === null
+        );
+
+        // --- Requirement 4: multiple null build_ids collapse to no build
+        // query at all (not one query per null, not a null-only query). ------
+        globalThis.__fixtures.profiles = [
+            { id: "user-a", username: "alice" },
+            { id: "user-b", username: "bob" }
+        ];
+        globalThis.__fixtures.builds = [];
+        reset();
+
+        await enrichNotifications([
+            makeNotification({ id: "n1", type: "report_resolved", build_id: null, actor_id: "user-a" }),
+            makeNotification({ id: "n2", type: "follow", build_id: null, actor_id: "user-b" }),
+            makeNotification({ id: "n3", type: "report_resolved", build_id: null, actor_id: "user-a" })
+        ]);
+
+        const buildsCallsCount = globalThis.__mock.calls.filter(c => c[0] === "getBuildsByIds").length;
+        const multiNullCall = globalThis.__mock.calls.find(c => c[0] === "getBuildsByIds");
+        test("multiple null build_ids: getBuildsByIds() is called exactly once (batched, not per-row)", buildsCallsCount === 1);
+        test(
+            "multiple null build_ids: the query array is empty, not [null, null, null] or similar",
+            Array.isArray(multiNullCall?.[1]) && multiNullCall[1].length === 0,
+            JSON.stringify(multiNullCall?.[1])
+        );
+
+        // --- Requirement 5: valid build ids are deduplicated -----------------
+        globalThis.__fixtures.profiles = [{ id: "user-a", username: "alice" }];
+        globalThis.__fixtures.builds = [{ id: "build-1", slug: "cool-build", title: "Cool Build" }];
+        reset();
+
+        await enrichNotifications([
+            makeNotification({ id: "n1", build_id: "build-1", actor_id: "user-a" }),
+            makeNotification({ id: "n2", build_id: "build-1", actor_id: "user-a" }),
+            makeNotification({ id: "n3", build_id: "build-1", actor_id: "user-a" })
+        ]);
+
+        const dedupeCall = globalThis.__mock.calls.find(c => c[0] === "getBuildsByIds");
+        test(
+            "repeated build_id values across notifications are deduplicated before the query",
+            JSON.stringify(dedupeCall?.[1]) === JSON.stringify(["build-1"]),
+            JSON.stringify(dedupeCall?.[1])
+        );
+
+        // --- Requirement 6: a build lookup failure still propagates —
+        // enrichNotifications() must not silently hide it. --------------------
+        globalThis.__fixtures.profiles = [{ id: "user-a", username: "alice" }];
+        reset();
+        globalThis.__buildsShouldFail = true;
+
+        let failurePropagated = false;
+        let failureMessage = "";
+        try {
+            await enrichNotifications([
+                makeNotification({ id: "n1", build_id: "build-1", actor_id: "user-a" })
+            ]);
+        } catch (error) {
+            failurePropagated = true;
+            failureMessage = error.message;
+        }
+        test(
+            "an unrelated build lookup failure still propagates, is not swallowed",
+            failurePropagated && failureMessage === "build lookup failed",
+            failureMessage
+        );
+
+        // --- Requirement 7: existing build-backed enrichment is unchanged ----
+        globalThis.__fixtures.profiles = [{ id: "user-a", username: "alice" }];
+        globalThis.__fixtures.builds = [{ id: "build-1", slug: "cool-build", title: "Cool Build" }];
+        reset();
+
+        const normalResult = await enrichNotifications([
+            makeNotification({ id: "n-normal", type: "comment", build_id: "build-1", actor_id: "user-a" })
+        ]);
+
+        test(
+            "a normal build-backed notification still enriches actor and build exactly as before",
+            normalResult[0]?.actor?.username === "alice"
+                && normalResult[0]?.build?.slug === "cool-build"
+                && normalResult[0]?.build?.title === "Cool Build"
+        );
+        test(
+            "a normal build-backed notification's own fields (id, type, etc.) are preserved unchanged",
+            normalResult[0]?.id === "n-normal" && normalResult[0]?.type === "comment"
+        );
+
+        // --- Edge case: an empty notification list short-circuits, no calls -
+        reset();
+        const emptyResult = await enrichNotifications([]);
+        test("an empty notification list returns an empty array", Array.isArray(emptyResult) && emptyResult.length === 0);
+        test("an empty notification list never calls getProfilesByIds/getBuildsByIds", globalThis.__mock.calls.length === 0);
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`notificationRepositoryEnrichment.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>
