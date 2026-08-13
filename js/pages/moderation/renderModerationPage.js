@@ -152,18 +152,19 @@ export async function renderModerationPage() {
             triggerButton.innerHTML = "Saving...";
         }
 
-        // Client-side freshness guard — resolve_report() (0028_moderation.sql)
-        // matches by report id alone, regardless of its current status, so
-        // it has no built-in defense against two moderators resolving the
-        // same report moments apart (the second call would silently
-        // re-resolve it, overwriting who/when it was resolved and firing a
-        // second reporter notification). Rather than add a migration to
-        // harden the RPC itself for this milestone, this re-checks the
-        // report's live status immediately before calling it — closes the
-        // realistic case (a queue left open in two tabs) without a schema
-        // change; a genuinely simultaneous click is a tiny residual, non-
-        // security race documented in this milestone's final report, not
-        // fixed here.
+        // Client-side freshness pre-check — a fast path only, NOT the
+        // concurrency boundary. resolve_report() (0028_moderation.sql,
+        // guarded atomically since migration 0036) now matches its UPDATE
+        // on `id = p_report_id and status = 'open'` in a single statement,
+        // so a report that's already been resolved by someone else can
+        // never be silently re-resolved by this call, regardless of
+        // whether this pre-check ran, succeeded, or was itself racing
+        // another moderator's action. This SELECT exists purely to skip an
+        // RPC round trip in the common case (a queue left open in two
+        // tabs, one clearly stale) — if it's wrong or skipped, the RPC's
+        // own atomic guard is what actually prevents the conflict, and its
+        // "already been resolved" error is handled identically to the
+        // stale-pre-check case below via handleAlreadyResolvedConflict().
         let stillOpen = true;
 
         try {
@@ -177,13 +178,13 @@ export async function renderModerationPage() {
             stillOpen = freshRow?.status === "open";
         } catch (error) {
             console.error("Report freshness check error:", error);
-            // Fall through — resolve_report()'s own check remains the
-            // backstop if this pre-check itself couldn't be completed.
+            // Fall through — resolve_report()'s own atomic guard remains
+            // the real backstop if this pre-check itself couldn't be
+            // completed.
         }
 
         if (!stillOpen) {
-            showToast("This report was already resolved by someone else.", "info");
-            removeFromOpenAndFocus(reportId, wasFocusInsideCard);
+            await handleAlreadyResolvedConflict(wasFocusInsideCard);
             return;
         }
 
@@ -198,19 +199,52 @@ export async function renderModerationPage() {
         } catch (error) {
             console.error("Resolve report error:", error);
 
-            if (/not found/i.test(error.message || "")) {
+            const message = error.message || "";
+
+            // Checked first and narrowly — this is the atomic guard's own
+            // distinct exception text (migration 0036), never confused
+            // with the separate "Report not found." case below. A
+            // conflict never shows a success toast for the attempted
+            // outcome and never inserts it into local history; it
+            // reconciles both views against the server instead, so
+            // whichever outcome the OTHER moderator actually recorded is
+            // what appears.
+            if (/already been resolved/i.test(message)) {
+                await handleAlreadyResolvedConflict(wasFocusInsideCard);
+                return;
+            }
+
+            if (/not found/i.test(message)) {
                 showToast("This report is no longer open.", "info");
                 removeFromOpenAndFocus(reportId, wasFocusInsideCard);
                 return;
             }
 
-            showToast(error.message || "Could not resolve this report. Try again.", "error");
+            showToast(message || "Could not resolve this report. Try again.", "error");
 
             actionButtons.forEach(btn => { btn.disabled = false; });
             if (triggerButton?.dataset.originalHtml) {
                 triggerButton.innerHTML = triggerButton.dataset.originalHtml;
             }
         }
+    }
+
+    // Shared by both conflict-detection paths above (the pre-check
+    // finding a non-open status, and resolve_report() itself rejecting an
+    // already-resolved report) — an honest, identical response either
+    // way: no success toast for what THIS moderator attempted, a full
+    // reload from the server so both Open and Resolved reflect whatever
+    // the OTHER moderator actually recorded (never a locally-guessed
+    // outcome), and focus moved to the Open heading if it would otherwise
+    // be stranded on a card that's already gone. loadAll()'s own re-render
+    // creates fresh, already-enabled controls, so there's nothing separate
+    // to re-enable here.
+    async function handleAlreadyResolvedConflict(wasFocusInsideCard) {
+        showToast("This report was already resolved by another moderator. The queue has been refreshed.", "info");
+
+        await loadAll();
+
+        if (wasFocusInsideCard) openHeading?.focus();
     }
 
     // Removes a report from the Open list and re-renders it — full
