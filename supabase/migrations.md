@@ -1356,3 +1356,75 @@ Every other migration still only ever moves forward from `0001`.
   `docs/milestones/MILESTONE_25_FOLLOW_NOTIFICATIONS_SPECIFICATION.md`
   and the spawned follow-up task recorded during that milestone's
   production release.
+
+## 0039_feedback_status_workflow
+
+- **Status**: Applied to the local disposable Supabase/Docker stack only
+  (full `supabase db reset --local` through `0039`, plus an isolated
+  apply/rollback/reapply rehearsal with real feedback rows and real
+  actorless notification rows present). **Not applied to production.**
+- **Purpose**: `feedback_submissions` (0029, Milestone 22) has carried a
+  `status` column since it shipped, but nothing has ever written past
+  its `'open'` default — no RPC, no UPDATE RLS policy. Milestone 26
+  closes that gap: a moderator or staff member can now mark a submission
+  Reviewed or Closed, and the submitter is notified.
+- **Schema changes**:
+  - `feedback_submissions.status_updated_at timestamptz`, nullable, no
+    default. Existing/new Open rows keep it `null`; only a successful
+    `update_feedback_status()` call ever sets it, atomically with the
+    status change itself. Lets the reviewer History view sort by "most
+    recently actioned" instead of `created_at`.
+  - `notifications_type_check` widened to add `'feedback_reviewed'` and
+    `'feedback_closed'` — two distinct frozen event types (not one type
+    with a live status join), so a notification's rendered text can
+    never retroactively change if the same submission is later actioned
+    again.
+  - `notifications.actor_id` changed from `not null` to nullable — the
+    reviewer-identity privacy fix, added as a required correction before
+    implementation began (the original plan reused `report_resolved`'s
+    pattern of a real `actor_id` + fixed rendered text, but inspecting
+    the full data path showed the raw `actor_id` and a separately-fetched
+    actor profile are both already client-visible via
+    `notifications.select("*")`/`enrichNotifications()`, regardless of
+    what the UI chooses to render). Every existing notification type is
+    completely unaffected — all of them always pass a real actor_id;
+    this only permits a new possibility, it requires nothing.
+- **New function**: `update_feedback_status(p_feedback_id uuid,
+  p_expected_status text, p_new_status text)` — `SECURITY DEFINER`,
+  re-checks `is_platform_moderator(auth.uid())` itself, validates the
+  transition against an explicit 3-entry allow-list (`open→reviewed`,
+  `open→closed`, `reviewed→closed`; Closed is terminal, no no-op is ever
+  valid), and claims the row atomically (`update ... where id = ... and
+  status = p_expected_status returning ...`) — same technique as
+  `resolve_report()`'s guard (`0036`), generalized with an explicit
+  expected-status parameter since feedback's graph has two valid source
+  statuses where a report's has one. On success, creates exactly one
+  notification (`recipient_id` = the submitter, `actor_id` = `null`,
+  never `auth.uid()`) — skipped entirely when `user_id` is null (a
+  deleted submitter's row updates silently). No UPDATE RLS policy is
+  added; this function remains the only write path, matching
+  `submit_feedback()`'s existing insert-only posture.
+- **Rollback is deliberately the narrowest in this chain so far** — it
+  drops ONLY the function. It does **not** drop `status_updated_at`
+  (a populated column would be destroyed with no way to recover it by
+  reapplying forward), does **not** narrow `notifications_type_check`
+  back (would fail outright or destroy real notifications once either
+  new type has been used), and does **not** restore `actor_id`'s `not
+  null` constraint (would fail outright once any actorless row exists,
+  and has no protective value to restore once nothing can insert one
+  anyway). Net effect: schema stays exactly as `0039` left it, all
+  feedback rows/statuses/timestamps and all notifications (actor-backed
+  and actorless alike) are untouched; only future status changes stop
+  being possible until re-applied.
+- **Rollback**: `0039_feedback_status_workflow_rollback.sql` in
+  `supabase/rollbacks/`.
+- **Related fix, same branch, different file**: `enrichNotifications()`
+  (`js/repositories/notificationRepository.js`) now filters out falsy
+  `actor_id` values (the same `.filter(Boolean)` guard it already
+  applied to `build_id` since `0037`'s follow-up fix) before batching
+  the profile lookup — an actorless notification's `actor_id` would
+  otherwise reach `getProfilesByIds()`'s `.in("id", ids)` as a literal
+  `null` in the array and be rejected by Postgres the same way an
+  unfiltered `build_id` was.
+- **Context**: Milestone 26 (Feedback Review) — see
+  `docs/milestones/MILESTONE_26_FEEDBACK_REVIEW_SPECIFICATION.md`.
