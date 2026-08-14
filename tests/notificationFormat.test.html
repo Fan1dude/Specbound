@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Milestones 24-25 — js/utils/notificationFormat.js (report_resolved, follow)</title>
+    <title>Milestones 24-26 — js/utils/notificationFormat.js (report_resolved, follow, feedback_reviewed/feedback_closed)</title>
     <style>
         body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
         .case { padding: 4px 0; border-bottom: 1px solid #222; }
@@ -12,7 +12,7 @@
     </style>
 </head>
 <body>
-    <h1>Milestones 24-25 — notificationFormat.js: report_resolved, follow</h1>
+    <h1>Milestones 24-26 — notificationFormat.js: report_resolved, follow, feedback_reviewed/feedback_closed</h1>
     <p>
         resolve_report() (supabase/migrations/0028_moderation.sql, Milestone 22)
         has always notified the reporter with this type on resolution — it just
@@ -142,6 +142,53 @@
             "unrecognized type: falls through to the generic, safe default text",
             unrecognizedText === "alice interacted with Cool Build",
             unrecognizedText
+        );
+
+        // --- feedback_reviewed / feedback_closed (Milestone 26) -----------------
+        // update_feedback_status() (supabase/migrations/
+        // 0039_feedback_status_workflow.sql) always passes actor_id = null —
+        // a deliberate privacy requirement, not an omission. These cases must
+        // never name a reviewer even if an actor somehow enriched (same
+        // defensive posture as the report_resolved-with-extra case above).
+        const feedbackReviewed = { type: "feedback_reviewed", actor: null, build: null };
+        const feedbackClosed = { type: "feedback_closed", actor: null, build: null };
+
+        test(
+            "feedback_reviewed: exact copy",
+            formatNotificationText(feedbackReviewed) === "Your feedback was reviewed."
+        );
+        test(
+            "feedback_closed: exact copy",
+            formatNotificationText(feedbackClosed) === "Your feedback was closed."
+        );
+        test(
+            "feedback_reviewed: routes to pages/my-feedback.html",
+            getNotificationUrl(feedbackReviewed, "../") === "../pages/my-feedback.html"
+        );
+        test(
+            "feedback_closed: routes to pages/my-feedback.html",
+            getNotificationUrl(feedbackClosed, "../") === "../pages/my-feedback.html"
+        );
+        test(
+            "feedback_reviewed/feedback_closed: destination is never suffixed with #commentsList",
+            !getNotificationUrl(feedbackReviewed, "../").includes("#") && !getNotificationUrl(feedbackClosed, "../").includes("#")
+        );
+
+        // Even if an actor object somehow enriched (it never will in
+        // practice — actor_id is always null on these rows — but the
+        // renderer itself must not depend on that being true to stay safe),
+        // the reviewer's identity must never appear in the rendered text.
+        const feedbackReviewedWithExtra = { type: "feedback_reviewed", actor: { username: "mod1" }, build: null };
+        const feedbackClosedWithExtra = { type: "feedback_closed", actor: { username: "mod1" }, build: null };
+        test(
+            "feedback_reviewed: ignores an actor even if present, by design — never names a reviewer",
+            formatNotificationText(feedbackReviewedWithExtra) === "Your feedback was reviewed."
+                && !formatNotificationText(feedbackReviewedWithExtra).includes("mod1")
+        );
+        test(
+            "feedback_closed: ignores an actor even if present, by design — never names a reviewer",
+            formatNotificationText(feedbackClosedWithExtra) === "Your feedback was closed."
+                && !formatNotificationText(feedbackClosedWithExtra).includes("mod1")
         );
 
         // --- Render + report ------------------------------------------------

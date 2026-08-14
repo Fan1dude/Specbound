@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/png" sizes="16x16" href="../assets/brand/logo/favicon-16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/brand/logo/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="../assets/brand/logo/favicon-48.png">
+    <link rel="apple-touch-icon" href="../assets/brand/logo/apple-touch-icon.png">
+    <link rel="manifest" href="../manifest.webmanifest">
+    <meta name="theme-color" content="#B79AE6">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feedback | Specbound</title>
+    <link rel="canonical" href="https://specboundapp.com/pages/feedback.html">
+    <meta name="robots" content="noindex">
+
+    <meta
+        name="description"
+        content="Review feedback submitted by builders."
+    >
+
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Specbound">
+    <meta property="og:title" content="Feedback | Specbound">
+    <meta property="og:description" content="Review feedback submitted by builders.">
+    <meta property="og:url" content="https://specboundapp.com/pages/feedback.html">
+    <meta property="og:image" content="https://specboundapp.com/assets/brand/og/og-image.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Feedback | Specbound">
+    <meta name="twitter:description" content="Review feedback submitted by builders.">
+    <meta name="twitter:image" content="https://specboundapp.com/assets/brand/og/og-image.png">
+
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/pages/feedback/feedback.css">
+</head>
+<body class="page-foundation">
+    <nav class="navbar" id="navbar"></nav>
+
+    <main class="feedback-page" id="main">
+        <!-- Fail-closed by default in the raw markup itself, not only via
+             script: #feedbackContent/#feedbackDenied both start hidden,
+             #feedbackGate starts visible. loadFeedbackQueue.js flips
+             exactly one of Content/Denied once the reviewer check has
+             actually resolved — a slow connection or a thrown error
+             never leaves submission data visible by default. -->
+        <div id="feedbackGate" class="feedback-gate" role="status" aria-live="polite">
+            <p class="text-secondary">Checking access...</p>
+        </div>
+
+        <div id="feedbackDenied" class="empty-state" hidden>
+            <h1>You don't have access to this page</h1>
+            <p>Feedback review is only available to Specbound moderators and staff.</p>
+            <a href="../pages/workshop.html" class="btn btn-secondary">Back to Workshop</a>
+        </div>
+
+        <div id="feedbackContent" hidden>
+            <section class="feedback-hero">
+                <div>
+                    <p class="hero-badge">Product Feedback</p>
+                    <h1 tabindex="-1" id="feedbackPageHeading">Feedback</h1>
+                    <p class="text-secondary">
+                        Review feedback submitted by builders. Marking a submission Reviewed or
+                        Closed records a decision only — it never notifies the submitter of the
+                        outcome, only that their submission was looked at.
+                    </p>
+                </div>
+            </section>
+
+            <div class="feedback-filters">
+                <label class="feedback-filter-label" for="feedbackCategoryFilter">
+                    Category
+                    <select id="feedbackCategoryFilter" class="feedback-filter-select"></select>
+                </label>
+            </div>
+
+            <div class="tabs" id="feedbackTabs" role="tablist" aria-label="Feedback views">
+                <button
+                    type="button"
+                    class="tab is-active"
+                    role="tab"
+                    id="feedbackOpenTab"
+                    aria-selected="true"
+                    aria-controls="feedbackOpenPanel"
+                >
+                    Open <span id="feedbackOpenCount" class="badge feedback-open-count" hidden></span>
+                </button>
+                <button
+                    type="button"
+                    class="tab"
+                    role="tab"
+                    id="feedbackHistoryTab"
+                    aria-selected="false"
+                    aria-controls="feedbackHistoryPanel"
+                >
+                    History
+                </button>
+            </div>
+
+            <div id="feedbackError" class="empty-state" hidden>
+                <h3>Could not load feedback</h3>
+                <p>Something went wrong loading the feedback queue.</p>
+                <button type="button" class="btn btn-secondary" id="feedbackRetryBtn">Try again</button>
+            </div>
+
+            <div id="feedbackBody">
+                <div
+                    id="feedbackOpenPanel"
+                    class="tab-panel"
+                    role="tabpanel"
+                    aria-labelledby="feedbackOpenTab"
+                >
+                    <div id="feedbackOpenList" class="feedback-list" aria-live="polite"></div>
+                </div>
+
+                <div
+                    id="feedbackHistoryPanel"
+                    class="tab-panel"
+                    role="tabpanel"
+                    aria-labelledby="feedbackHistoryTab"
+                    hidden
+                >
+                    <label class="feedback-filter-label feedback-history-status-filter" for="feedbackHistoryStatusFilter">
+                        Status
+                        <select id="feedbackHistoryStatusFilter" class="feedback-filter-select">
+                            <option value="all">All</option>
+                            <option value="reviewed">Reviewed</option>
+                            <option value="closed">Closed</option>
+                        </select>
+                    </label>
+
+                    <div id="feedbackHistoryList" class="feedback-list" aria-live="polite"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer" id="footer"></footer>
+
+    <script type="module" src="../js/pages/feedback/app.js"></script>
+</body>
+</html>

@@ -150,8 +150,13 @@
         // the iframes below do), so only DOM existence is meaningful to
         // check here — the actual show/hide-per-viewport behavior is
         // verified against real loaded CSS in Cases 4 and 5.
+        // Milestone 26 — a fourth link ("My Feedback") is now unconditional
+        // for every signed-in user, alongside Profile/Settings/Log Out
+        // (moderator-only links like Moderation/Feedback are additional on
+        // top of these four, not counted here since this fixture's
+        // communityMockSrc above returns no roles).
         const mobileLinksAtDesktopWidth = [...document.querySelectorAll(".mobile-account-link")];
-        test("three .mobile-account-link elements exist in the DOM regardless of viewport", mobileLinksAtDesktopWidth.length === 3);
+        test("four .mobile-account-link elements exist in the DOM regardless of viewport", mobileLinksAtDesktopWidth.length === 4);
 
         // --- Case 4 — the actual production bug: reproduced against the
         // REAL loadNavbar() AND the REAL initNotificationBell() (neither
@@ -475,8 +480,8 @@
             const r = await runMobileScenario(height, shouldLogout);
 
             test(
-                `[${label}] the real loadNavbar() (real async timing, real DOM, not static test markup) renders exactly 3 mobile-account-link elements`,
-                r.mobileLinksCount === 3,
+                `[${label}] the real loadNavbar() (real async timing, real DOM, not static test markup) renders exactly 4 mobile-account-link elements`,
+                r.mobileLinksCount === 4,
                 JSON.stringify(r)
             );
             test(`[${label}] View My Profile is rendered by the real render path`, r.profileLinkFound);

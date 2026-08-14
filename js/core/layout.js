@@ -59,6 +59,13 @@ export async function loadNavbar(pathPrefix = "") {
             ? `<a href="${pathPrefix}pages/moderation.html">Moderation</a>`
             : "";
 
+        // Milestone 26 — a second moderator/staff-only entry point,
+        // reusing the exact same isModerator check above (no extra role
+        // check needed) rather than a separate one.
+        const feedbackReviewLink = isModerator
+            ? `<a href="${pathPrefix}pages/feedback.html">Feedback</a>`
+            : "";
+
         // .builder-menu (the desktop-style disclosure button + dropdown)
         // and .mobile-account-link (three plain links) render the same
         // three destinations two different ways — CSS picks exactly one
@@ -84,7 +91,9 @@ export async function loadNavbar(pathPrefix = "") {
                     <a href="${pathPrefix}pages/workshop.html">Workshop</a>
                     <a href="${pathPrefix}pages/profile.html?user=${user.id}">View My Profile</a>
                     <a href="${pathPrefix}pages/settings.html">Settings</a>
+                    <a href="${pathPrefix}pages/my-feedback.html">My Feedback</a>
                     ${moderationLink}
+                    ${feedbackReviewLink}
                     <hr>
                     <a href="#" class="logout-link">Log Out</a>
                 </div>
@@ -92,7 +101,9 @@ export async function loadNavbar(pathPrefix = "") {
 
             <a href="${pathPrefix}pages/profile.html?user=${user.id}" class="mobile-account-link">View My Profile</a>
             <a href="${pathPrefix}pages/settings.html" class="mobile-account-link">Settings</a>
+            <a href="${pathPrefix}pages/my-feedback.html" class="mobile-account-link">My Feedback</a>
             ${moderationLink ? `<a href="${pathPrefix}pages/moderation.html" class="mobile-account-link">Moderation</a>` : ""}
+            ${feedbackReviewLink ? `<a href="${pathPrefix}pages/feedback.html" class="mobile-account-link">Feedback</a>` : ""}
             <a href="#" class="mobile-account-link logout-link">Log Out</a>
         `;
     } else {

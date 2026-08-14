@@ -79,7 +79,14 @@ export async function markAllNotificationsRead() {
 export async function enrichNotifications(notifications) {
     if (!notifications.length) return [];
 
-    const uniqueActorIds = [...new Set(notifications.map(n => n.actor_id))];
+    // Milestone 26 — feedback_reviewed/feedback_closed notifications
+    // always have actor_id null (a deliberate privacy requirement, see
+    // supabase/migrations/0039_feedback_status_workflow.sql), the same
+    // shape that already required filtering build_id below. Same reason:
+    // getProfilesByIds() does an unfiltered .in("id", ids); a raw null
+    // in that array reaches PostgREST as "id=in.(null)" and Postgres
+    // rejects it as an invalid uuid.
+    const uniqueActorIds = [...new Set(notifications.map(n => n.actor_id).filter(Boolean))];
     // report_resolved and follow notifications always have build_id null
     // (see notificationFormat.js) — getBuildsByIds() does an unfiltered
     // .in("id", ids), and PostgREST/Postgres reject a null in that list

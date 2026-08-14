@@ -45,6 +45,22 @@ export function formatNotificationText(notification) {
         case "follow":
             return `${actorName} followed you.`;
 
+        // Milestone 26 — update_feedback_status() (supabase/migrations/
+        // 0039_feedback_status_workflow.sql) notifies the submitter on a
+        // successful Open->Reviewed or ->Closed transition. actor_id is
+        // always null for these (see that migration's header) — a
+        // deliberate privacy requirement, not an oversight, so this text
+        // never names a reviewer and never should, even if actor_id were
+        // ever populated. Two distinct types (not one generic type read
+        // from a live join to the feedback row's current status) so an
+        // OLD notification's text can never silently change if the same
+        // submission is later actioned again.
+        case "feedback_reviewed":
+            return "Your feedback was reviewed.";
+
+        case "feedback_closed":
+            return "Your feedback was closed.";
+
         default:
             return `${actorName} interacted with ${buildTitle}`;
     }
@@ -67,6 +83,14 @@ export function getNotificationUrl(notification, pathPrefix = "") {
     // (pages/profile.html?user=<uuid>) exactly.
     if (notification.type === "follow") {
         return `${pathPrefix}pages/profile.html?user=${encodeURIComponent(notification.actor_id)}`;
+    }
+
+    // Milestone 26 — no specific target row is linked (the notification
+    // doesn't carry a feedback id), just a safe, stable, generic
+    // destination — same "nothing more specific to point at" reasoning
+    // as report_resolved above.
+    if (notification.type === "feedback_reviewed" || notification.type === "feedback_closed") {
+        return `${pathPrefix}pages/my-feedback.html`;
     }
 
     const slug = notification.build?.slug || "";

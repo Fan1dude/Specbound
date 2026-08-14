@@ -25,7 +25,8 @@ This is a live pointer to the approved milestone plan, not a third copy of it. D
 | 22 | Community foundation — Discord linking, roles, reporting, feedback, beta invites, Community Guidelines | Complete — merged to main |
 | 23 | Setup Inventory, scoped search, builder dates | Complete — merged to main, deployed to production |
 | 24 | Moderator Report Queue — moderator-facing interface for content reports filed since Milestone 22 | Complete — see `docs/milestones/MILESTONE_24_MODERATOR_REPORT_QUEUE_SPECIFICATION.md`; merged and deployed to production |
-| 25 | Follow Notifications — notify a builder when someone follows them | See `docs/milestones/MILESTONE_25_FOLLOW_NOTIFICATIONS_SPECIFICATION.md`; draft PR open, not yet merged or deployed to production |
+| 25 | Follow Notifications — notify a builder when someone follows them | Complete — see `docs/milestones/MILESTONE_25_FOLLOW_NOTIFICATIONS_SPECIFICATION.md`; merged and deployed to production, including the follow-up security-hardening migration `0038` |
+| 26 | Feedback Review — moderator/staff feedback triage workflow and a submitter-facing My Feedback page | See `docs/milestones/MILESTONE_26_FEEDBACK_REVIEW_SPECIFICATION.md`; implemented on branch `milestone-26-feedback-review`, draft PR open, not yet merged or deployed to production |
 
 ---
 
