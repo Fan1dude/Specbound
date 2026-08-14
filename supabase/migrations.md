@@ -1428,3 +1428,78 @@ Every other migration still only ever moves forward from `0001`.
   unfiltered `build_id` was.
 - **Context**: Milestone 26 (Feedback Review) — see
   `docs/milestones/MILESTONE_26_FEEDBACK_REVIEW_SPECIFICATION.md`.
+
+## 0040_harden_handle_new_user_search_path
+
+- **Status**: Applied to the local disposable Supabase/Docker stack only
+  (fixture-based real `auth.users` inserts firing the real
+  `on_auth_user_created` trigger, plus an isolated apply/rollback/reapply
+  rehearsal). **Not applied to production.**
+- **Purpose**: closes the one gap Milestone 27's launch-readiness audit
+  found across all 30 `SECURITY DEFINER` functions in this schema —
+  `handle_new_user()` (the `auth.users` signup trigger) was the only one
+  with no `SET search_path` at all, read directly via
+  `pg_get_functiondef()` against production.
+- **A real discrepancy surfaced while writing this migration**:
+  `0000_baseline_pre_tracked_tables.sql`'s own reconstruction of
+  `handle_new_user()` (a two-column insert, `set search_path = public`)
+  does not match what production actually runs — production's real
+  function inserts five columns (`id, username, display_name, bio,
+  avatar_url`), defaults `username`/`display_name` via
+  `coalesce(raw_user_meta_data->>'username', split_part(email, '@', 1))`,
+  and had no `search_path` at all. This migration preserves production's
+  *real* current behavior while adding the missing `search_path` — it
+  does not reproduce the baseline file's stale two-column version, which
+  would have been a silent behavioral regression, not a safe fix. The
+  baseline file itself is intentionally left unedited (already applied
+  to production; this project never edits an already-shipped migration).
+- **Also found, not fixed here (deferred by explicit decision)**: four
+  Milestone 19-era functions (`approve_component_submission`,
+  `is_catalog_moderator`, `reject_component_submission`,
+  `set_component_alias_technology_and_field`) use the narrower
+  `search_path=public` (missing `pg_temp`) rather than the later
+  convention — lower severity, not a live exploit, intentionally out of
+  this migration's scope. Also found: `handle_new_user()` grants EXECUTE
+  to the `PUBLIC` pseudo-role (in addition to `anon`/`authenticated`),
+  present since the `0000` baseline and untouched by this migration (a
+  pure `create or replace function` never alters grants) — worth a
+  dedicated cleanup pass later, not addressed here.
+- **Rollback**: `0040_harden_handle_new_user_search_path_rollback.sql`
+  in `supabase/rollbacks/` — restores the exact pre-migration (real,
+  five-column) function body with `search_path` removed again, never the
+  older baseline stub. Fully reversible either direction; a trigger
+  function replace never rewrites rows already inserted under a prior
+  version.
+- **Context**: Milestone 27A (Launch Readiness, engineering-controlled
+  workstream) — see the published Milestone 27A implementation-ready
+  specification.
+
+## 0041_add_account_deleted_action_type
+
+- **Status**: Applied to the local disposable Supabase/Docker stack
+  only. **Not applied to production.**
+- **Purpose**: schema support only — does **not** implement account
+  deletion. Milestone 27A's account-deletion design calls for logging
+  each (manually executed, staff-run) deletion to `moderation_actions`,
+  the same audit table every other privileged moderation action uses.
+  `moderation_actions.action_type`'s CHECK constraint (`0028_moderation
+  .sql`) allowed exactly `'report_resolved'`, `'role_granted'`,
+  `'role_revoked'`, `'content_removed'` — `'account_deleted'` was
+  missing, which would have made logging a real deletion fail outright
+  the first time it was attempted. Added now, ahead of need.
+- **Schema change**: widens `moderation_actions_action_type_check` to
+  add `'account_deleted'` as a fifth allowed value. Same additive-widen
+  shape already used twice in this schema for the same reason —
+  `0037_follow_notifications.sql` (adding `'follow'`) and
+  `0039_feedback_status_workflow.sql` (adding `'feedback_reviewed'`/
+  `'feedback_closed'`). No RLS change — `moderation_actions` already has
+  no client INSERT policy at all.
+- **Rollback**: `0041_add_account_deleted_action_type_rollback.sql` in
+  `supabase/rollbacks/` — an intentional no-op. Same reasoning as
+  `0037`'s and `0039`'s rollbacks: narrowing a widened CHECK back is
+  unsafe once any row might already use the new value.
+- **Context**: Milestone 27A (Launch Readiness, engineering-controlled
+  workstream) — see the published Milestone 27A implementation-ready
+  specification. The account-deletion procedure itself remains
+  unimplemented; this migration exists to unblock its audit logging
+  whenever that work happens.
