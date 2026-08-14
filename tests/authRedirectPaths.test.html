@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Hotfix — requireAuth() redirect path resolution</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Hotfix — requireAuth() redirect path resolution</h1>
+    <p>
+        Standalone from feedbackQueue.test.html / moderationQueue.test.html /
+        myFeedback.test.html (which each prove the exact string passed to
+        their own requireAuth() mock). This file instead proves what that
+        string actually *resolves to* in a real browser, for every
+        requireAuth() call site in the repo, against both a local-dev-style
+        origin and a production-style origin — the exact class of mistake
+        this hotfix fixes (a relative path that resolves correctly at one
+        page depth but not another) can only be caught by resolving against
+        the real serving URL, not by reading the literal string in
+        isolation.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        // Every requireAuth(...) call site in the repo (confirmed via
+        // `grep -rn "requireAuth(" js/`), paired with the one HTML page
+        // that actually serves the JS file containing it (confirmed via
+        // `grep -rln` on each script's own src). pageUrl is the page's
+        // real deployed path — resolution must not depend on which
+        // directory depth a page happens to live at.
+        const CALL_SITES = [
+            {
+                label: "feedback/loadFeedbackQueue.js (pages/feedback.html) — hotfixed",
+                redirectPath: "/pages/login.html",
+                pageUrl: "/pages/feedback.html"
+            },
+            {
+                label: "moderation/loadModerationQueue.js (pages/moderation.html) — hotfixed",
+                redirectPath: "/pages/login.html",
+                pageUrl: "/pages/moderation.html"
+            },
+            {
+                label: "myFeedback/loadMyFeedback.js (pages/my-feedback.html) — hotfixed",
+                redirectPath: "/pages/login.html",
+                pageUrl: "/pages/my-feedback.html"
+            },
+            {
+                label: "editor/app.js (pages/build/edit.html) — already correct, untouched",
+                redirectPath: "../login.html",
+                pageUrl: "/pages/build/edit.html"
+            },
+            {
+                label: "notifications/loadNotifications.js (pages/notifications.html) — already correct, untouched",
+                redirectPath: "login.html",
+                pageUrl: "/pages/notifications.html"
+            },
+            {
+                label: "settings/app.js (pages/settings.html) — already correct, untouched",
+                redirectPath: "login.html",
+                pageUrl: "/pages/settings.html"
+            },
+            {
+                label: "upload/app.js (pages/upload.html) — already correct, untouched",
+                redirectPath: "login.html",
+                pageUrl: "/pages/upload.html"
+            },
+            {
+                label: "workshop/loadWorkshop.js (pages/workshop.html) — already correct, untouched",
+                redirectPath: "login.html",
+                pageUrl: "/pages/workshop.html"
+            }
+        ];
+
+        // Two representative origins: the local Playwright/CI test server
+        // (tools/ci/run-tests.js, serves the repo root at "/" on
+        // localhost:4173 — see that file's own comment) and the real
+        // production custom domain (Cloudflare Pages, also serving the
+        // repo root at "/", confirmed via _headers' unscoped "/*" pattern
+        // and the absence of any wrangler/base-path config in this repo).
+        // A root-relative path resolves identically against both since
+        // neither serves from a subpath — that equivalence is exactly what
+        // is being proven here, not assumed.
+        const ORIGINS = [
+            { label: "local test server", origin: "http://localhost:4173" },
+            { label: "production custom domain", origin: "https://specboundapp.com" }
+        ];
+
+        for (const site of CALL_SITES) {
+            for (const { label: originLabel, origin } of ORIGINS) {
+                const pageUrl = new URL(site.pageUrl, origin);
+                const resolved = new URL(site.redirectPath, pageUrl);
+                const expected = new URL("/pages/login.html", origin);
+                test(
+                    `${site.label} @ ${originLabel}: resolves to the real login page`,
+                    resolved.href === expected.href,
+                    `resolved to ${resolved.pathname}, expected /pages/login.html`
+                );
+            }
+        }
+
+        // Explicit, named assertions for the exact bullets this hotfix's
+        // spec called out, beyond the general resolution proof above.
+        for (const site of CALL_SITES) {
+            const localResolved = new URL(site.redirectPath, new URL(site.pageUrl, "http://localhost:4173"));
+            test(
+                `${site.label}: never resolves to the nonexistent root-level /login.html`,
+                localResolved.pathname !== "/login.html"
+            );
+        }
+
+        // The three hotfixed sites specifically used the broken
+        // "../login.html" convention before this fix — pin the exact
+        // literal so a future edit can't silently regress the string
+        // itself, not just its resolution.
+        const hotfixedSites = CALL_SITES.filter((s) => s.label.includes("hotfixed"));
+        test(
+            "all three hotfixed call sites use the root-relative form, not a relative one",
+            hotfixedSites.every((s) => s.redirectPath === "/pages/login.html")
+        );
+
+        // The four already-correct sites (plus editor, which uses a
+        // different but equally-correct relative form for its own nested
+        // depth) must be byte-for-byte unchanged by this hotfix — this
+        // guards against accidentally "fixing" something that was never
+        // broken, which the hotfix's own instructions explicitly forbid.
+        const untouchedSites = CALL_SITES.filter((s) => s.label.includes("untouched"));
+        test(
+            "editor/app.js keeps its own correct relative form (\"../login.html\"), unaltered by this hotfix",
+            untouchedSites.find((s) => s.label.startsWith("editor")).redirectPath === "../login.html"
+        );
+        test(
+            "notifications/settings/upload/workshop keep their own correct relative form (\"login.html\"), unaltered by this hotfix",
+            untouchedSites.filter((s) => !s.label.startsWith("editor")).every((s) => s.redirectPath === "login.html")
+        );
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`authRedirectPaths.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

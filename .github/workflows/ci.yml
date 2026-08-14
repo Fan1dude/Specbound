@@ -19,6 +19,7 @@ jobs:
       - run: node tools/ci/check-a11y-regressions.js
       - run: node tools/ci/check-csp-bootstrap.js
       - run: node tools/ci/check-production-domain.js
+      - run: node tools/ci/check-auth-redirects.js
 
   browser-tests:
     name: Browser test suite (tests/*.test.html)

@@ -71,11 +71,12 @@
         // sign-in.
         // =====================================================================
 
-        globalThis.__authMock = { user: { id: "user-1" } };
+        globalThis.__authMock = { user: { id: "user-1" }, redirectPathUsed: null };
         globalThis.__renderCalls = 0;
 
         const authMockSrc = `
-            export async function requireAuth() {
+            export async function requireAuth(redirectPath) {
+                globalThis.__authMock.redirectPathUsed = redirectPath;
                 return globalThis.__authMock.user;
             }
         `;
@@ -92,9 +93,16 @@
         const { loadMyFeedback } = await import(loadUrl);
 
         globalThis.__authMock.user = null;
+        globalThis.__authMock.redirectPathUsed = null;
         globalThis.__renderCalls = 0;
         await loadMyFeedback();
         test("signed-out visitor: My Feedback is never rendered (requireAuth redirects)", globalThis.__renderCalls === 0);
+        // Hotfix regression — pages/my-feedback.html is one level up from
+        // site root, so a "../login.html" redirect target would point at a
+        // nonexistent root-level /login.html instead of the real
+        // /pages/login.html. See js/pages/myFeedback/loadMyFeedback.js.
+        test("signed-out visitor: requireAuth() is given the real login page, not a relative path that 404s", globalThis.__authMock.redirectPathUsed === "/pages/login.html");
+        test("signed-out visitor: redirect target is never the nonexistent root-level login.html", globalThis.__authMock.redirectPathUsed !== "../login.html" && globalThis.__authMock.redirectPathUsed !== "/login.html");
 
         globalThis.__authMock.user = { id: "user-1" };
         globalThis.__renderCalls = 0;
