@@ -88,10 +88,11 @@
         // Part A — js/pages/moderation/loadModerationQueue.js: authorization
         // =====================================================================
 
-        globalThis.__authMock = { user: { id: "user-1" }, roles: [], rolesError: null };
+        globalThis.__authMock = { user: { id: "user-1" }, roles: [], rolesError: null, redirectPathUsed: null };
 
         const authMockSrc = `
-            export async function requireAuth() {
+            export async function requireAuth(redirectPath) {
+                globalThis.__authMock.redirectPathUsed = redirectPath;
                 return globalThis.__authMock.user;
             }
         `;
@@ -131,10 +132,17 @@
         // nothing here should ever unhide. ---------------------------------
         resetGateDom();
         globalThis.__authMock.user = null;
+        globalThis.__authMock.redirectPathUsed = null;
         await loadModerationQueue();
         test("signed-out visitor: #moderationContent stays hidden", byId("moderationContent").hidden === true);
         test("signed-out visitor: #moderationDenied stays hidden (requireAuth already redirected)", byId("moderationDenied").hidden === true);
         test("signed-out visitor: the report queue is never rendered", globalThis.__renderCalls === 0);
+        // Hotfix regression — pages/moderation.html is one level up from
+        // site root, so a "../login.html" redirect target would point at a
+        // nonexistent root-level /login.html instead of the real
+        // /pages/login.html. See js/pages/moderation/loadModerationQueue.js.
+        test("signed-out visitor: requireAuth() is given the real login page, not a relative path that 404s", globalThis.__authMock.redirectPathUsed === "/pages/login.html");
+        test("signed-out visitor: redirect target is never the nonexistent root-level login.html", globalThis.__authMock.redirectPathUsed !== "../login.html" && globalThis.__authMock.redirectPathUsed !== "/login.html");
 
         // -- Ordinary authenticated user (no moderator/staff role): fails
         // closed with a visible access-denied state, content never shown. ---

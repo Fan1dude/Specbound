@@ -28,7 +28,10 @@ export async function loadFeedbackQueue() {
 
     // requireAuth() redirects to login.html itself when signed out —
     // nothing here needs to render an access-denied state for that case.
-    const user = await requireAuth("../login.html");
+    // Root-relative (hotfix, previously "../login.html" — pages/feedback.html
+    // is one level up from site root, so "../login.html" pointed at a
+    // nonexistent /login.html instead of the real /pages/login.html).
+    const user = await requireAuth("/pages/login.html");
     if (!user) return;
 
     let roles = [];
