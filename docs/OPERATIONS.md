@@ -106,6 +106,8 @@ Recurring things worth checking periodically, not because anything is currently 
 
 ## 10. Account deletion (manual, staff-run)
 
+> **Production-use disclaimer**: this procedure has been rehearsed only against disposable local fixtures, inside a Postgres transaction that was rolled back — it has **never been executed against production**. Using it against real production data requires, every time: separate adult-owner authorization for that specific case (§10.2), independent identity verification (§10.1), a current backup/PITR confirmation (§10.5), and a fresh re-read of this entire section against the live schema immediately before use. Schemas drift; a stale reading of this document is not a substitute for re-checking it.
+
 **Specbound has no self-service account-deletion flow today.** This procedure is the only path by which a user's account and published builds are removed, and it is manual, staff-run, and gated on adult-operator approval at every irreversible step. It reflects the approved decision to hard-delete a departing user's published builds along with their account — not a soft-delete or anonymization.
 
 Every schema fact cited below (column nullability, constraint definitions, `ON DELETE` behavior) was confirmed by direct, read-only queries (`information_schema.columns`, `pg_constraint`) against the linked production project on 2026-08-15, not assumed from memory.
@@ -115,7 +117,7 @@ Every schema fact cited below (column nullability, constraint definitions, `ON D
 A deletion request arrives through the future contact method 27B will define (no in-app request flow exists yet — this is a known gap, not an oversight). Whatever channel it arrives on:
 
 1. Verify the requester's identity is genuinely tied to the account in question before doing anything else — this procedure never acts on an unverified claim of ownership.
-2. Record the request and verification outcome wherever 27B's process specifies (not in this repository, and never with the account's real identifiers committed anywhere in git history).
+2. Record the request and verification outcome wherever 27B's process specifies (not in this repository, and never with the account's real identifiers committed anywhere in git history). See §10.13 for exactly how the verified identifier itself must be handled from this point forward.
 
 ### 10.2 Adult-operator approval
 
@@ -123,29 +125,49 @@ No step past this point runs without a specific adult operator's explicit go-ahe
 
 ### 10.3 Read-only dry-run inventory
 
-Run every query below before touching anything. `<TARGET_USER_ID>` is a placeholder — substitute the real id only at execution time, never commit it anywhere.
+Run every query below before touching anything. `<TARGET_USER_ID>` is a placeholder — substitute the real id only at execution time; see §10.13 for how long it may be retained afterward. The goal of this section is that the operator can see the **complete blast radius** — every table this deletion touches, and exactly how — before authorizing anything irreversible; the categorized reference table at the end of this section summarizes it.
+
+**Identity and role holdings:**
 
 ```sql
--- 1. Confirm the account exists (operator's own verification only — do not log or copy this output anywhere)
+-- 1. Confirm the account exists (operator's own verification only — see §10.13)
 select id, created_at from auth.users where id = '<TARGET_USER_ID>';
 
 -- 2. Role holdings
 select role, granted_at, granted_by from public.profile_roles where user_id = '<TARGET_USER_ID>';
+```
 
--- 3. Staff-account safety check — must return at least 1 if the target itself holds 'staff'
-select count(*) as remaining_staff_after_deletion
+**Staff-safety check — two separate facts on purpose, never conflate them:**
+
+```sql
+-- 3a. Does the target itself currently hold 'staff'? This MUST be checked before query 3b means
+--     anything. If this is false, query 3b's result is not relevant to this deletion at all.
+select exists (
+  select 1 from public.profile_roles where user_id = '<TARGET_USER_ID>' and role = 'staff'
+) as target_is_staff;
+
+-- 3b. Count of OTHER verified staff accounts (target already excluded either way). Only apply the
+--     "would leave zero staff" abort criterion (§10.4) when 3a is true. A low or zero count here
+--     when 3a is FALSE — e.g. because no bootstrap (§11) has happened yet — is not itself a reason
+--     to block deleting an account that was never staff.
+select count(*) as other_staff_accounts
 from public.profile_roles
 where role = 'staff' and user_id <> '<TARGET_USER_ID>';
 
 -- 4. Moderation-action audit-trail-loss check — non-zero means deleting this account will
 --    CASCADE-delete these audit rows (moderation_actions.actor_id is NOT NULL, FK ON DELETE CASCADE
---    to auth.users — there is no way to null it out and keep the row)
+--    to auth.users — there is no way to null it out and keep the row). See §10.4's footnote on
+--    audit-record durability.
 select count(*) as moderation_actions_authored
 from public.moderation_actions
 where actor_id = '<TARGET_USER_ID>';
+```
 
+**Content this account owns or authored directly:**
+
+```sql
 -- 5. Published/private builds owned by this account (builds.user_id has NO foreign key at all —
---    nothing cascades here automatically; this list is exactly what step 10.7 must delete explicitly)
+--    nothing cascades here automatically; this list is exactly what step 10.6 must delete explicitly)
 select id, title, slug, visibility, created_at
 from public.builds
 where user_id = '<TARGET_USER_ID>';
@@ -157,26 +179,61 @@ from public.build_revisions
 where user_id = '<TARGET_USER_ID>';
 
 -- 7. Drafts — informational only; project_drafts.user_id cascades automatically once the Auth user
---    is deleted (step 10.8), listed here only so the operator knows what that cascade will remove
+--    is deleted (step 10.7), listed here only so the operator knows what that cascade will remove
 select id, title, updated_at from public.project_drafts where user_id = '<TARGET_USER_ID>';
+```
 
--- 8. Open moderation/legal context tied to this account
-select id, status, created_at from public.content_reports where reporter_id = '<TARGET_USER_ID>';
-select id, status, reviewed_at from public.content_reports where reviewed_by = '<TARGET_USER_ID>';
+**Community activity — all CASCADE-deleted automatically by the Auth admin call (§10.7). Nothing here needs a manual delete step; these queries exist purely so the operator sees the full blast radius before authorizing:**
 
--- 9. Feedback submissions — survive deletion with user_id set to null (existing, intentional privacy
---    design from Milestone 26 — no action needed, informational only)
-select count(*) from public.feedback_submissions where user_id = '<TARGET_USER_ID>';
+```sql
+-- 8. Comments authored by this account
+select count(*) from public.comments where user_id = '<TARGET_USER_ID>';
 
--- 10. Notifications where this account is the actor — these rows are deleted for the OTHER
---     recipient too once the Auth user is deleted (notifications.actor_id is CASCADE), meaning
---     another user's notification history silently loses these entries
+-- 9. Likes given by this account
+select count(*) from public.likes where user_id = '<TARGET_USER_ID>';
+
+-- 10. Saved builds (private bookmarks) belonging to this account
+select count(*) from public.saved_builds where user_id = '<TARGET_USER_ID>';
+
+-- 11. Follows in both directions
+select count(*) as accounts_this_user_follows from public.follows where follower_id = '<TARGET_USER_ID>';
+select count(*) as accounts_following_this_user from public.follows where following_id = '<TARGET_USER_ID>';
+
+-- 12. Connected social accounts (e.g. Discord)
+select count(*) from public.social_connections where user_id = '<TARGET_USER_ID>';
+
+-- 13. Saved Setup-technology categories
+select count(*) from public.saved_setup_categories where user_id = '<TARGET_USER_ID>';
+
+-- 14. Notifications in both directions. The actor-direction count is the one that silently removes
+--     entries from OTHER users' notification history, not just this account's own.
+select count(*) as notifications_received from public.notifications where recipient_id = '<TARGET_USER_ID>';
 select count(*) as notifications_sent_to_others_that_will_be_deleted
 from public.notifications
 where actor_id = '<TARGET_USER_ID>' and recipient_id <> '<TARGET_USER_ID>';
+
+-- 15. Catalog-moderator membership, and any grants this account made to others as a catalog moderator
+select count(*) as catalog_moderator_membership from public.catalog_moderators where user_id = '<TARGET_USER_ID>';
+select count(*) as catalog_moderator_grants_made from public.catalog_moderators where granted_by = '<TARGET_USER_ID>';
+
+-- 16. Component submissions — as the submitter, and separately as the reviewing moderator
+select count(*) as component_submissions_made from public.component_submissions where submitted_by = '<TARGET_USER_ID>';
+select count(*) as component_submissions_reviewed from public.component_submissions where moderator_id = '<TARGET_USER_ID>';
 ```
 
-**Storage-object inventory** (also read-only, run before any deletion — these rows will be gone after step 10.7/10.8, so the paths must be captured now or they become unrecoverable for cleanup):
+**Open moderation/legal context and anonymized-retention content:**
+
+```sql
+-- 17. Open reports filed by this account, and reports this account reviewed as a moderator
+select id, status, created_at from public.content_reports where reporter_id = '<TARGET_USER_ID>';
+select id, status, reviewed_at from public.content_reports where reviewed_by = '<TARGET_USER_ID>';
+
+-- 18. Feedback submissions — survive deletion with user_id set to null (existing, intentional
+--     privacy design from Milestone 26 — no action needed, informational only)
+select count(*) from public.feedback_submissions where user_id = '<TARGET_USER_ID>';
+```
+
+**Storage-object inventory** (also read-only, run before any deletion — these rows will be gone after step 10.6/10.7, so the paths must be captured now or they become unrecoverable for cleanup):
 
 ```sql
 select revision_media.storage_path
@@ -191,20 +248,59 @@ join public.project_drafts on project_drafts.id = project_media.draft_id
 where project_drafts.user_id = '<TARGET_USER_ID>';
 
 select avatar_path from public.profiles where id = '<TARGET_USER_ID>';
+
+-- Legacy avatar check — accounts that predate the signed-URL delivery migration (0003) may have
+-- avatar_url set with avatar_path still null. This value is NEVER auto-deleted from this query
+-- result alone — see §10.8's mandatory manual-verification gate before treating it as a Storage
+-- object to remove.
+select avatar_url
+from public.profiles
+where id = '<TARGET_USER_ID>' and avatar_path is null and avatar_url is not null;
 ```
+
+**Complete blast-radius reference** — every table this deletion touches, grouped by exactly how:
+
+| Table / column (scoped to the target) | Behavior | Notes |
+|---|---|---|
+| `builds.user_id` | Manual hard-delete | No FK at all; explicit `DELETE` in §10.6 — cascades further on its own |
+| `build_revisions.user_id` | Manual, cleared (not deleted) | Blocking FK, `NO ACTION`; explicit `UPDATE ... SET NULL` in §10.6 |
+| `profiles.id` | Manual hard-delete | No FK to `auth.users` at all; explicit `DELETE` in §10.6 — prevents recreating the known orphan condition (§10.12) |
+| `project_drafts.user_id` (→ `project_media`) | Cascade | Removed automatically by §10.7 |
+| `comments.user_id` | Cascade | " |
+| `likes.user_id` | Cascade | " |
+| `saved_builds.user_id` | Cascade | " |
+| `follows.follower_id` / `.following_id` | Cascade | Both directions |
+| `social_connections.user_id` | Cascade | " |
+| `profile_roles.user_id` | Cascade | " |
+| `content_reports.reporter_id` | Cascade | Reports they filed are deleted, not retained |
+| `catalog_moderators.user_id` | Cascade | " |
+| `component_submissions.submitted_by` | Cascade | " |
+| `saved_setup_categories.user_id` | Cascade | " |
+| `notifications.recipient_id` / `.actor_id` | Cascade | Both directions; actor-direction rows removed from OTHER users' history too |
+| `content_reports.reviewed_by` | `SET NULL` (anonymized) | Reports they reviewed survive, attribution removed |
+| `feedback_submissions.user_id` | `SET NULL` (anonymized) | Existing Milestone 26 privacy design |
+| `beta_invites.created_by` / `.used_by` | `SET NULL` | |
+| `components.created_by` | `SET NULL` | |
+| `catalog_moderators.granted_by` | `SET NULL` | |
+| `component_submissions.moderator_id` | `SET NULL` | |
+| `profile_roles.granted_by` | `SET NULL` | |
+| `moderation_actions.actor_id` | Cascade — **audit/history, requires retention review** | The one CASCADE that destroys audit history; §10.4's second abort criterion exists specifically for this |
+| `profiles.avatar_url` (legacy, no `avatar_path`) | Manual, verify-then-decide | Never auto-deleted — see §10.8 |
 
 ### 10.4 Abort / escalation criteria
 
 Stop and do not proceed past this point if any of the following are true:
 
-- Query 3 above would leave **zero remaining staff accounts** — escalate to §11.6 (grant a second staff account first) rather than proceeding.
+- **Staff-safety**: query 3a shows the target holds `'staff'`, **and** query 3b shows zero other verified staff accounts — escalate to §11.6 (grant a second staff account through the normal RPC first) rather than proceeding. If query 3a shows the target does **not** hold `'staff'`, this criterion does not apply at all, regardless of what 3b shows. Never bootstrap a replacement staff account or grant any role as part of resolving this criterion inline — §11's bootstrap procedure is separate, independently authorized, and run on its own, never folded into a deletion.
 - Query 4 above is non-zero — get explicit adult-owner acknowledgment that this specific audit history will be destroyed (the schema offers no way to preserve it; `actor_id` cannot be null). Silent proceeding is never acceptable here.
-- Any open `content_reports` or unresolved moderation/legal retention need touches this account (query 8) — resolve or explicitly document the retention decision first.
+- Any open `content_reports` or unresolved moderation/legal retention need touches this account (query 17) — resolve or explicitly document the retention decision first.
 - Identity was not independently verified (§10.1), or approval did not come from an adult operator (§10.2).
+
+**Audit-record durability**: the `account_deleted` row §10.6 inserts is attributed to the verified adult operator (`actor_id`), never the departing target — this holds by construction, since §10.6 always uses `<OPERATOR_USER_ID>`, never `<TARGET_USER_ID>`, for `actor_id`. If that operator's own account is ever later deleted through this same procedure, `moderation_actions.actor_id`'s existing `ON DELETE CASCADE` means every moderation action they ever authored — including this one — would be removed too. Query 4 above already exists to catch exactly this for that *future* deletion (an operator who has ever authored a moderation action is precisely what query 4 finds); this note only makes the connection explicit. No schema change is proposed or made here — this is a documentation-only observation.
 
 ### 10.5 Backup/PITR confirmation
 
-Confirm a same-day backup/PITR recovery point exists (§13.1) before proceeding. This procedure is irreversible past commit (§10.10) — never run it without a fresh restore point on record.
+Confirm a same-day backup/PITR recovery point exists (§13.1) before proceeding. This procedure is irreversible past commit (§10.11) — never run it without a fresh restore point on record.
 
 ### 10.6 Transaction boundaries and ordering
 
@@ -239,7 +335,7 @@ update public.build_revisions set user_id = null where user_id = '<TARGET_USER_I
 
 -- profiles.id has NO foreign key to auth.users at all — nothing else in this schema deletes this
 -- row automatically. This is the exact gap responsible for the one known historical orphan profile
--- documented in §10.11; skipping this step recreates that same condition for a new account.
+-- documented in §10.12; skipping this step recreates that same condition for a new account.
 delete from public.profiles where id = '<TARGET_USER_ID>';
 
 -- Verification, inside the same transaction, before commit — abort criteria for step 10.6 itself.
@@ -250,7 +346,7 @@ select count(*) from public.profiles where id = '<TARGET_USER_ID>';             
 commit;
 ```
 
-**If any verification query above returns non-zero: `rollback;`, not `commit;`.** Investigate before retrying — never re-run blind.
+**If any verification query above returns non-zero: `rollback;`, not `commit;`.** Investigate before retrying — never re-run blind. If this step is interrupted before you know whether it committed, see §10.14 before doing anything else.
 
 ### 10.7 Supabase Auth admin deletion (requires Auth admin access, cannot run from SQL alone)
 
@@ -260,11 +356,11 @@ Only after 10.6 commits successfully. This step requires the Supabase Admin API 
 supabase.auth.admin.deleteUser('<TARGET_USER_ID>')
 ```
 
-This cascades automatically (all confirmed via live `pg_constraint`, `ON DELETE CASCADE`): `project_drafts` (and from there `project_media`), `comments`, `likes`, `saved_builds`, `notifications` (both as recipient and — per query 10 above — as actor), `follows`, `social_connections`, `profile_roles`, `content_reports.reporter_id`, `catalog_moderators`, `component_submissions.submitted_by`, `saved_setup_categories`, plus Supabase Auth's own internal tables (`identities`, `sessions`, `mfa_factors`, etc.).
+This cascades automatically (all confirmed via live `pg_constraint`, `ON DELETE CASCADE`): `project_drafts` (and from there `project_media`), `comments`, `likes`, `saved_builds`, `notifications` (both as recipient and — per query 14 above — as actor), `follows`, `social_connections`, `profile_roles`, `content_reports.reporter_id`, `catalog_moderators`, `component_submissions.submitted_by`, `saved_setup_categories`, plus Supabase Auth's own internal tables (`identities`, `sessions`, `mfa_factors`, etc.).
 
 It sets to null rather than deleting: `content_reports.reviewed_by`, `feedback_submissions.user_id`, `beta_invites.created_by`/`used_by`, `components.created_by`, `catalog_moderators.granted_by`, `component_submissions.moderator_id`, `profile_roles.granted_by`. These are accepted, pre-existing schema behaviors — not something this procedure changes.
 
-By the time this step runs, `build_revisions.user_id` no longer references the target (cleared in 10.6), so the one blocking foreign key is already resolved and this call should succeed without a `foreign_key_violation`.
+By the time this step runs, `build_revisions.user_id` no longer references the target (cleared in 10.6), so the one blocking foreign key is already resolved and this call should succeed without a `foreign_key_violation`. If this step fails, see §10.14 before doing anything else — do not re-run §10.6.
 
 ### 10.8 Storage cleanup (cannot be part of the PostgreSQL transaction)
 
@@ -275,15 +371,32 @@ for each storage_path captured in §10.3:
   supabase.storage.from('project-images').remove([storage_path])
 ```
 
-This is irreversible: no undelete, no trash/recycle bin. If interrupted partway, the result is orphaned Storage objects with no referencing row — low-severity, the same accepted-limitation category already documented for the `0005`/`0018` migrations, not a new gap introduced here.
+This is irreversible: no undelete, no trash/recycle bin. If interrupted partway, the result is orphaned Storage objects with no referencing row — low-severity, the same accepted-limitation category already documented for the `0005`/`0018` migrations, not a new gap introduced here. See §10.14 for what's safe to retry.
+
+**Legacy avatar handling — never delete from a URL blindly.** For any `avatar_url` captured in §10.3's legacy-avatar query, only treat it as a Storage object to remove once **all three** of the following are positively verified:
+
+1. The URL's origin/host matches this project's own Supabase Storage endpoint — not a Discord CDN URL, not any other unrelated external host.
+2. The decoded path clearly and unambiguously falls under the `project-images` bucket — not another bucket, not a bucket-root path, not a `..`-containing or otherwise ambiguous path.
+3. The resulting object key, once decoded and verified, corresponds to this specific target's own historical avatar location.
+
+If any of the three can't be positively confirmed, **flag the row for manual review and take no automated action on it.** Never issue a broad prefix or wildcard delete against the bucket to "catch" an unverifiable legacy avatar — an unresolved legacy avatar is a low-severity, disclosed limitation (the same category as the accepted `0005`/`0018` orphaned-Storage-object gap), not a reason to risk deleting an object that may not belong to this account at all.
 
 ### 10.9 Post-operation verification
 
-Re-run the applicable §10.3 queries; every count must be zero. Confirm the Auth user is gone via the Admin API (`getUserById` should return not-found) — a raw SQL read against `auth.users` for the same id should also return zero rows.
+Re-run the applicable §10.3 queries; every count must be zero. This includes the legacy `avatar_url` query — if it still returns a row, confirm whether that row was positively verified and removed per §10.8, or was correctly flagged for manual review and deliberately left untouched; a flagged-but-unremoved legacy avatar is not a verification failure. Confirm the Auth user is gone via the Admin API (`getUserById` should return not-found) — a raw SQL read against `auth.users` for the same id should also return zero rows.
 
 ### 10.10 Requester notification
 
-Notify the requester through whichever channel their request arrived on (§10.1) that the deletion is complete. No separate in-app mechanism exists for this yet.
+Notify the requester through whichever channel their request arrived on (§10.1), using language equivalent to the checklist below — never a blanket "everything was erased" claim, since this procedure intentionally retains some data:
+
+- [ ] Your account and all published builds have been removed.
+- [ ] Uploaded images and other Storage objects: removed — or, if any step is still pending, name what remains and give an expected completion window (§10.8).
+- [ ] Feedback you submitted remains on record with your identity removed (anonymized), not deleted — this is an existing Milestone 26 design, not specific to your request.
+- [ ] Reports you filed were deleted along with your account. If you ever reviewed reports as a moderator, those records remain on file with your identity removed.
+- [ ] An internal audit record of this deletion exists for accountability and is retained under platform policy; it references your account but carries no other personal data.
+- [ ] If anything above is not yet complete, state exactly what remains and when to expect it.
+
+Never promise total erasure — several items above are retained by design, either anonymized or as an internal audit record, and this notification must say so accurately rather than overclaiming.
 
 ### 10.11 What's reversible, what's irreversible
 
@@ -297,6 +410,38 @@ Notify the requester through whichever channel their request arrived on (§10.1)
 A read-only investigation performed before this PR found exactly one `profiles` row with no corresponding `auth.users` row. This is possible precisely because `profiles.id` has no foreign-key constraint to `auth.users(id)` — confirmed via `pg_constraint`: `profiles`' only constraints are its primary key and three `CHECK` constraints (`featured_build_id`, `headline`, `guidelines_accepted_version`, `building_since_year`); none reference `auth.users`. At the time of that investigation this row had zero references from any other table in the schema, and no identifying information about it appears anywhere in this document or this repository. It predates the changes released in PR #24 (27A PR2) and was not caused by it. **It is not touched, altered, or deleted by this PR.**
 
 Recommended handling, not performed here: a separate, adult-approved cleanup under the same approval posture as §10.1-10.2 (re-confirm zero references at cleanup time, since state can drift, then delete the single row in its own transaction), plus a future migration adding the missing foreign key (`profiles.id references auth.users(id) on delete cascade`) so this class of drift becomes structurally impossible rather than requiring §10.6's manual `delete from public.profiles` step to be remembered every time.
+
+### 10.13 UUID handling across this procedure
+
+This resolves the tension between §10.3's "do not log or copy this output anywhere" and the fact that this procedure needs the same target identifier across §10.3 through §10.9.
+
+- The verified target UUID (and the operator's own UUID used as `<OPERATOR_USER_ID>`) may be held only in the active operator's own session — memory, a local shell variable, or a single scratch file deleted the moment the case closes — for the duration of exactly one deletion case, and nowhere else.
+- Never in this repository, in a commit, in chat or ticket text, in a screenshot, in analytics, in general application logs, or in persistent shell history.
+- If an adult owner later establishes an approved, secure case-management system for handling deletion requests, follow that system's own retention rules instead of this note — this procedure does not invent record-keeping infrastructure and takes no position on what that future system should look like.
+- Clear any temporary variable or scratch file holding the UUID as soon as §10.9 and §10.10 are complete.
+- If access or the operator's session is lost mid-procedure and no securely retained copy exists, **do not** reconstruct the UUID from an untrusted source (a chat log, a screenshot, memory of it) — re-verify identity from scratch per §10.1 before resuming, exactly as if this were a new request. See §10.14 first, to determine what already happened before you re-verify.
+
+`<TARGET_USER_ID>` and `<OPERATOR_USER_ID>` remain placeholders throughout this document; no real UUID appears anywhere in this repository.
+
+### 10.14 Interrupted runs: determining state and safe retry
+
+Never rerun this procedure from §10.1 blindly after an interruption. Determine exactly what already happened using the read-only checks below, then resume only at the first step that hasn't completed — never repeat a step that already has.
+
+**How to tell what already happened (read-only, in this order):**
+
+1. `select count(*) from public.moderation_actions where target_id = '<TARGET_USER_ID>' and action_type = 'account_deleted';` — `1` means §10.6 already committed. Because the audit insert is the first statement inside §10.6's single transaction, this being `1` is proof the builds/build_revisions/profiles deletes committed too — they cannot have succeeded without it, or vice versa. `0` means §10.6 has not committed, whether or not it was attempted (a failed attempt leaves nothing behind — see below).
+2. If step 1 is `1`: check the Auth user via the Admin API (`getUserById('<TARGET_USER_ID>')`). Found → §10.7 hasn't succeeded yet. Not found → §10.7 already succeeded.
+3. If step 2 shows §10.7 already succeeded: spot-check one of the `storage_path` values captured in §10.3 against the Storage API. Still present → §10.8 hasn't completed. Not found → check the rest of the captured list the same way before assuming §10.8 is fully done.
+
+**Boundary-by-boundary guidance:**
+
+- **§10.6 fails before `commit;`** — safe, no special handling needed. A failed statement aborts the whole transaction automatically; nothing was written, including no audit row (it's the first statement, so it can't survive a later failure). Re-run §10.3's dry-run fresh before retrying §10.6 — whatever caused the failure may need investigating, and production state can drift between reads.
+- **§10.6 commits but §10.7 fails** — confirm via steps 1–2 above that §10.6 truly committed and the Auth user still exists. If so, retrying `deleteUser()` is safe and idempotent for a still-existing id. **Do not re-run any part of §10.6** — the audit row already exists, and inserting it again would create a duplicate `account_deleted` record for the same target.
+- **§10.7 succeeds but §10.8 hasn't started** — use the `storage_path` list captured during §10.3, while it's still held in the active session (§10.13). If that list was lost after §10.6/§10.7 already ran, it cannot be re-derived from Postgres — the referencing rows are gone. Do not attempt a blind bucket-wide or prefix-wildcard cleanup in that case; escalate to an adult owner to decide whether a targeted, manually-verified Storage listing is worth attempting, accepting that some objects may remain as low-severity orphans (§10.8).
+- **§10.8 partially succeeds** — safe to retry. Removing an already-removed Storage object is a harmless no-op/not-found response, not an error requiring special handling. Re-run `remove()` against the remaining paths from the captured list.
+- **Operator access or session lost between any of the above** — use the three-step check above to determine exactly what already happened before doing anything else. Resume only at the first not-yet-completed step. Never restart from §10.1's intake, and never re-run §10.6 once its audit row is confirmed present.
+
+**When to stop and escalate rather than retry**: if the read-only checks above produce a result that doesn't fit any of the boundary cases described — for example, the audit row exists but the Auth admin API keeps erroring in a way that isn't explained by a still-existing user id — stop, do not keep retrying, and escalate to an adult owner rather than improvising a workaround.
 
 ## 11. Moderator/staff bootstrap (first-staff account, one-time — not yet authorized)
 
@@ -454,7 +599,7 @@ Each entry below follows the same shape: read-only checks first, when to abort/e
 
 ### 12.9 Account-deletion requests
 
-Fully covered by §10 — this entry is an index pointer, not a duplicate. Read-only checks first (§10.3), abort/escalation criteria (§10.4), adult-owner-only steps (approval, the transaction, Auth admin deletion), and the explicit statement that self-service deletion doesn't exist are all defined there.
+Fully covered by §10 — this entry is an index pointer, not a duplicate. Read-only checks first (§10.3), abort/escalation criteria (§10.4), adult-owner-only steps (approval, the transaction, Auth admin deletion), UUID handling (§10.13), interrupted-run recovery (§10.14), and the explicit statement that self-service deletion doesn't exist are all defined there.
 
 ### 12.10 Cloudflare deployment mismatch
 
