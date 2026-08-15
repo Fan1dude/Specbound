@@ -5,7 +5,7 @@ describes what was actually built, not a proposal awaiting approval.
 Local-only verification against disposable Supabase test data, including
 four real accounts (submitter, moderator, staff, ordinary) exercised
 through the live browser UI, plus a full rollback/reapply rehearsal
-against real data; not yet deployed to production.
+against real data; merged and deployed to production (migration `0039`).
 
 ## 1. Problem
 

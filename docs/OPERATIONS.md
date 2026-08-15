@@ -1,18 +1,20 @@
 # Operations
 
-**Status: current and accurate as of Phase 9D implementation, 2026-07-27.** Companion to `docs/DEPLOYMENT.md` (initial setup) — this document covers the ongoing day-to-day of running Specbound in production: redeploying, rolling back, releasing changes, rotating credentials, updating dependencies, and what to do when something breaks.
+**Status: current and accurate as of Milestone 27A PR4 (documentation-only), 2026-08-15.** Companion to `docs/DEPLOYMENT.md` (initial setup) — this document covers the ongoing day-to-day of running Specbound in production: redeploying, rolling back, releasing changes, rotating credentials, updating dependencies, and what to do when something breaks. §10 onward (added by Milestone 27A PR4) cover manual account deletion, staff bootstrap, an incident runbook, and adult-owner-gated checklists for backups/monitoring and Storage configuration.
+
+**A note on scope for §10-§14**: Specbound's owner is a minor. Legal publication, age-policy decisions, external-account ownership, production moderator bootstrap, and handling of account-deletion requests all require an adult owner/guardian's direct action or explicit authorization — every section below states exactly where that gate applies. Nothing in §10-§14 has been executed; these sections document procedures only.
 
 ---
 
 ## 1. Redeployment
 
-Nothing special — push to the production branch. Cloudflare Pages auto-builds and auto-deploys on every push (see `docs/DEPLOYMENT.md` §2). There is no separate "trigger a redeploy" step for a normal code change; the deploy *is* the push.
+Nothing special — push to the production branch. Cloudflare Pages auto-builds and auto-deploys on every push (see `docs/DEPLOYMENT.md` §4). There is no separate "trigger a redeploy" step for a normal code change; the deploy *is* the push.
 
 To force a redeploy with no code change (e.g. after a Cloudflare-side issue, or to pick up a dashboard setting change that needs a fresh build): Cloudflare dashboard → Pages project → **Deployments** → **Retry deployment** on the latest one, or push an empty commit (`git commit --allow-empty -m "Trigger redeploy"`).
 
 ## 2. Rollback
 
-Full procedure in `docs/DEPLOYMENT.md` §7. Summary: Cloudflare dashboard → Deployments → pick the last known-good one → promote it to production. Immediate, no rebuild, no git operation needed. Use this the moment a deploy is suspected bad — don't wait to diagnose the root cause first; roll back, then investigate calmly with the site already stable.
+Full procedure in `docs/DEPLOYMENT.md` §13. Summary: Cloudflare dashboard → Deployments → pick the last known-good one → promote it to production. Immediate, no rebuild, no git operation needed. Use this the moment a deploy is suspected bad — don't wait to diagnose the root cause first; roll back, then investigate calmly with the site already stable.
 
 ## 3. Releasing updates
 
@@ -21,14 +23,14 @@ This is a solo/small-scale project today (single `master` branch, no staging env
 1. Make the change locally, verify it against the local dev server (`.claude/nocache_server.py` on port 8431) as this project has done throughout Milestones 1-9.
 2. Commit with a clear message describing *why*, not just *what* (matches this project's established commit convention — see recent commits for examples).
 3. Push to the production branch. This *is* the release — no separate "deploy step" or "release cut" process exists or is needed for a project this size.
-4. Run the relevant subset of the smoke-test checklist (`docs/DEPLOYMENT.md` §9) against the live production URL after the deploy completes.
+4. Run the relevant subset of the smoke-test checklist (`docs/DEPLOYMENT.md` §12) against the live production URL after the deploy completes.
 5. For anything touching Storage, RLS, or auth specifically: don't skip the smoke test. This app's history (Migrations A/B/C) shows exactly how subtle and high-consequence a mistake in that area can be — see `docs/STORAGE_ARCHITECTURE.md` and `docs/AUTH_ARCHITECTURE.md`.
 
 **Database migrations are a separate, manual process**, unrelated to Cloudflare Pages deploys: this project has no automated migration runner. New migrations go in `supabase/migrations/` (sequential, zero-padded, with a matching rollback file in `supabase/rollbacks/` — kept in a separate folder so a real Supabase project's tooling doesn't mistake a rollback for a forward migration, logged in `supabase/migrations.md`) and are run manually in the Supabase SQL editor — the implementation environment has never had direct database execution access, by design. A Cloudflare Pages deploy never touches the database; a migration never touches the deployed site. Keep these two release paths mentally separate.
 
 ## 4. Cache invalidation
 
-Automatic on every Cloudflare Pages deploy — see `docs/DEPLOYMENT.md` §8 for the full reasoning (and why this app deliberately does *not* set custom long-lived cache headers). Nothing to do here in normal operation. If a stale-asset issue is ever suspected: Cloudflare dashboard → Caching → **Purge Cache**, as a manual fallback.
+Automatic on every Cloudflare Pages deploy — see `docs/DEPLOYMENT.md` §10 for the full reasoning (and why this app deliberately does *not* set custom long-lived cache headers). Nothing to do here in normal operation. If a stale-asset issue is ever suspected: Cloudflare dashboard → Caching → **Purge Cache**, as a manual fallback.
 
 ## 5. Rotating credentials
 
@@ -98,6 +100,450 @@ Recurring things worth checking periodically, not because anything is currently 
 | Supabase backup/PITR tier | Once, then rarely | Confirm the project's plan tier still matches actual data-loss tolerance (tracked as **L4** in the original audit, part of Phase 9E) |
 | SMTP/email provider | Once, before real signup volume | Supabase's default email service has strict rate limits — confirm custom SMTP is configured before relying on password-reset/signup emails at any scale (tracked as **L9**) |
 | Domain/SSL | Rarely (Cloudflare auto-renews) | Spot-check the site is still serving over valid HTTPS |
-| `robots.txt`/`sitemap.xml` accuracy | When new public pages are added | New static pages (e.g. a new category) should be added to `sitemap.xml`; new private/account pages should be added to `robots.txt`'s disallow list, matching the pattern in `docs/DEPLOYMENT.md` §3 |
+| `robots.txt`/`sitemap.xml` accuracy | When new public pages are added | New static pages (e.g. a new category) should be added to `sitemap.xml`; new private/account pages should be added to `robots.txt`'s disallow list, matching the pattern in `docs/DEPLOYMENT.md` §11 |
 | Dead code / duplication | Periodically | Phase 9C found real recurrence of "imported but fully dead" CSS and duplicated utilities even after an earlier (8D) cleanup pass — worth an occasional fresh audit rather than assuming one cleanup pass is permanent |
-| CSP footprint | Whenever a new external resource is added | Any new external script/font/API host must be added to `_headers`' CSP *before* the code that uses it ships, or it will be silently blocked in production (verify via the same meta-tag/temporary-header technique used during Phase 9D implementation — see `docs/DEPLOYMENT.md` §9.8) |
+| CSP footprint | Whenever a new external resource is added | Any new external script/font/API host must be added to `_headers`' CSP *before* the code that uses it ships, or it will be silently blocked in production (verify via the same meta-tag/temporary-header technique used during Phase 9D implementation — see `docs/DEPLOYMENT.md` §10) |
+
+## 10. Account deletion (manual, staff-run)
+
+**Specbound has no self-service account-deletion flow today.** This procedure is the only path by which a user's account and published builds are removed, and it is manual, staff-run, and gated on adult-operator approval at every irreversible step. It reflects the approved decision to hard-delete a departing user's published builds along with their account — not a soft-delete or anonymization.
+
+Every schema fact cited below (column nullability, constraint definitions, `ON DELETE` behavior) was confirmed by direct, read-only queries (`information_schema.columns`, `pg_constraint`) against the linked production project on 2026-08-15, not assumed from memory.
+
+### 10.1 Intake and identity verification
+
+A deletion request arrives through the future contact method 27B will define (no in-app request flow exists yet — this is a known gap, not an oversight). Whatever channel it arrives on:
+
+1. Verify the requester's identity is genuinely tied to the account in question before doing anything else — this procedure never acts on an unverified claim of ownership.
+2. Record the request and verification outcome wherever 27B's process specifies (not in this repository, and never with the account's real identifiers committed anywhere in git history).
+
+### 10.2 Adult-operator approval
+
+No step past this point runs without a specific adult operator's explicit go-ahead for *this* request. Approval of the procedure existing is not approval to run it — each real deletion is its own authorization event.
+
+### 10.3 Read-only dry-run inventory
+
+Run every query below before touching anything. `<TARGET_USER_ID>` is a placeholder — substitute the real id only at execution time, never commit it anywhere.
+
+```sql
+-- 1. Confirm the account exists (operator's own verification only — do not log or copy this output anywhere)
+select id, created_at from auth.users where id = '<TARGET_USER_ID>';
+
+-- 2. Role holdings
+select role, granted_at, granted_by from public.profile_roles where user_id = '<TARGET_USER_ID>';
+
+-- 3. Staff-account safety check — must return at least 1 if the target itself holds 'staff'
+select count(*) as remaining_staff_after_deletion
+from public.profile_roles
+where role = 'staff' and user_id <> '<TARGET_USER_ID>';
+
+-- 4. Moderation-action audit-trail-loss check — non-zero means deleting this account will
+--    CASCADE-delete these audit rows (moderation_actions.actor_id is NOT NULL, FK ON DELETE CASCADE
+--    to auth.users — there is no way to null it out and keep the row)
+select count(*) as moderation_actions_authored
+from public.moderation_actions
+where actor_id = '<TARGET_USER_ID>';
+
+-- 5. Published/private builds owned by this account (builds.user_id has NO foreign key at all —
+--    nothing cascades here automatically; this list is exactly what step 10.7 must delete explicitly)
+select id, title, slug, visibility, created_at
+from public.builds
+where user_id = '<TARGET_USER_ID>';
+
+-- 6. Build revisions authored by this account, independent of builds.user_id — build_revisions.user_id
+--    carries no required relationship to builds.user_id, so this can in principle diverge from query 5
+select id, build_id, version, created_at
+from public.build_revisions
+where user_id = '<TARGET_USER_ID>';
+
+-- 7. Drafts — informational only; project_drafts.user_id cascades automatically once the Auth user
+--    is deleted (step 10.8), listed here only so the operator knows what that cascade will remove
+select id, title, updated_at from public.project_drafts where user_id = '<TARGET_USER_ID>';
+
+-- 8. Open moderation/legal context tied to this account
+select id, status, created_at from public.content_reports where reporter_id = '<TARGET_USER_ID>';
+select id, status, reviewed_at from public.content_reports where reviewed_by = '<TARGET_USER_ID>';
+
+-- 9. Feedback submissions — survive deletion with user_id set to null (existing, intentional privacy
+--    design from Milestone 26 — no action needed, informational only)
+select count(*) from public.feedback_submissions where user_id = '<TARGET_USER_ID>';
+
+-- 10. Notifications where this account is the actor — these rows are deleted for the OTHER
+--     recipient too once the Auth user is deleted (notifications.actor_id is CASCADE), meaning
+--     another user's notification history silently loses these entries
+select count(*) as notifications_sent_to_others_that_will_be_deleted
+from public.notifications
+where actor_id = '<TARGET_USER_ID>' and recipient_id <> '<TARGET_USER_ID>';
+```
+
+**Storage-object inventory** (also read-only, run before any deletion — these rows will be gone after step 10.7/10.8, so the paths must be captured now or they become unrecoverable for cleanup):
+
+```sql
+select revision_media.storage_path
+from public.revision_media
+join public.build_revisions on build_revisions.id = revision_media.revision_id
+join public.builds on builds.id = build_revisions.build_id
+where builds.user_id = '<TARGET_USER_ID>';
+
+select project_media.storage_path
+from public.project_media
+join public.project_drafts on project_drafts.id = project_media.draft_id
+where project_drafts.user_id = '<TARGET_USER_ID>';
+
+select avatar_path from public.profiles where id = '<TARGET_USER_ID>';
+```
+
+### 10.4 Abort / escalation criteria
+
+Stop and do not proceed past this point if any of the following are true:
+
+- Query 3 above would leave **zero remaining staff accounts** — escalate to §11.6 (grant a second staff account first) rather than proceeding.
+- Query 4 above is non-zero — get explicit adult-owner acknowledgment that this specific audit history will be destroyed (the schema offers no way to preserve it; `actor_id` cannot be null). Silent proceeding is never acceptable here.
+- Any open `content_reports` or unresolved moderation/legal retention need touches this account (query 8) — resolve or explicitly document the retention decision first.
+- Identity was not independently verified (§10.1), or approval did not come from an adult operator (§10.2).
+
+### 10.5 Backup/PITR confirmation
+
+Confirm a same-day backup/PITR recovery point exists (§13.1) before proceeding. This procedure is irreversible past commit (§10.10) — never run it without a fresh restore point on record.
+
+### 10.6 Transaction boundaries and ordering
+
+The SQL below is a single transaction. Everything in it either all commits or all rolls back — nothing here is meant to be run statement-by-statement outside a transaction.
+
+```sql
+begin;
+
+-- Audit row first, inside this same transaction — rolls back with everything else if any later
+-- step fails, so a rolled-back attempt never leaves a false "this happened" audit trail.
+insert into public.moderation_actions (actor_id, action_type, target_type, target_id, note)
+values (
+  '<OPERATOR_USER_ID>',
+  'account_deleted',
+  'profile',
+  '<TARGET_USER_ID>',
+  'Manual account deletion per docs/OPERATIONS.md §10. Requested via <27B intake channel — placeholder>. Approved by <adult operator, placeholder>.'
+);
+
+-- Deletes builds owned by the account. Cascades automatically to build_revisions
+-- (build_updates_project_id_fkey, ON DELETE CASCADE) and from there to revision_media
+-- (revision_media_revision_id_fkey, ON DELETE CASCADE) — no separate delete needed for either.
+delete from public.builds where user_id = '<TARGET_USER_ID>';
+
+-- Safety net for query 6's possible divergence: build_revisions.user_id has its own foreign key
+-- to auth.users (build_updates_user_id_fkey) with NO ON DELETE action specified — this is "the
+-- blocking build_revisions.user_id relationship." Left non-null, it would raise a
+-- foreign_key_violation and block step 10.8 outright for any revision not already removed above.
+-- The column is nullable, so clearing it (not deleting the revision, which may belong to a build
+-- this account doesn't own) is the correct, minimal action here.
+update public.build_revisions set user_id = null where user_id = '<TARGET_USER_ID>';
+
+-- profiles.id has NO foreign key to auth.users at all — nothing else in this schema deletes this
+-- row automatically. This is the exact gap responsible for the one known historical orphan profile
+-- documented in §10.11; skipping this step recreates that same condition for a new account.
+delete from public.profiles where id = '<TARGET_USER_ID>';
+
+-- Verification, inside the same transaction, before commit — abort criteria for step 10.6 itself.
+select count(*) from public.builds where user_id = '<TARGET_USER_ID>';          -- expect 0
+select count(*) from public.build_revisions where user_id = '<TARGET_USER_ID>'; -- expect 0
+select count(*) from public.profiles where id = '<TARGET_USER_ID>';             -- expect 0
+
+commit;
+```
+
+**If any verification query above returns non-zero: `rollback;`, not `commit;`.** Investigate before retrying — never re-run blind.
+
+### 10.7 Supabase Auth admin deletion (requires Auth admin access, cannot run from SQL alone)
+
+Only after 10.6 commits successfully. This step requires the Supabase Admin API (service-role authenticated) — never the publishable key this app ships to browsers, and not achievable through a plain SQL `delete from auth.users` in a way that correctly cleans up Auth's own internal state. The simplest correct path is the Supabase dashboard's own user-management "Delete user" action, which calls the same Admin API internally:
+
+```
+supabase.auth.admin.deleteUser('<TARGET_USER_ID>')
+```
+
+This cascades automatically (all confirmed via live `pg_constraint`, `ON DELETE CASCADE`): `project_drafts` (and from there `project_media`), `comments`, `likes`, `saved_builds`, `notifications` (both as recipient and — per query 10 above — as actor), `follows`, `social_connections`, `profile_roles`, `content_reports.reporter_id`, `catalog_moderators`, `component_submissions.submitted_by`, `saved_setup_categories`, plus Supabase Auth's own internal tables (`identities`, `sessions`, `mfa_factors`, etc.).
+
+It sets to null rather than deleting: `content_reports.reviewed_by`, `feedback_submissions.user_id`, `beta_invites.created_by`/`used_by`, `components.created_by`, `catalog_moderators.granted_by`, `component_submissions.moderator_id`, `profile_roles.granted_by`. These are accepted, pre-existing schema behaviors — not something this procedure changes.
+
+By the time this step runs, `build_revisions.user_id` no longer references the target (cleared in 10.6), so the one blocking foreign key is already resolved and this call should succeed without a `foreign_key_violation`.
+
+### 10.8 Storage cleanup (cannot be part of the PostgreSQL transaction)
+
+Storage is not transactional with Postgres — this is necessarily a separate step, using the `storage_path` values captured in §10.3's read-only inventory (the underlying rows no longer exist to re-query by this point):
+
+```
+for each storage_path captured in §10.3:
+  supabase.storage.from('project-images').remove([storage_path])
+```
+
+This is irreversible: no undelete, no trash/recycle bin. If interrupted partway, the result is orphaned Storage objects with no referencing row — low-severity, the same accepted-limitation category already documented for the `0005`/`0018` migrations, not a new gap introduced here.
+
+### 10.9 Post-operation verification
+
+Re-run the applicable §10.3 queries; every count must be zero. Confirm the Auth user is gone via the Admin API (`getUserById` should return not-found) — a raw SQL read against `auth.users` for the same id should also return zero rows.
+
+### 10.10 Requester notification
+
+Notify the requester through whichever channel their request arrived on (§10.1) that the deletion is complete. No separate in-app mechanism exists for this yet.
+
+### 10.11 What's reversible, what's irreversible
+
+- **Reversible up to `commit;`**: the entire §10.6 transaction — `rollback;` undoes it cleanly, and nothing outside Postgres has happened yet.
+- **Irreversible once §10.6 commits**: the deleted `builds`/`build_revisions`/`profiles` rows. Recovery past this point means a PITR restore to disposable infrastructure (§13.2) and manual data recovery — not a rollback, and not something to attempt against the live project.
+- **Irreversible and immediate**: §10.7's Auth admin `deleteUser()` call. Supabase has no "undelete" for an Auth user.
+- **Irreversible and immediate**: §10.8's Storage object removal.
+
+### 10.12 Known condition: one historical orphan profile (not caused by this milestone)
+
+A read-only investigation performed before this PR found exactly one `profiles` row with no corresponding `auth.users` row. This is possible precisely because `profiles.id` has no foreign-key constraint to `auth.users(id)` — confirmed via `pg_constraint`: `profiles`' only constraints are its primary key and three `CHECK` constraints (`featured_build_id`, `headline`, `guidelines_accepted_version`, `building_since_year`); none reference `auth.users`. At the time of that investigation this row had zero references from any other table in the schema, and no identifying information about it appears anywhere in this document or this repository. It predates the changes released in PR #24 (27A PR2) and was not caused by it. **It is not touched, altered, or deleted by this PR.**
+
+Recommended handling, not performed here: a separate, adult-approved cleanup under the same approval posture as §10.1-10.2 (re-confirm zero references at cleanup time, since state can drift, then delete the single row in its own transaction), plus a future migration adding the missing foreign key (`profiles.id references auth.users(id) on delete cascade`) so this class of drift becomes structurally impossible rather than requiring §10.6's manual `delete from public.profiles` step to be remembered every time.
+
+## 11. Moderator/staff bootstrap (first-staff account, one-time — not yet authorized)
+
+**No bootstrap has occurred.** This section documents the procedure only. It requires separate, explicit authorization from an adult owner before any SQL below is run against production. No account identifier, real UUID, username, or email appears anywhere in this section or elsewhere in this repository.
+
+### 11.1 Why `grant_profile_role()` cannot create the first staff account
+
+Confirmed by direct read of `pg_get_functiondef('public.grant_profile_role')` against production (2026-08-15). The live function body enforces two independent guards:
+
+1. Granting `'moderator'` or `'staff'` requires `is_platform_staff(auth.uid())` to already be true for the calling session. Before any staff account exists, no session can ever satisfy this — the call always raises `'Only staff can grant the % role.'`.
+2. Independent of the above, the function unconditionally rejects `p_user_id = auth.uid()` (`'You cannot grant yourself a role.'`) — so even a hypothetical account that somehow passed check 1 still could not grant the role to itself.
+
+Both checks are inside the function body, not just RLS — there is no calling sequence through this RPC that produces a first staff account. That is why this is a manual, SQL-level, one-time exception rather than a code change.
+
+### 11.2 Prerequisite: adult-owner self-verification
+
+An adult owner must identify and verify their own existing Specbound account before this procedure runs — the bootstrap target is that verified account, not a new one created for the purpose. No account identifier belongs in this repository, in commit messages, or in this document; the operator holds it privately while substituting `<TARGET_USER_ID>` at execution time.
+
+### 11.3 Pre-flight checks (read-only)
+
+```sql
+-- confirm the target account exists
+select id, created_at from auth.users where id = '<TARGET_USER_ID>';
+
+-- confirm the target has no existing role rows for 'staff'
+select role from public.profile_roles where user_id = '<TARGET_USER_ID>';
+
+-- abort condition: confirm no staff account already exists unexpectedly
+select count(*) as existing_staff from public.profile_roles where role = 'staff';
+```
+
+**Abort if**: the target account doesn't exist; the operator isn't fully certain which account is theirs (ambiguous target); the target already holds `'staff'`; or `existing_staff` is non-zero — this procedure is for the *first* staff account only. If a staff account already exists, use the normal `grant_profile_role()` RPC instead, once a real staff session can call it.
+
+### 11.4 The bootstrap transaction
+
+```sql
+begin;
+
+insert into public.profile_roles (user_id, role, granted_by, note)
+values (
+  '<TARGET_USER_ID>',
+  'staff',
+  null,
+  'One-time bootstrap of the first staff account. Not granted via grant_profile_role() — that RPC requires an existing staff caller and separately blocks self-grants (see docs/OPERATIONS.md §11.1), so no session could ever have performed this grant through the app. Performed directly via SQL by the verified adult account owner.'
+);
+
+-- moderation_actions.actor_id is NOT NULL (FK to auth.users, ON DELETE CASCADE) — a true null-actor
+-- audit row is not schema-compatible. actor_id is set to the target's own id: the granter and the
+-- grantee are the same verified adult owner acting directly via SQL, not through the self-grant-
+-- blocking RPC, so this is the honest value, not a workaround standing in for something else.
+insert into public.moderation_actions (actor_id, action_type, target_type, target_id, note)
+values (
+  '<TARGET_USER_ID>',
+  'role_granted',
+  'profile',
+  '<TARGET_USER_ID>',
+  'Bootstrap grant of the first staff role, performed directly via SQL, not through grant_profile_role(). See docs/OPERATIONS.md §11.'
+);
+
+-- verification, inside the same transaction
+select role, granted_by, note from public.profile_roles where user_id = '<TARGET_USER_ID>' and role = 'staff'; -- expect exactly 1 row
+select count(*) from public.profile_roles where role = 'staff'; -- expect exactly 1
+
+commit;
+```
+
+**If either verification query doesn't match exactly: `rollback;`, not `commit;`.**
+
+### 11.5 Rollback
+
+If this needs to be undone before anything else has happened (e.g. the wrong account was targeted):
+
+```sql
+delete from public.profile_roles
+where user_id = '<TARGET_USER_ID>' and role = 'staff' and granted_by is null;
+```
+
+The `granted_by is null` clause is a deliberate safety guard — it ensures this can only ever match the single bootstrap-created row, never a real, RPC-granted staff row (which always has a non-null `granted_by`). The corresponding `moderation_actions` row is left in place regardless — this schema never deletes audit rows (matching every migration's rollback convention in `supabase/migrations.md`); an incorrect grant followed by a correction is itself worth an honest, permanent audit trail, not a deletion.
+
+### 11.6 Recommended next step: a second trusted adult backup
+
+Immediately after a successful bootstrap, the new staff account should grant `'staff'` to a second, independently verified adult through the *normal* path (`grant_profile_role()`, now callable since a real staff session exists) — so no single account is ever a single point of failure for platform moderation again. This is a recommendation, not something this procedure enforces.
+
+### 11.7 Authorization status
+
+No bootstrap has occurred, and none will occur as part of this PR. This section documents the procedure only, pending separate, explicit authorization from an adult owner.
+
+## 12. Deployment and incident runbook
+
+Each entry below follows the same shape: read-only checks first, when to abort/escalate, what requires an adult owner directly, what an authorized Claude session may perform, and what must never be improvised.
+
+### 12.1 Routine deployment verification
+
+- **Read-only first**: after any push to `main`, confirm the Cloudflare Pages dashboard shows the new deployment as current; run the smoke-test subset (`docs/DEPLOYMENT.md` §12) against the live URL — sign-in flow, one public page, `_headers` response headers, `robots.txt`/`sitemap.xml` reachability.
+- **Abort/escalate**: any smoke check fails → the release is not complete; proceed to §12.2 rather than leaving production unverified.
+- **Adult-owner only**: none — routine, read-only.
+- **Claude may perform after authorization**: the checks themselves and reporting results.
+- **Never improvise**: don't skip the smoke test because the diff looked small — the header regression this project already shipped once (fixed in PR3's follow-up) is the standing reason this isn't optional.
+
+### 12.2 Frontend-only rollback
+
+- **Read-only first**: identify the last known-good deployment in Cloudflare's Deployments list; check `git log` for what changed since it, so the rollback's scope is understood before acting.
+- **Abort/escalate**: if a database change might be the actual cause, don't rely on a frontend rollback alone — see §12.13's decision framework first.
+- **Adult-owner only**: authorizing the rollback action.
+- **Claude may perform after authorization**: promoting the prior deployment in the Cloudflare dashboard (`docs/DEPLOYMENT.md` §13), then re-running §12.1.
+- **Never improvise**: never force-push or rewrite `main`'s history as a substitute for the dashboard rollback — that changes what the next real push deploys from and can reintroduce the exact code just rolled back.
+
+### 12.3 Migrate-first database releases
+
+- **Read-only first**: `supabase migration list --linked` (or `db push --linked --dry-run`) to confirm exactly what's pending; re-read the migration and its paired rollback file in full immediately before running it, even if reviewed earlier — production state can drift (see `0020`'s production-compatibility rewrite, discovered by a real `db push` that stopped safely at exactly that migration).
+- **Abort/escalate**: any unexpected dry-run result (a migration showing partially applied, an out-of-order gap) → stop and investigate before pushing.
+- **Adult-owner only**: authorizing the production migration apply.
+- **Claude may perform after authorization**: `supabase db push --linked --yes` for the confirmed, reviewed, pending migration(s) only — never a broader flag; then the corresponding frontend deploy, migration-first, matching every release so far (PR #24/#25 both applied migrations before merging the frontend change).
+- **Never improvise**: never apply a migration that hasn't been rehearsed against local disposable Docker first (apply → verify → rollback → reapply); never skip the paired rollback file.
+
+### 12.4 Migration failure and partial-application response
+
+- **Read-only first**: `supabase migration list --linked` immediately to see which migration(s) the failure left in an unclear state; read the actual Postgres error rather than assuming what failed.
+- **Abort/escalate**: any partial-application state → stop, do not attempt an automatic fix. This project's migrations are written to fail atomically where possible; a partial failure means something didn't behave as designed and needs a human read of the real error first.
+- **Adult-owner only**: authorizing any corrective SQL against production outside the normal migration-file process.
+- **Claude may perform after authorization**: reading the error, proposing a fix as a new, higher-numbered migration file (never editing the failed file in place — this project's absolute convention) — applied only after adult-owner review.
+- **Never improvise**: never patch the affected table/function directly in the Supabase dashboard SQL editor as a "quick fix" — that's exactly the untracked-change problem `0017`'s audit had to clean up after the fact.
+
+### 12.5 Authentication incidents
+
+- **Read-only first**: reproduce against production directly; determine whether the failure is Supabase Auth itself (check status.supabase.com), a bug in this app's own code (the exact class the earlier signed-out-redirect hotfix fixed), or a third-party OAuth provider (Discord) outage.
+- **Abort/escalate**: if Supabase Auth itself is degraded, there is nothing to fix on the Specbound side — wait and communicate, not a code change.
+- **Adult-owner only**: any change to Auth admin settings (email templates, redirect URL allowlist) in the Supabase dashboard.
+- **Claude may perform after authorization**: diagnosing and shipping a code fix through the normal release path (§3/§12.1), as done for the earlier login-redirect hotfix.
+- **Never improvise**: never disable RLS, widen an Auth redirect allowlist, or grant a broader OAuth scope "to see if that fixes it."
+
+### 12.6 Unusual signup spikes
+
+- **Read-only first**: check `auth.users` growth via the Supabase dashboard's Auth user list/count — organic, bot/abuse pattern, or a bug (e.g. a retry loop double-submitting signups)?
+- **Abort/escalate**: public signup is currently **held** pending 27B's Terms of Service/Privacy Policy — any signup spike at all before that gate lifts is itself an anomaly worth immediate escalation, since it shouldn't be possible in normal operation today.
+- **Adult-owner only**: any decision to throttle, disable signup, or ban accounts.
+- **Claude may perform after authorization**: read-only investigation and reporting; implementing an approved, specific mitigation as a normal code/config change.
+- **Never improvise**: never narrow RLS/policies as an improvised anti-abuse measure; never delete suspected-bot accounts without the same adult-operator approval §10 requires for any account deletion.
+
+### 12.7 Upload/Storage abuse
+
+- **Read-only first**: identify the abusive object(s)/account via the Storage dashboard or a read-only query against `storage.objects`/`project_media`/`revision_media`; confirm which bucket/policy is implicated.
+- **Abort/escalate**: if the abuse indicates a genuine RLS/policy gap (not just a bad actor using the app as intended), treat as a security issue (§8 item 4) — scoped migration + rollback, not a live dashboard patch.
+- **Adult-owner only**: deleting another user's uploaded content; any Storage bucket/policy configuration change (§14).
+- **Claude may perform after authorization**: read-only investigation; removing a specific, confirmed-abusive object via the Storage API once authorized; drafting a hardening migration if a policy gap is found.
+- **Never improvise**: never flip the `project-images` bucket's public/private flag or alter its MIME/size limits as an improvised response — that's §14's own pre-planned, adult-owner-gated change, not an incident-response shortcut.
+
+### 12.8 Moderation access loss
+
+- **Read-only first**: `select role, user_id from public.profile_roles where role in ('moderator','staff')` (dashboard SQL editor, read-only) to see who currently holds access.
+- **Abort/escalate**: if zero staff accounts remain reachable, this is the bootstrap scenario again (§11), not a normal role-grant — the same chicken-and-egg problem applies, since `grant_profile_role()` needs an existing staff caller.
+- **Adult-owner only**: any role grant/revoke, and any emergency SQL-level bootstrap.
+- **Claude may perform after authorization**: the read-only check; running an authorized role-grant/bootstrap exactly per §11.
+- **Never improvise**: never grant a role to an unverified account "to restore access quickly" — §11.2-style identity verification still applies under time pressure.
+
+### 12.9 Account-deletion requests
+
+Fully covered by §10 — this entry is an index pointer, not a duplicate. Read-only checks first (§10.3), abort/escalation criteria (§10.4), adult-owner-only steps (approval, the transaction, Auth admin deletion), and the explicit statement that self-service deletion doesn't exist are all defined there.
+
+### 12.10 Cloudflare deployment mismatch
+
+- **Read-only first**: compare response headers/`ETag` between `specboundapp.com` and `specbound.pages.dev` for the same path (matches the custom-domain smoke check already performed after PR #24's release) — a mismatch usually means the custom domain is pointed at a different (often stale) deployment or a caching layer is serving old content.
+- **Abort/escalate**: if the two never converge after a cache purge (§4) and a hard refresh, escalate — likely a Cloudflare Pages custom-domain configuration issue, not an application bug.
+- **Adult-owner only**: any Cloudflare DNS/Pages custom-domain configuration change.
+- **Claude may perform after authorization**: the read-only comparison; a cache purge (§4) if that's the confirmed cause.
+- **Never improvise**: never change DNS records or the Pages custom-domain binding without adult-owner authorization.
+
+### 12.11 Security-header regressions
+
+- **Read-only first**: `tools/ci/check-security-headers.js` (already gates every PR since PR3) plus a direct header check against production; compare against `docs/DEPLOYMENT.md` §10.
+- **Abort/escalate**: any missing/weakened security header on `main` after a deploy — treat as a shipped bug, not a cosmetic issue, exactly the regression class this check exists to prevent.
+- **Adult-owner only**: none beyond the standing deploy-authorization gate — a header fix is a normal `_headers` change.
+- **Claude may perform after authorization**: diagnosing and fixing `_headers`, verifying with the CI check plus a live production header check, shipping through the normal release path.
+- **Never improvise**: never loosen `check-security-headers.js`'s assertions to make a deploy pass instead of fixing the actual regression.
+
+### 12.12 HSTS staged rollout and rollback limitations
+
+- **Read-only first**: confirm the currently-live `Strict-Transport-Security` value against both production hostnames — as of this PR, Stage 1 (`max-age=300`, no `includeSubDomains`, no `preload`) is the only stage ever deployed (`docs/DEPLOYMENT.md` §6/§14).
+- **The core limitation**: HSTS is asymmetric. Browsers that already received a longer `max-age`, `includeSubDomains`, or a `preload`-listed entry cannot be told to stop enforcing HTTPS early by a later, weaker header — a "rollback" can only lower future `max-age` going forward, never retroactively un-pin a browser that already cached a stronger policy. This is why staging (Stage 1 → 2 → 3 → `preload`) is deliberate and effectively one-directional, and why advancing past Stage 1 needs its own dedicated review, not a routine header tweak.
+- **Adult-owner only**: advancing to any later HSTS stage, and definitely `preload`-list submission (functionally irreversible for months — removal from Chromium's preload list is itself a slow, manual process).
+- **Claude may perform after authorization**: the read-only header check; a `_headers` change only for an explicitly authorized stage transition, never a silent widening.
+- **Never improvise**: never add `includeSubDomains`/`preload`, or raise `max-age` past what's explicitly authorized, "since it seems stable now" — the asymmetry above is exactly why every advance requires deliberate, separate sign-off.
+
+### 12.13 Deciding between a frontend revert, a database rollback, or a forward fix
+
+- **Frontend-only bug, database unaffected** → frontend rollback (§12.2). Fastest, fully reversible, no data risk.
+- **Database migration is the root cause and nothing has read/written through the new shape yet** → database rollback via the migration's paired rollback file (rehearsed locally first, §12.3), then a frontend rollback if the frontend already assumed the new shape.
+- **Database migration is the root cause but real data now depends on the new shape** (a new column has real values, a widened `CHECK` constraint has real rows using the new value) → check the migration's own rollback file first: this project's convention (see `0037`/`0039`/`0041`) is to make such rollbacks deliberately narrow or a no-op *specifically because* reversing them would destroy real data. The only safe path in that case is a **forward fix** — a new migration correcting the behavior — never forcing a destructive rollback for the appeal of "undo."
+- **Genuinely unsure which layer is at fault** → reproduce against production first, roll back the frontend immediately if a deploy is the plausible trigger (cheap, reversible, buys time), then investigate the database layer calmly with the site already stable — matches this project's existing "roll back first, diagnose second" posture (§2, §8 item 2).
+- In every case: never combine a frontend revert with an ad hoc database patch as one improvised action — pick a path above, execute it, verify (§12.1), then decide on next steps.
+
+## 13. Backups and monitoring (adult-owner checklist)
+
+### 13.1 Backup/PITR confirmation
+
+- Confirm the Supabase project's current plan tier and point-in-time-recovery retention window (Supabase dashboard → Project Settings → Database/Add-ons, or the Backups panel) — tracked as **L4** in the original launch audit, and already listed in §9's maintenance table.
+- Record only the confirmation date and retention window (e.g. "Confirmed 2026-MM-DD: PITR available, N-day retention") — never publish the project ref, billing details, or any other account-identifying detail in this repository.
+- This confirmation is a prerequisite for §10's account-deletion procedure — do not run that procedure without a current confirmation on record.
+
+### 13.2 Restoration rehearsal
+
+- Periodically (recommended: once per major schema-changing milestone, not a fixed calendar) rehearse an actual PITR restore — **only ever against disposable infrastructure** (a throwaway Supabase project or local Docker), never over the live production project.
+- Document the rehearsal outcome (worked / didn't / lessons) without including any real user data recovered during the test.
+
+### 13.3 Error-monitoring provider (not selected in this PR)
+
+- §7 already documents a working, unimplemented design (`client_errors` table, INSERT-only RLS, global error handler) — reused here, not duplicated. A future third-party provider remains an option per §7's own "not ruled out permanently" note, to be selected later.
+- **Do not select, sign up for, or configure any provider in this PR.** No DSN, API key, or project identifier — real or placeholder-that-looks-real — belongs in this repository until a provider is actually chosen and authorized.
+- **Required approval**: creating an external monitoring account, or adding any DSN/webhook/API key to the codebase or Cloudflare Pages environment variables, requires explicit adult-owner authorization first.
+
+### 13.4 Mandatory redaction
+
+Whichever monitoring approach is eventually live — the `client_errors` table today, or a future provider — the following must never appear unredacted in any error report, log line, or dashboard this project controls: auth tokens, session identifiers, refresh tokens; email addresses or usernames tied to real accounts; feedback submission bodies, moderation report content, comments, build descriptions, or any other user-generated free text. Only an error message, stack trace, URL, and coarse context (signed-in vs signed-out) belong in a report — matching §7's existing "deliberately excluded" list. This constraint applies to any future provider integration, not just the current design — evaluate a candidate's data-scrubbing configuration as part of choosing it, not after.
+
+## 14. Storage configuration checklist (`project-images` bucket — approved, not performed)
+
+**Status: documented, not performed.** Requires adult-owner action in the Supabase Dashboard or Management API — out of scope for this PR, which does not alter the Dashboard or Management API in any way.
+
+Approved change: bucket `project-images`, allowed MIME type `image/jpeg` only, file-size limit 10 MB. Existing RLS policies (`docs/STORAGE_ARCHITECTURE.md`, `0017`) remain unchanged — this is a bucket-level constraint, not a policy change. These limits affect new uploads only; existing objects already in the bucket are unaffected and remain accessible exactly as before.
+
+### 14.1 Pre-change inventory (read-only)
+
+- Note the bucket's current MIME-type/size configuration (or lack thereof) via the Supabase dashboard, for later comparison.
+- Spot-check a sample of existing objects' content-types — confirms the "existing objects unaffected" assumption holds for what's actually in the bucket today, not just in theory.
+
+### 14.2 The change itself
+
+Set allowed MIME types to `image/jpeg` and the file-size limit to 10 MB, via Supabase Dashboard → Storage → `project-images` → bucket settings. **Claude must not perform this step or any Supabase Dashboard/Management API action for it** — it is an account/infrastructure settings change, reserved for the adult owner.
+
+### 14.3 Post-change tests
+
+Run all five, in a disposable/test account where practical:
+
+1. A valid `image/jpeg` upload through the normal editor UI succeeds.
+2. An invalid MIME type (e.g. `.png`, `.webp`) is rejected with a clear error, not a silent failure.
+3. An oversized file (>10 MB) is rejected.
+4. Cross-owner access remains rejected exactly as before — confirms the bucket-level limit and RLS are independent layers, neither weakening the other.
+5. An existing (pre-change) file already in the bucket is still readable/servable exactly as before.
+
+### 14.4 Rollback
+
+Clear the two bucket settings (MIME-type allowlist, size limit) back to unset/default. No data is destroyed by either direction — this is a validation-layer setting, not a schema or content change.
+
+## Related documentation
+
+- `docs/DEPLOYMENT.md` — initial setup, architecture, and the full rollback/verification procedures §2 and §12.1-12.2 summarize.
+- `docs/STORAGE_ARCHITECTURE.md` — the RLS model §14 leaves unchanged.
+- `docs/AUTH_ARCHITECTURE.md` — background for §12.5's authentication-incident checks.
+- `supabase/migrations.md` — the authoritative migration log referenced throughout §10-§12.
+- `docs/ROADMAP.md` — current milestone status, including what remains before public signup (§12.6) can open.

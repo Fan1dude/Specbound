@@ -1226,11 +1226,14 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0037_follow_notifications
 
-- **Status**: Applied to the local disposable Supabase/Docker stack only
-  (`npx supabase migration up --local`, 2026-08-13), live-verified
-  end-to-end via two real local accounts, plus a full rollback-and-
-  restore-forward rehearsal against real local notification rows.
-  **Not applied to production.**
+- **Status**: Applied to production. Rehearsed first against the local
+  disposable Supabase/Docker stack (`npx supabase migration up --local`,
+  2026-08-13), live-verified end-to-end via two real local accounts, plus
+  a full rollback-and-restore-forward rehearsal against real local
+  notification rows. Applied to production as part of Milestone 25's
+  release (merged and deployed alongside `0038`, per `docs/ROADMAP.md`).
+  Re-confirmed present in production via `supabase migration list
+  --linked` as of 2026-08-15 (Milestone 27A PR4).
 - **Purpose**: `set_follow()` (0012_follows.sql, Milestone 7C) has never
   called `create_notification()` — that file's own header comment says
   so explicitly, calling it out-of-scope at the time. Milestone 25
@@ -1294,11 +1297,14 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0038_restrict_pre_0020_function_execute_permissions
 
-- **Status**: Applied to the local disposable Supabase/Docker stack only
-  (full `supabase db reset --local` through `0038`, plus an isolated
-  apply/rollback/reapply rehearsal), live-verified against both the
-  grant state and actual signed-in/signed-out call behavior. **Not
-  applied to production.**
+- **Status**: Applied to production. Rehearsed first against the local
+  disposable Supabase/Docker stack (full `supabase db reset --local`
+  through `0038`, plus an isolated apply/rollback/reapply rehearsal),
+  live-verified against both the grant state and actual signed-in/
+  signed-out call behavior. Applied to production as part of Milestone
+  25's release (per `docs/ROADMAP.md`). Re-confirmed present in
+  production via `supabase migration list --linked` as of 2026-08-15
+  (Milestone 27A PR4).
 - **Purpose**: security-hardening follow-up from Milestone 25's
   production release. `0033_restrict_function_execute_permissions.sql`
   closed the "every function has a stray `anon` EXECUTE grant left by
@@ -1359,10 +1365,14 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0039_feedback_status_workflow
 
-- **Status**: Applied to the local disposable Supabase/Docker stack only
-  (full `supabase db reset --local` through `0039`, plus an isolated
-  apply/rollback/reapply rehearsal with real feedback rows and real
-  actorless notification rows present). **Not applied to production.**
+- **Status**: Applied to production. Rehearsed first against the local
+  disposable Supabase/Docker stack (full `supabase db reset --local`
+  through `0039`, plus an isolated apply/rollback/reapply rehearsal with
+  real feedback rows and real actorless notification rows present).
+  Applied to production as part of Milestone 26's release (PR #22,
+  merged and deployed alongside a signed-out login-redirect hotfix).
+  Re-confirmed present in production via `supabase migration list
+  --linked` as of 2026-08-15 (Milestone 27A PR4).
 - **Purpose**: `feedback_submissions` (0029, Milestone 22) has carried a
   `status` column since it shipped, but nothing has ever written past
   its `'open'` default — no RPC, no UPDATE RLS policy. Milestone 26
@@ -1431,10 +1441,13 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0040_harden_handle_new_user_search_path
 
-- **Status**: Applied to the local disposable Supabase/Docker stack only
-  (fixture-based real `auth.users` inserts firing the real
-  `on_auth_user_created` trigger, plus an isolated apply/rollback/reapply
-  rehearsal). **Not applied to production.**
+- **Status**: Applied to production. Rehearsed first against the local
+  disposable Supabase/Docker stack (fixture-based real `auth.users`
+  inserts firing the real `on_auth_user_created` trigger, plus an
+  isolated apply/rollback/reapply rehearsal). Applied to production as
+  part of 27A PR2 (PR #24, merge commit `d15a4eeddb335f1779ebb245b54b7
+  04bc09590e0`). Re-confirmed present in production via `supabase
+  migration list --linked` as of 2026-08-15 (Milestone 27A PR4).
 - **Purpose**: closes the one gap Milestone 27's launch-readiness audit
   found across all 30 `SECURITY DEFINER` functions in this schema —
   `handle_new_user()` (the `auth.users` signup trigger) was the only one
@@ -1471,13 +1484,20 @@ Every other migration still only ever moves forward from `0001`.
   function replace never rewrites rows already inserted under a prior
   version.
 - **Context**: Milestone 27A (Launch Readiness, engineering-controlled
-  workstream) — see the published Milestone 27A implementation-ready
-  specification.
+  workstream). No standalone `docs/milestones/MILESTONE_27A_*` file
+  exists for this workstream today — its implementation-ready
+  specification was produced and reviewed in-session but was never
+  committed to the repository as its own document; see `docs/ROADMAP.md`
+  and this file's own PR2/PR3/PR4 entries for the closest durable record
+  of what was scoped and delivered.
 
 ## 0041_add_account_deleted_action_type
 
-- **Status**: Applied to the local disposable Supabase/Docker stack
-  only. **Not applied to production.**
+- **Status**: Applied to production. Rehearsed first against the local
+  disposable Supabase/Docker stack. Applied to production as part of 27A
+  PR2 (PR #24, merge commit `d15a4eeddb335f1779ebb245b54b704bc09590e0`).
+  Re-confirmed present in production via `supabase migration list
+  --linked` as of 2026-08-15 (Milestone 27A PR4).
 - **Purpose**: schema support only — does **not** implement account
   deletion. Milestone 27A's account-deletion design calls for logging
   each (manually executed, staff-run) deletion to `moderation_actions`,
@@ -1499,7 +1519,11 @@ Every other migration still only ever moves forward from `0001`.
   `0037`'s and `0039`'s rollbacks: narrowing a widened CHECK back is
   unsafe once any row might already use the new value.
 - **Context**: Milestone 27A (Launch Readiness, engineering-controlled
-  workstream) — see the published Milestone 27A implementation-ready
-  specification. The account-deletion procedure itself remains
+  workstream). No standalone `docs/milestones/MILESTONE_27A_*` file
+  exists for this workstream today — its implementation-ready
+  specification was produced and reviewed in-session but was never
+  committed to the repository as its own document; see `docs/ROADMAP.md`
+  and this file's own PR2/PR3/PR4 entries for the closest durable record
+  of what was scoped and delivered. The account-deletion procedure itself remains
   unimplemented; this migration exists to unblock its audit logging
   whenever that work happens.
