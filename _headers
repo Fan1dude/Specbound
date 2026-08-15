@@ -1,8 +1,22 @@
 /*
+  Strict-Transport-Security: max-age=300
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), microphone=(), camera=()
   Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://xpxjqyraizntbtijzoyp.supabase.co; connect-src 'self' https://xpxjqyraizntbtijzoyp.supabase.co https://cloudflareinsights.com; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+
+# Strict-Transport-Security is being rolled out in stages rather than
+# shipped at a long duration immediately: max-age=300 (5 minutes) is
+# Stage 1 — long enough to prove the header is served correctly and that
+# no HTTP-only asset/redirect breaks under it, short enough that if
+# something DOES break, the mistake self-heals within minutes instead of
+# being locked in for weeks/months (a long max-age + includeSubDomains
+# is very hard to safely undo once real browsers have cached it). Stage
+# 2/3 (a longer duration, then includeSubDomains, then eventually
+# preload submission) are deliberately deferred to a later milestone
+# once Stage 1 has run in production without incident — see
+# docs/DEPLOYMENT.md for the staged rollout plan. Do not add
+# includeSubDomains or preload, and do not raise max-age, in this PR.
 
 # img-src's blob: (added alongside the pre-existing 'self'/data:/Supabase
 # origin, nothing else changed) — js/services/imageService.js's
