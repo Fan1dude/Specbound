@@ -26,7 +26,9 @@ This is a live pointer to the approved milestone plan, not a third copy of it. D
 | 23 | Setup Inventory, scoped search, builder dates | Complete — merged to main, deployed to production |
 | 24 | Moderator Report Queue — moderator-facing interface for content reports filed since Milestone 22 | Complete — see `docs/milestones/MILESTONE_24_MODERATOR_REPORT_QUEUE_SPECIFICATION.md`; merged and deployed to production |
 | 25 | Follow Notifications — notify a builder when someone follows them | Complete — see `docs/milestones/MILESTONE_25_FOLLOW_NOTIFICATIONS_SPECIFICATION.md`; merged and deployed to production, including the follow-up security-hardening migration `0038` |
-| 26 | Feedback Review — moderator/staff feedback triage workflow and a submitter-facing My Feedback page | See `docs/milestones/MILESTONE_26_FEEDBACK_REVIEW_SPECIFICATION.md`; implemented on branch `milestone-26-feedback-review`, draft PR open, not yet merged or deployed to production |
+| 26 | Feedback Review — moderator/staff feedback triage workflow and a submitter-facing My Feedback page | Complete — see `docs/milestones/MILESTONE_26_FEEDBACK_REVIEW_SPECIFICATION.md`; merged and deployed to production (migration `0039`), including a same-week signed-out login-redirect hotfix |
+| 27A | Launch Readiness, engineering track (PR1 signup posture, PR2 DB hardening, PR3 security headers/SEO, PR4 operator documentation, PR5 accessibility/performance) | PR2 (migrations `0040`/`0041`) and PR3 (Stage 1 HSTS, security-header CI check, crawl/noindex fix) complete, merged, and deployed to production. PR4 (this entry) is documentation-only — no production operation. PR1 is blocked pending 27B (public signup stays held until then). PR5 not started. |
+| 27B | Launch Readiness, legal/policy track — Terms of Service, Privacy Policy, age rules, cookie disclosure, adult-owner review | Not started. Public signup remains held until 27B's legal placeholders are resolved; those placeholders are the current launch blocker. |
 
 ---
 
