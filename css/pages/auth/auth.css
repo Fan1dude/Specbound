@@ -44,7 +44,15 @@
     font-size: var(--font-size-sm);
 }
 
+/* display: inline-block + padding, offset by an equal negative margin so neither the
+   link's own layout box nor its visible position changes — same target-size technique
+   already used for .footer-group a/button (css/layout/footer.css). Lighthouse's
+   target-size audit flagged this link at 17px tall on the Sign In page, below the
+   WCAG 2.5.8 AA 24px minimum, during the 27A PR5 audit (2026-08-15). */
 .auth-forgot a {
+    display: inline-block;
+    margin: calc(var(--space-0) * -1);
+    padding: var(--space-0);
     color: var(--text-secondary);
 }
 

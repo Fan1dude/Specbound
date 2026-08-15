@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>27A PR5 a11y/perf fixes</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>27A PR5 a11y/perf fixes</h1>
+    <p>
+        Covers findings from the Milestone 27A PR5 accessibility/performance
+        audit (2026-08-15): the Sign In page's "Forgot password?" link measured
+        17px tall in production, below the WCAG 2.5.8 AA 24px touch-target
+        minimum (flagged by Lighthouse's target-size audit); &lt;nav
+        id="navbar"&gt;/&lt;footer id="footer"&gt; ship empty in every page's raw
+        HTML, populated later by loadNavbar()/loadFooter() (js/core/layout.js),
+        contributing ~0.2-0.3 CLS on several pages because nothing reserved
+        their eventual height; and two WCAG 2.5.3 (Label in Name) mismatches
+        where a control's visible text isn't part of its accessible name
+        (BlueprintCard's stage badge, the build page's like count) — flagged
+        by Lighthouse's accessibility audit as label-content-name-mismatch on
+        the production Explore/Build pages.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <!-- Real markup fixtures, not JS mocks — both fixes are pure CSS, so
+         proving them against the actual shipped HTML/CSS is both sufficient
+         and more honest than re-implementing the markup inline. -->
+    <main id="fixture"></main>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        const fixture = document.getElementById("fixture");
+
+        // --- Fix 1: login "Forgot password?" touch target ----------------------
+        const loginHtml = await (await fetch("../pages/login.html")).text();
+        const loginDoc = new DOMParser().parseFromString(loginHtml, "text/html");
+        const forgotMarkup = loginDoc.querySelector(".auth-forgot").outerHTML;
+        fixture.innerHTML = forgotMarkup;
+        const forgotLink = fixture.querySelector(".auth-forgot a");
+        const forgotRect = forgotLink.getBoundingClientRect();
+
+        test(
+            "auth.css ships .auth-forgot a as display: inline-block (required for padding to expand the hit area)",
+            getComputedStyle(forgotLink).display === "inline-block",
+            getComputedStyle(forgotLink).display
+        );
+        test(
+            `"Forgot password?" link is at least 24px tall (WCAG 2.5.8 AA touch-target minimum; was 17px)`,
+            forgotRect.height >= 24,
+            `${forgotRect.height}px`
+        );
+        test(
+            "the padding technique doesn't shift the link's visible position (negative margin offsets the added padding)",
+            getComputedStyle(forgotLink).marginTop.startsWith("-") || getComputedStyle(forgotLink).marginTop === "0px",
+            getComputedStyle(forgotLink).marginTop
+        );
+
+        // --- Fix 2: navbar/footer layout-shift reservation ----------------------
+        fixture.innerHTML = '<nav class="navbar" id="navbar"></nav><footer class="footer" id="footer"></footer>';
+        const navEl = document.getElementById("navbar");
+        const footEl = document.getElementById("footer");
+
+        test(
+            "empty #navbar has a non-zero min-height reserved before loadNavbar() populates it",
+            parseFloat(getComputedStyle(navEl).minHeight) > 0,
+            getComputedStyle(navEl).minHeight
+        );
+        test(
+            "empty #footer has a non-zero min-height reserved before loadFooter() populates it",
+            parseFloat(getComputedStyle(footEl).minHeight) > 0,
+            getComputedStyle(footEl).minHeight
+        );
+
+        // Confirm the reservation actually holds the empty elements open at
+        // their approximate real height (not just a token non-zero value) —
+        // regression guard against someone reverting to a token min-height
+        // like 1px that technically passes the checks above but doesn't
+        // meaningfully prevent the shift.
+        const navRect = navEl.getBoundingClientRect();
+        const footRect = footEl.getBoundingClientRect();
+        test(
+            "reserved #navbar height is close to its real measured desktop height (79px, not just a token non-zero value)",
+            navRect.height >= 60,
+            `${navRect.height}px`
+        );
+        test(
+            "reserved #footer height is close to its real measured desktop height (228px, not just a token non-zero value)",
+            footRect.height >= 150,
+            `${footRect.height}px`
+        );
+
+        // --- Fix 3: BlueprintCard image-link accessible name includes the stage badge ---
+        const { BlueprintCard } = await import("../js/components/BlueprintCard.js");
+        fixture.innerHTML = BlueprintCard({
+            id: "b1",
+            slug: "sample-build",
+            title: "Sample Build",
+            status: "planning",
+            category: "pc",
+            version: "1.0",
+            progress: 10,
+            specifications: {},
+            profiles: { username: "sample-user" }
+        });
+        const cardImageLink = fixture.querySelector(".blueprint-card-image");
+        const stageBadgeText = fixture.querySelector(".blueprint-card-stage").textContent.trim();
+
+        test(
+            "BlueprintCard image-link's accessible name includes the visible stage badge text (WCAG 2.5.3)",
+            cardImageLink.getAttribute("aria-label").includes(stageBadgeText),
+            cardImageLink.getAttribute("aria-label")
+        );
+
+        // --- Render ---------------------------------------------------------
+        fixture.remove();
+        const resultsEl = document.getElementById("results");
+        const passed = results.filter(r => r.pass).length;
+        results.forEach(r => {
+            const div = document.createElement("div");
+            div.className = "case";
+            div.innerHTML = `<span class="${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"}</span> ${r.name}${r.detail ? ` <em>(${r.detail})</em>` : ""}`;
+            resultsEl.appendChild(div);
+        });
+        document.getElementById("summary").textContent = `${passed}/${results.length} passed`;
+        window.__testResults = {
+            passCount: passed,
+            failCount: results.length - passed,
+            total: results.length,
+            results
+        };
+    </script>
+</body>
+</html>

@@ -16,7 +16,7 @@ export async function renderLike(build, currentUser) {
 
     let liked = false;
 
-    countEl.textContent = String(build.likes_count || 0);
+    setCount(build.likes_count || 0);
 
     if (currentUser && isPublic) {
         try {
@@ -53,7 +53,7 @@ export async function renderLike(build, currentUser) {
 
         liked = nextLiked;
         setButtonState(liked);
-        countEl.textContent = String(nextCount);
+        setCount(nextCount);
         button.disabled = true;
 
         try {
@@ -61,13 +61,13 @@ export async function renderLike(build, currentUser) {
 
             liked = result.liked;
             setButtonState(liked);
-            countEl.textContent = String(result.likesCount);
+            setCount(result.likesCount);
         } catch (error) {
             console.error("Like update error:", error);
 
             liked = previousLiked;
             setButtonState(liked);
-            countEl.textContent = String(previousCount);
+            setCount(previousCount);
 
             showToast(error.message || "Could not update your like.", "error");
         } finally {
@@ -78,6 +78,20 @@ export async function renderLike(build, currentUser) {
     function setButtonState(isLiked) {
         button.classList.toggle("is-liked", isLiked);
         button.setAttribute("aria-pressed", String(isLiked));
+    }
+
+    // aria-label on the button suppresses its child content (including
+    // #likeCount) from the accessible name entirely, so the visible count
+    // was previously announced to no one — a name/content mismatch flagged
+    // by Lighthouse's accessibility audit on the production build page
+    // during the 27A PR5 audit (2026-08-15). Folding the count into the
+    // label keeps it in the accessible name every time it changes.
+    function setCount(count) {
+        countEl.textContent = String(count);
+        button.setAttribute(
+            "aria-label",
+            `Like this project (${count} like${count === 1 ? "" : "s"})`
+        );
     }
 
     function setHint(html) {
