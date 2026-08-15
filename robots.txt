@@ -5,12 +5,21 @@ Disallow: /pages/notifications.html
 Disallow: /pages/moderation.html
 Disallow: /pages/feedback.html
 Disallow: /pages/my-feedback.html
-Disallow: /pages/login.html
-Disallow: /pages/signup.html
-Disallow: /pages/forgotPassword.html
-Disallow: /pages/updatePassword.html
 Disallow: /pages/build/edit.html
 Disallow: /design-system.html
 Disallow: /tests/
+
+# /pages/login.html, /pages/signup.html, /pages/forgotPassword.html, and
+# /pages/updatePassword.html are deliberately NOT disallowed here, even
+# though they carry <meta name="robots" content="noindex">. They are
+# genuinely linked from crawlable, signed-out-visible surfaces (the
+# navbar's "Sign In" link on every public page, plus static cross-links
+# between these four pages themselves) — unlike the pages above, which
+# only ever appear in the authenticated navbar branch and are never
+# rendered for an anonymous visitor. Disallow-ing a page that IS linked
+# from elsewhere prevents a crawler from ever fetching it to read its
+# noindex tag, which can leave a bare, snippet-less URL in search results
+# instead of a clean exclusion — the opposite of the intended effect. See
+# docs/DEPLOYMENT.md §11 for the full reasoning.
 
 Sitemap: https://specboundapp.com/sitemap.xml
