@@ -1,6 +1,6 @@
 # Milestone 27A PR5 — Accessibility & Performance Verification Results
 
-Status: In progress — baseline and automated/manual audit complete; narrowly-scoped fixes implemented and locally verified; post-fix Lighthouse re-run pending Cloudflare Preview availability (recorded below once the branch is pushed).
+Status: PR5 complete and verified (draft PR [#27](https://github.com/Fan1dude/Specbound/pull/27), not yet merged). Baseline audit, narrowly-scoped fixes, and post-fix Cloudflare Preview re-verification all recorded below. **This does not mean Milestone 27A as a whole is complete** — see `docs/ROADMAP.md`'s 27A row for what remains (PR1 blocked on 27B; Storage/backup/monitoring/staff-bootstrap adult-owner actions outstanding).
 
 - **Date:** 2026-08-15
 - **Branch:** `27a-a11y-perf-pass`
@@ -200,4 +200,39 @@ Full suite: **1562/1562 passing** (1551 baseline + 11 new), all 8 static checks 
 
 ## 10. After-fix verification
 
-*(To be completed once the branch is pushed and the Cloudflare Preview URL is available — see the task's own instruction to verify against Preview, not by further production runs. This section will record the same Lighthouse metrics from §3 re-run against the preview build, for the affected pages, using identical settings.)*
+Draft PR: [#27](https://github.com/Fan1dude/Specbound/pull/27). Cloudflare Preview: `https://27a-a11y-perf-pass.specbound.pages.dev`, confirmed live and serving this branch's commit (`7cb308f`) — spot-checked via `getComputedStyle()` on `#navbar`/`#footer` returning the expected `min-height: 79px` / `228px` before re-running Lighthouse. Same tool, same flags, same 3-runs-per-page methodology as §3, run 2026-08-15.
+
+**Important comparability note:** the "before" numbers in §3 are from **production**; the "after" numbers below are from the **Cloudflare Preview**, because the fix isn't live on production yet. These are not a perfectly controlled A/B — see the two environment-driven deltas called out below that are **not** caused by this PR's changes.
+
+| Metric | Home (before → after) | Explore (before → after) | Public build page (before → after) | Login (before → after) |
+|---|---|---|---|---|
+| Performance | 73 → 85 | 70 → 91 | 61 → 73 | 72 → 85 |
+| Accessibility | 100 → 100 | 100 → 100 | 100 → 100 | **95 → 100** |
+| Best Practices | 92 → 96 | 92 → 96 | 92 → 96 | 92 → 96 |
+| SEO | 100 → **69** | 100 → **69** | 100 → **66** | 66 → 66 |
+| LCP (ms, median) | 4615 → 3483 | 4624 → 2891 | 5427 → 5138 | 3776 → 3484 |
+| **CLS (median)** | **0 → 0.025** | **0.195 → 0.002** | **0.282 → 0.076** | **0.229 → 0.017** |
+| Total Blocking Time | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 |
+| Transfer (KB) | 424 → 409 | 1891 → 1876 | 454 → 443 | 370 → 359 |
+
+### CLS — the fix's direct target — confirmed working
+
+CLS dropped sharply on every page: Explore 0.195→0.002, the public build page 0.282→0.076, Login 0.229→0.017. CLS is a pure layout-timing measurement, not sensitive to CDN edge location or network conditions the way LCP/Performance-score are, so this drop is attributable to the `min-height` reservation fix, not an environment artifact. The build page's remaining 0.076 is real and non-zero — smaller than before, but the reservation isn't a perfect match for every possible content height on that page (its `.navbar-inner`/`.footer-inner` content can vary slightly, e.g. a long build title wrapping); it is a large, clearly attributable improvement, not a claim of full elimination.
+
+### Login accessibility — 95 → 100 — confirmed fixed
+
+The one Lighthouse accessibility finding from §3 (`target-size` on the "Forgot password?" link) is gone; Login's accessibility score is now 100. No other page's accessibility score changed (Home/Explore/build were already 100).
+
+### Two deltas that are environment artifacts, not caused by this PR
+
+- **SEO dropped to 69/69/66 on Home/Explore/build.** Lighthouse's `is-crawlable` audit failed on the preview with "Page is blocked from indexing" — Cloudflare Pages preview deployments are blocked from indexing by the platform itself, independent of anything in this repository. This is expected preview behavior, not a regression, and not something to "fix" (doing so would mean making a preview URL indexable, which is wrong). Login's SEO score is unchanged (66→66) because it was already explained by its own intentional `noindex` (§3) on both environments.
+- **Best Practices rose from 92 to 96 on every page.** Diffing the audit failures: production failed both `errors-in-console` and `inspector-issues`; the preview only fails `errors-in-console`. The remaining console-error finding is present on both environments and unrelated to this PR's changes — not chased here, consistent with the performance-fix policy's instruction to treat Cloudflare-injected script cost separately from repository-owned code and not change CDN/Cloudflare configuration in this PR.
+- **The rest of the Performance-score movement (LCP, transfer size, overall category score) likely reflects a mix of the CLS improvement (a real scoring component) and ordinary environment noise between production and a different edge deployment** (e.g. Explore's LCP range was 2628–5218ms across 3 preview runs, wider than its production range) — it is not claimed as a verified performance win beyond the CLS figure itself.
+
+### Automated/static re-verification
+
+- Full browser regression suite: **1562/1562 passing** (unchanged from the pre-push local run).
+- All 8 static checks: passing (unchanged).
+- No new console errors attributable to this PR's changes were found on the preview (the one pre-existing `errors-in-console` Best Practices finding above is present on both environments and predates this PR).
+- Desktop (1280px) and mobile (375px) visual check of the CLS fix: confirmed via `getComputedStyle()` that `#navbar`/`#footer` reserve non-zero height matching each breakpoint before content loads, on the live preview.
+- No temporary reports containing sensitive URLs or data were committed — all raw Lighthouse JSON output and intermediate aggregation scripts live only in the local scratchpad directory (outside this git worktree), never staged or committed.
