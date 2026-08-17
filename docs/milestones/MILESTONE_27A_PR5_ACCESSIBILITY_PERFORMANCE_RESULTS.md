@@ -263,7 +263,9 @@ Both dimensions of the "after" box clear the WCAG 2.5.8 AA 24×24px minimum; it 
 
 ### 11.2 F2 — Skip-link was invisible and pointer-unreachable behind the navbar
 
-`.skip-link` (`css/base/reset.css`) and `.navbar` (`css/layout/navbar.css`) shared `z-index: 1000`. With tied z-index, paint order falls back to DOM order — the navbar (inserted later in `<body>` by `loadNavbar()`, `js/core/layout.js`) painted over the skip-link whenever it was focused, because both sit in the same top-left region of the page. A sighted keyboard user tabbing to the skip-link got no visible confirmation focus moved there, and a pointer user clicking at its expected location hit the navbar's logo link instead. Activation itself (Enter/click navigating to `#main`) was never broken — this was purely a visual/pointer-hit-testing defect.
+`.skip-link` (`css/base/reset.css`) and `.navbar` (`css/layout/navbar.css`) shared `z-index: 1000`. With tied z-index, paint order falls back to DOM order — the navbar (inserted later in `<body>` by `loadNavbar()`, `js/core/layout.js`) painted over the skip-link whenever it was focused, because both sit in the same top-left region of the page. A sighted keyboard user tabbing to the skip-link got no visible confirmation focus moved there, and a pointer user clicking at its expected location hit the navbar's logo link instead.
+
+This first fix addressed visibility and pointer hit-testing only. It left a second, separate defect unaddressed: `#main` had no `tabindex`, so activating the skip link (Enter/click) still only changed `location.hash` to `#main` — real keyboard/AT focus never moved off `<body>`, because a plain `<main>` element with no `tabindex` is not a valid native fragment-navigation focus target. A second PR #27 follow-up (also 2026-08-15, §11.6) closed that gap. The two fixes are independent and were verified separately: this section's "Real measurements" table below covers only the visibility/hit-testing fix.
 
 **Fix:** `.skip-link`'s `z-index` raised to `1001`, one above the navbar's `1000`. No other change; the navbar itself is untouched.
 
@@ -284,9 +286,38 @@ The duplicate-`<h1>` finding (§5, §7 informational item 1 — navbar logo `<h1
 
 ### 11.5 Regression tests
 
-`tests/a11yPerfPass27A5.test.html` extended with 6 new assertions (9→15 total in this file):
+`tests/a11yPerfPass27A5.test.html` extended for this follow-up (F1/F2/F3): **8→15 test cases** in this file — 9 assertion (`test()`) calls added, 2 superseded assertions removed (the pre-fix touch-target and z-index checks, which asserted the *broken* pre-fix values and were replaced rather than kept alongside the corrected ones), for a net of +7 tests:
 - F1: link ≥24px tall, ≥24px wide, no negative top margin, no pixel overlap with the password input, no pixel overlap with the submit button — against the real `.auth-form` markup (email group, password group, forgot link, submit button, in real DOM order).
 - F2: skip-link z-index > navbar z-index; the two elements' boxes actually overlap in the fixture (proving the z-index check isn't vacuous); pointer hit-test at the focused skip-link's center resolves to the skip-link, not the navbar — against real skip-link + navbar markup inserted as the first children of `<body>`, matching production structure.
 - F3: the results document no longer contains the old inaccurate landmark claim, and does contain the corrected one — a content-fingerprint guard against the doc regressing to the same overstatement.
 
-All three regressions were reproduced locally (reverting each fix in turn) and confirmed to fail the newly-added assertions before being restored byte-for-byte via `git checkout`; see the delivery report for this follow-up for the exact before/after test counts.
+All three regressions were reproduced locally (reverting each fix in turn) and confirmed to fail the newly-added assertions before being restored byte-for-byte via `git checkout`. Complete browser-suite total after this follow-up: **1569/1569 passing** (1562 baseline + 7 net new in this file). See §11.6 for a second, later follow-up that adds one further test case to this same file.
+
+### 11.6 Second PR #27 follow-up (2026-08-17) — skip-link did not move keyboard focus to `#main`
+
+A second, later review of draft PR #27 (head `3edf097`) found that §11.2's fix (raising `.skip-link`'s `z-index`) made the skip link visible and clickable but did not close the gap noted in that section's updated text above: activating the link still only changed `location.hash`, because `<main id="main">` had no `tabindex` and so was not a valid native fragment-navigation focus target. A sighted keyboard user could now *see* the skip link and activate it, but neither they nor a screen-reader user actually had their focus moved past the navbar — the link bypassed nothing.
+
+**Fix:** `insertSkipLink()` (`js/core/layout.js`, called from `loadNavbar()` on every page load) now also sets `tabindex="-1"` on `#main` when present, guarded by `if (main && !main.hasAttribute("tabindex"))` so a page with no `#main` element is a no-op (fails safely) and an element that already declares its own `tabindex` is left untouched. `tabindex="-1"` makes an element programmatically focusable without adding it to the normal Tab sequence (`tabIndex < 0`, not reachable by sequential Tab navigation) — the standard accessible pattern for skip-link targets. No custom click/keydown handler was added: Playwright-driven real keyboard tests (Tab → Enter) confirmed the browser's native fragment-activation behavior already moves `document.activeElement` to a `tabindex="-1"` target once one exists, so a handler would have been redundant.
+
+One further, previously-latent issue surfaced only once focus started actually landing on `#main`: the sitewide `:focus-visible` rule (`css/base/reset.css`) then rendered a 2px outline box around the entire main-content landmark, which reads as broken UI rather than a focus indicator (`#main` is a landmark, not an interactive control). A scoped `#main:focus { outline: none; }` rule suppresses it; this is safe specifically because `tabindex="-1"` keeps `#main` out of the normal Tab sequence, so no keyboard-tabbed focus indicator is ever hidden by this rule — it only ever applies to the one fragment-navigation case.
+
+**Real measurements** (real keyboard sequence via Playwright's `page.keyboard.press()` — Tab, Enter, Tab again — against the live page HTML, repeated on Home, Explore, Login, and a public build page):
+
+| Check | Before this follow-up | After |
+|---|---|---|
+| `#main` has `tabindex` attribute | absent | `"-1"` |
+| `#main.tabIndex` (IDL, confirms not in normal Tab order) | `0` (default, would be Tab-reachable were it also given a positive/zero tabindex) | `-1` |
+| `location.hash` after Enter on the focused skip link | `"#main"` (already correct pre-fix) | `"#main"` (unchanged) |
+| `document.activeElement` after Enter on the focused skip link | `<body>` (fragment navigated but focus never moved) | `document.querySelector("main#main")` |
+| Second Tab press after skip-link activation | N/A (focus was already on `<body>`, so this Tab restarted the page's own Tab order from the top, landing on the navbar) | lands on the first interactive control after `<main>` in DOM order — the navbar is not revisited |
+| `#main`'s own `:focus` outline | N/A (never focused) | `none` (suppressed via the new scoped rule; confirmed via `getComputedStyle().outlineStyle`) |
+| `.skip-link` `z-index` (regression check for §11.2's fix) | `1001` | `1001` (unchanged) |
+
+**Regression test:** `tests/a11yPerfPass27A5.test.html` extended further, from the 15 test cases left at the end of §11.5 to **20 test cases** — 5 new `test()` assertions added, 0 removed (a pure addition, unlike §11.5's fix which superseded 2 older assertions). The new assertions build a real `<main id="main">` fixture plus a trailing interactive element, call the now-exported `insertSkipLink()` from `js/core/layout.js` directly (exported for this reason only — `loadNavbar()` itself requires live Supabase auth state and cannot be called directly from a test), and assert: `#main` carries `tabindex="-1"`; `#main.tabIndex < 0`; `.skip-link`'s `z-index` is still `"1001"` (guards §11.2's fix against regressing); `location.hash === "#main"` after a real `.click()` on the skip link; and `document.activeElement === document.querySelector("main#main")` after that same click.
+
+**Mutation test:** with the tabindex-setting block temporarily commented out of `insertSkipLink()` (the real fix having been committed first, so `git checkout -- js/core/layout.js` afterward restored the fixed state, not an earlier unfixed one), the file's pass count dropped from 20/20 to **18/20** — exactly the 2 assertions that directly depend on the fix (the tabindex-attribute check and the activeElement-after-click check) failed; the other 3 new assertions (IDL `tabIndex < 0`, `location.hash`, `.skip-link` z-index) correctly kept passing, since those conditions hold independently of this specific fix. This confirms the new test isn't vacuous — it fails when the fix it's meant to guard is absent. The implementation was then restored byte-for-byte and re-verified at 20/20.
+
+**Test-case vs. assertion-call accounting for this file, reported without conflating the two terms** (a "test case" is one `test()` call in the file; an "assertion" here is used as a synonym for the same `test()` call, per this file's convention of one boolean check per `test()` invocation — there are no multi-assertion `test()` calls in this file):
+- Start of this follow-up: 15 test cases (per §11.5).
+- End of this follow-up: 20 test cases (+5, 0 removed).
+- Complete browser-suite total: **1569/1569 before** this follow-up's test was added → **1574/1574 after** (1569 + 5 net new in this file).
