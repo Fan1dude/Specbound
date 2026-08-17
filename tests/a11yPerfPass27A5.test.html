@@ -233,6 +233,63 @@
             "corrected claim text not found"
         );
 
+        // --- Fix 6: skip-link activation moves real keyboard focus to #main,
+        // not just the URL hash (PR #27 second review follow-up). Calls the
+        // real, now-exported insertSkipLink() (js/core/layout.js) against a
+        // minimal real <main id="main"> fixture — loadNavbar() itself isn't
+        // callable here (it needs live Supabase auth state), but this is the
+        // exact function it delegates to for both the skip-link markup and
+        // the tabindex behavior under test, so this is real shared-layout
+        // behavior, not a re-implementation of it.
+        const { insertSkipLink } = await import("../js/core/layout.js");
+
+        const mainFixture = document.createElement("main");
+        mainFixture.id = "main";
+        const afterMainButton = document.createElement("button");
+        afterMainButton.id = "afterMainButtonFixture6";
+        afterMainButton.textContent = "After main";
+        mainFixture.appendChild(afterMainButton);
+        document.body.appendChild(mainFixture);
+
+        insertSkipLink();
+
+        const realSkipLink = document.getElementById("skipLink");
+        const realMain = document.getElementById("main");
+
+        test(
+            "#main is programmatically focusable: insertSkipLink() gives it tabindex=\"-1\" (Fix 6 regression guard)",
+            realMain.getAttribute("tabindex") === "-1",
+            realMain.getAttribute("tabindex")
+        );
+        test(
+            "#main's tabindex is not 0 or greater — it must stay out of the normal Tab sequence (Fix 6 regression guard against tabindex=\"0\"+)",
+            realMain.tabIndex < 0,
+            `tabIndex=${realMain.tabIndex}`
+        );
+        test(
+            "the skip link's own z-index fix (1001, above the navbar's 1000) has not regressed",
+            getComputedStyle(realSkipLink).zIndex === "1001",
+            getComputedStyle(realSkipLink).zIndex
+        );
+
+        const hashBeforeActivation = location.hash;
+        realSkipLink.click();
+
+        test(
+            "activating the skip link updates location.hash to #main (Fix 6 regression guard)",
+            location.hash === "#main" && location.hash !== hashBeforeActivation,
+            location.hash
+        );
+        test(
+            "activating the skip link moves document.activeElement to the real <main id=\"main\"> element, not just the URL hash (Fix 6 regression guard — the actual defect this follow-up fixes)",
+            document.activeElement === document.querySelector("main#main"),
+            document.activeElement.tagName + (document.activeElement.id ? "#" + document.activeElement.id : "")
+        );
+
+        realSkipLink.remove();
+        mainFixture.remove();
+        location.hash = "";
+
         // --- Render ---------------------------------------------------------
         skipLinkEl.remove();
         navbarEl.remove();

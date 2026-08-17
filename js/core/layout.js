@@ -336,13 +336,36 @@ export function loadFooter(pathPrefix = "") {
 // has to tab through the entire navbar (logo, nav toggle, search,
 // primary links, notification bell, builder menu) on every single page
 // view before reaching real content.
-function insertSkipLink() {
+//
+// Exported (unlike the module's other private helpers) purely so
+// tests/a11yPerfPass27A5.test.html can exercise this exact function
+// instead of re-implementing its tabindex logic — loadNavbar() itself
+// isn't test-friendly to call directly (it depends on live Supabase
+// auth state), but this function has no such dependency.
+export function insertSkipLink() {
     if (document.getElementById("skipLink")) return;
 
     document.body.insertAdjacentHTML(
         "afterbegin",
         `<a href="#main" id="skipLink" class="skip-link">Skip to content</a>`
     );
+
+    // tabindex="-1" makes #main a valid fragment-navigation focus target
+    // without adding it to the normal Tab sequence (a -1 value is
+    // programmatically focusable only — never reachable by pressing Tab).
+    // Native browser fragment activation (both a real click and a real
+    // Enter keypress on the skip link) then moves keyboard focus here on
+    // its own; no click/keydown handler is needed. Confirmed during PR
+    // #27 review (2026-08-15) that without this attribute, #main isn't
+    // focusable at all, so activating the skip link only changed
+    // location.hash — document.activeElement stayed on <body>, meaning
+    // keyboard/AT users' focus never actually moved past the navbar.
+    // Guarded so a page without a #main element (if one ever exists)
+    // fails safely instead of throwing.
+    const main = document.getElementById("main");
+    if (main && !main.hasAttribute("tabindex")) {
+        main.setAttribute("tabindex", "-1");
+    }
 }
 
 function ensureToastContainer() {
