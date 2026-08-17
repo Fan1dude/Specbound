@@ -44,15 +44,21 @@
     font-size: var(--font-size-sm);
 }
 
-/* display: inline-block + padding, offset by an equal negative margin so neither the
-   link's own layout box nor its visible position changes — same target-size technique
-   already used for .footer-group a/button (css/layout/footer.css). Lighthouse's
-   target-size audit flagged this link at 17px tall on the Sign In page, below the
-   WCAG 2.5.8 AA 24px minimum, during the 27A PR5 audit (2026-08-15). */
+/* min-height, not the negative-margin/padding technique used elsewhere (e.g.
+   .footer-group a/button) — .auth-forgot's own -space-3 top margin already pulls it
+   flush against the password field with zero gap, so pulling the link's box upward
+   with its own negative margin (the first version of this fix, PR5) put its padded
+   hit-area 4px into the password input's own box, confirmed via elementFromPoint()
+   during PR #27 review (2026-08-15). min-height only grows the box downward within
+   .auth-forgot's normal flow, so it cannot intrude on the input above; the Sign In
+   page's submit button sits well below with room to spare. Lighthouse's target-size
+   audit originally flagged this link at 17px tall, below the WCAG 2.5.8 AA 24px
+   minimum. */
 .auth-forgot a {
-    display: inline-block;
-    margin: calc(var(--space-0) * -1);
-    padding: var(--space-0);
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 0 var(--space-0);
     color: var(--text-secondary);
 }
 

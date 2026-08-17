@@ -1,6 +1,6 @@
 # Milestone 27A PR5 — Accessibility & Performance Verification Results
 
-Status: PR5 complete and verified (draft PR [#27](https://github.com/Fan1dude/Specbound/pull/27), not yet merged). Baseline audit, narrowly-scoped fixes, and post-fix Cloudflare Preview re-verification all recorded below. **This does not mean Milestone 27A as a whole is complete** — see `docs/ROADMAP.md`'s 27A row for what remains (PR1 blocked on 27B; Storage/backup/monitoring/staff-bootstrap adult-owner actions outstanding).
+Status: PR5 complete and verified (draft PR [#27](https://github.com/Fan1dude/Specbound/pull/27), not yet merged, still draft). Baseline audit, narrowly-scoped fixes, post-fix Cloudflare Preview re-verification, and a follow-up round addressing three findings from an independent PR #27 review are all recorded below (§11). **This does not mean Milestone 27A as a whole is complete** — see `docs/ROADMAP.md`'s 27A row for what remains (PR1 blocked on 27B; Storage/backup/monitoring/staff-bootstrap adult-owner actions outstanding).
 
 - **Date:** 2026-08-15
 - **Branch:** `27a-a11y-perf-pass`
@@ -130,7 +130,7 @@ Run against 6 signed-out-reachable pages: **Home, Explore, a public build page, 
 | Keyboard traps | None found on pages checked. |
 | Accessible names (buttons, links, inputs, menus, tabs, status pills, icon-only controls) | axe-clean on all 6 pages tested (§4). Two real, small mismatches found by Lighthouse specifically (not axe, on these particular production pages/data) — see §5 fixes below. |
 | Heading hierarchy | **Informational, not fixed this pass:** every page has two `<h1>` elements — the navbar's logo (`<h1 class="logo">`, `js/core/layout.js:117`, injected on every page via `loadNavbar()`) and the page's own content `<h1>` (e.g. Home's "Document Every Build."). Confirmed live on production (`document.querySelectorAll("h1")` returned 2 elements on the homepage). Fixing this means changing the shared navbar component's semantics sitewide — broader than this pass's narrow-fix policy allows; flagged as follow-up work, not fixed here. |
-| Landmarks | **Informational, not fixed this pass:** `BlueprintCard.js` renders a `<footer class="blueprint-card-footer">` per card (`js/components/BlueprintCard.js:148`) — confirmed live on the production homepage (`document.querySelectorAll("footer").length` returned 4: the page footer plus 3 card footers from a features/gallery section). Multiple non-page `<footer>` landmarks per page is a real semantic-HTML quirk (a `<footer>` is meant to be page/section-level, not per-card metadata) but renaming it means touching the shared card component and its CSS across every page that renders builds — broader than a narrow fix; flagged as follow-up work. |
+| Landmarks | **Corrected during PR #27 review (2026-08-15) — not a landmark issue.** `BlueprintCard.js` renders a `<footer class="blueprint-card-footer">` per card (`js/components/BlueprintCard.js:148`), and an earlier version of this document characterized that as "multiple non-page `<footer>` landmarks per page." That was inaccurate. Per the HTML→ARIA mapping, a `<footer>` nested inside `<article>` (as every `.blueprint-card-footer` is) carries **no landmark role at all** — only a page-level `<footer>` with no such ancestor exposes `contentinfo`. Verified directly: walking every `<footer>` element on the live homepage and checking for an `article`/`aside`/`main`/`nav`/`section` ancestor found exactly **one** `contentinfo` landmark (the real page footer, `<footer id="footer">`) among 14 `<footer>` elements total; axe-core independently reported 0 violations on the same page. **Informational only, non-impacting:** using `<footer>` as a per-card sectioning wrapper is an unconventional but harmless choice — it does not create landmark-navigation noise for assistive technology and needs no follow-up. |
 | Live-region behavior (loading/success/error/empty/denied) | Not independently tested this pass for authenticated states (Docker unavailable). Signed-out denied states (redirect) confirmed. |
 | Reduced-motion behavior | Confirmed handled — `prefers-reduced-motion` rules exist in 7 CSS files including the base `css/base/animations.css` (verified via source grep after an initial live-DOM script check gave a false negative from not recursing into nested `@media` blocks). |
 | Color contrast (incl. Feedback/My Feedback status pills) | Covered by axe's automated contrast checks (0 violations on pages tested); Feedback/My Feedback pages themselves not independently re-tested this pass (require an authenticated account with feedback data — Docker unavailable). |
@@ -167,15 +167,15 @@ None identified this pass.
 
 ### Important, non-blocking — fixed this pass
 
-1. **Login "Forgot password?" touch target below WCAG 2.5.8 AA minimum.** Measured 17px tall; AA minimum is 24px. Root-caused to `.auth-forgot a` having no padding. **Fixed** in `css/pages/auth/auth.css` using the app's existing padding+negative-margin hit-area-without-layout-shift technique (already used for `.footer-group a`/`button`).
+1. **Login "Forgot password?" touch target below WCAG 2.5.8 AA minimum.** Measured 17px tall; AA minimum is 24px. Root-caused to `.auth-forgot a` having no padding. **Fixed** in `css/pages/auth/auth.css`, originally using the app's existing padding+negative-margin hit-area-without-layout-shift technique (already used for `.footer-group a`/`button`). **Superseded during PR #27 review (2026-08-15) — see §11.1:** that technique put the link's padded hit-area 4px into the password input's own box, because `.auth-forgot`'s own container was already flush against the input with no buffer to absorb the pull. Now uses `min-height: 24px` with no negative margin, so the box only grows downward within its own normal flow. The target now meets the ≥24×24px minimum (verified 24×~132px) without overlapping the password input or the submit button at any pixel.
 2. **Unreserved navbar/footer height causes CLS on every page.** `<nav id="navbar">`/`<footer id="footer">` ship empty and are populated async, contributing 0.195–0.282 CLS across Explore/build/Login (Home intermittently). **Fixed** by adding `min-height` to `.navbar`/`.footer` and their responsive breakpoints, set to each breakpoint's real measured shell height (measured live via `getBoundingClientRect()` at desktop/tablet/mobile widths on production).
 3. **`BlueprintCard`'s image-link accessible name omits its visible stage-badge text** (WCAG 2.5.3, Label in Name) — flagged by Lighthouse as `label-content-name-mismatch` on the production Explore and build pages. The link's `aria-label` was `"View {title}"`, but its visible rendered content includes a stage badge (e.g. "In Progress") not reflected in the accessible name. **Fixed** in `js/components/BlueprintCard.js` by appending the stage label to the `aria-label`.
 4. **The build page's like button accessible name omits its visible like count** (same WCAG 2.5.3 category) — the button's `aria-label` ("Like this project") suppresses all child content, including the visible `#likeCount` number, from the accessible name, so the count was never announced. **Fixed** in `js/pages/build/renderLike.js` by folding the current count into the label every time it changes (initial render, optimistic update, server reconciliation, and rollback).
 
 ### Informational — not fixed this pass (out of narrow-fix scope)
 
-1. Every page has two `<h1>` elements (navbar logo + page content) — sitewide navbar semantics change, broader than this pass.
-2. `BlueprintCard` renders a `<footer>` landmark per card — shared-component rename, broader than this pass.
+1. Every page has two `<h1>` elements (navbar logo + page content) — sitewide navbar semantics change, broader than this pass. **Still open, tracked as a separate sitewide follow-up — not addressed by the PR #27 review follow-up (§11).**
+2. ~~`BlueprintCard` renders a `<footer>` landmark per card — shared-component rename, broader than this pass.~~ **Corrected during PR #27 review — see the Landmarks row in §5 and §11.2. This was never a real landmark issue: card-local `<footer>` elements nested in `<article>` carry no landmark role under the HTML→ARIA mapping, and only the one page-level footer exposes `contentinfo`. No follow-up needed.**
 
 ---
 
@@ -236,3 +236,57 @@ The one Lighthouse accessibility finding from §3 (`target-size` on the "Forgot 
 - No new console errors attributable to this PR's changes were found on the preview (the one pre-existing `errors-in-console` Best Practices finding above is present on both environments and predates this PR).
 - Desktop (1280px) and mobile (375px) visual check of the CLS fix: confirmed via `getComputedStyle()` that `#navbar`/`#footer` reserve non-zero height matching each breakpoint before content loads, on the live preview.
 - No temporary reports containing sensitive URLs or data were committed — all raw Lighthouse JSON output and intermediate aggregation scripts live only in the local scratchpad directory (outside this git worktree), never staged or committed.
+
+---
+
+## 11. PR #27 review follow-up (2026-08-15)
+
+An independent review of draft PR #27 (base `38ae621`, head `d99f9c7`) found two real, small defects in this PR's own fixes (F1, F2 below) and one factual overstatement in this document (F3 below, corrected in §5 and §7 above rather than here). This section records what changed and why. **It does not touch or reinterpret the historical Lighthouse measurements in §3/§10** — those remain the record of what was measured on 2026-08-15 before this follow-up.
+
+### 11.1 F1 — Forgot-password link overlapped the password input
+
+The original touch-target fix (`.auth-forgot a { display: inline-block; margin: calc(var(--space-0) * -1); padding: var(--space-0); }`) reused the negative-margin/padding technique from `.footer-group a`/`button` without accounting for a difference in context: `.auth-forgot`'s own `margin-top: calc(var(--space-3) * -1)` already pulls it flush (0px gap) against the password field, so the link's *own* negative top margin pulled its padded hit-area a further 4px upward, into the password input's own box.
+
+**Fix:** replaced the negative-margin/padding technique with `display: inline-flex; align-items: center; min-height: 24px; padding: 0 var(--space-0);` — no negative margin at all, so the box can only grow downward within `.auth-forgot`'s own normal flow, never upward into the input above.
+
+**Real measurements** (login page, real DOM, desktop width — captured via `tests/a11yPerfPass27A5.test.html`, matching methodology used throughout this audit):
+
+| Metric | Before (F1) | After |
+|---|---|---|
+| Link height | 31.8px | 24.0px |
+| Link width | 126.4px | 131.2px |
+| Link's own top margin | `-4px` | `0px` |
+| Password-input-bottom vs. link-top | password bottom 569.19px, link top 565.19px (**link starts 4px above the input's own bottom — overlap**) | password bottom 563.47px, link top 563.47px (**exact match, zero gap, zero overlap**) |
+| Gap to submit button | 28.2px | 32.0px |
+
+Both dimensions of the "after" box clear the WCAG 2.5.8 AA 24×24px minimum; it no longer overlaps the password input at any pixel, and the gap to the submit button widened slightly rather than shrinking.
+
+### 11.2 F2 — Skip-link was invisible and pointer-unreachable behind the navbar
+
+`.skip-link` (`css/base/reset.css`) and `.navbar` (`css/layout/navbar.css`) shared `z-index: 1000`. With tied z-index, paint order falls back to DOM order — the navbar (inserted later in `<body>` by `loadNavbar()`, `js/core/layout.js`) painted over the skip-link whenever it was focused, because both sit in the same top-left region of the page. A sighted keyboard user tabbing to the skip-link got no visible confirmation focus moved there, and a pointer user clicking at its expected location hit the navbar's logo link instead. Activation itself (Enter/click navigating to `#main`) was never broken — this was purely a visual/pointer-hit-testing defect.
+
+**Fix:** `.skip-link`'s `z-index` raised to `1001`, one above the navbar's `1000`. No other change; the navbar itself is untouched.
+
+**Real measurements** (real skip-link + real navbar markup, inserted as the first two children of `<body>` to match production exactly, focused via a real DOM `.focus()` call and measured after `.skip-link`'s own `transition: top .15s ease` completes — captured via `tests/a11yPerfPass27A5.test.html`):
+
+| Check | Before (F2) | After |
+|---|---|---|
+| `.skip-link` z-index vs. `.navbar` z-index | 1000 vs. 1000 (tied) | 1001 vs. 1000 (skip-link wins) |
+| Pointer hit-test at the focused skip-link's own visual center (`document.elementFromPoint`) | resolved to the navbar (confirmed live on the PR #27 preview during review, via a real Tab press + `elementFromPoint`) | resolves to the skip-link itself |
+
+### 11.3 F3 — Landmark-proliferation claim corrected, not a code fix
+
+No code change; see §5 (Landmarks row) and §7 (Informational finding #2) above for the corrected finding text. Recorded here as an entry in this document's own audit trail: the original claim ("multiple non-page `<footer>` landmarks per page") was inaccurate — only the one page-level `<footer>` exposes a `contentinfo` landmark; card-local `<footer>` elements nested in `<article>` carry no landmark role under the HTML→ARIA mapping.
+
+### 11.4 Explicitly not addressed in this follow-up
+
+The duplicate-`<h1>` finding (§5, §7 informational item 1 — navbar logo `<h1>` + page content `<h1>` on every page) remains open, unfixed, and out of scope here by design — it requires a sitewide navbar semantics change and is tracked as a separate follow-up, not part of this PR.
+
+### 11.5 Regression tests
+
+`tests/a11yPerfPass27A5.test.html` extended with 6 new assertions (9→15 total in this file):
+- F1: link ≥24px tall, ≥24px wide, no negative top margin, no pixel overlap with the password input, no pixel overlap with the submit button — against the real `.auth-form` markup (email group, password group, forgot link, submit button, in real DOM order).
+- F2: skip-link z-index > navbar z-index; the two elements' boxes actually overlap in the fixture (proving the z-index check isn't vacuous); pointer hit-test at the focused skip-link's center resolves to the skip-link, not the navbar — against real skip-link + navbar markup inserted as the first children of `<body>`, matching production structure.
+- F3: the results document no longer contains the old inaccurate landmark claim, and does contain the corrected one — a content-fingerprint guard against the doc regressing to the same overstatement.
+
+All three regressions were reproduced locally (reverting each fix in turn) and confirmed to fail the newly-added assertions before being restored byte-for-byte via `git checkout`; see the delivery report for this follow-up for the exact before/after test counts.

@@ -72,11 +72,20 @@ table {
     border: 0;
 }
 
+/* z-index: 1001, one above .navbar's own 1000 (css/layout/navbar.css) — with
+   equal z-index the two ties on DOM order instead, and .navbar (inserted later
+   in <body> by loadNavbar(), js/core/layout.js) painted over this link whenever
+   it was focused, making it invisible to sighted keyboard users and putting the
+   navbar's own logo link at this link's coordinates for pointer hit-testing —
+   found during PR #27 review (2026-08-15) via a real keyboard Tab producing no
+   visible change and elementFromPoint() resolving to the navbar instead of this
+   link. Activation itself (Enter/click navigating to #main) was never broken;
+   only the visual/pointer layer needed to move above the navbar. */
 .skip-link {
     position: absolute;
     top: -100%;
     left: 12px;
-    z-index: 1000;
+    z-index: 1001;
     padding: 10px 16px;
     background: var(--surface);
     color: var(--text);

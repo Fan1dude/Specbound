@@ -28,6 +28,15 @@
         by Lighthouse's accessibility audit as label-content-name-mismatch on
         the production Explore/Build pages.
     </p>
+    <p>
+        Also covers two findings from the PR #27 review (2026-08-15): the
+        first version of the touch-target fix above padded the "Forgot
+        password?" link with a negative margin that put its hit-area 4px into
+        the password field's own box; and the skip-link (css/base/reset.css)
+        shared the navbar's z-index, so the navbar — inserted later in
+        &lt;body&gt; — painted over it whenever it was focused, hiding it from
+        sighted keyboard users and intercepting pointer clicks meant for it.
+    </p>
     <div id="results"></div>
     <div id="summary"></div>
 
@@ -44,28 +53,49 @@
 
         const fixture = document.getElementById("fixture");
 
-        // --- Fix 1: login "Forgot password?" touch target ----------------------
+        // --- Fix 1: login "Forgot password?" touch target, without overlapping
+        // the password field (PR #27 review finding F1: the original negative-
+        // margin version pulled the link's padded box 4px into the password
+        // input's own box, since .auth-forgot's own container already sits
+        // flush against it with no buffer). Renders the real .auth-form
+        // verbatim (email group, password group, the forgot link, and the
+        // submit button, in real DOM order) so the overlap checks below are
+        // against real, cascaded layout, not a hand-built fixture.
         const loginHtml = await (await fetch("../pages/login.html")).text();
         const loginDoc = new DOMParser().parseFromString(loginHtml, "text/html");
-        const forgotMarkup = loginDoc.querySelector(".auth-forgot").outerHTML;
-        fixture.innerHTML = forgotMarkup;
-        const forgotLink = fixture.querySelector(".auth-forgot a");
-        const forgotRect = forgotLink.getBoundingClientRect();
+        fixture.innerHTML = loginDoc.querySelector(".auth-form").outerHTML;
 
-        test(
-            "auth.css ships .auth-forgot a as display: inline-block (required for padding to expand the hit area)",
-            getComputedStyle(forgotLink).display === "inline-block",
-            getComputedStyle(forgotLink).display
-        );
+        const passwordInput = fixture.querySelector("#password");
+        const forgotLink = fixture.querySelector(".auth-forgot a");
+        const submitBtn = fixture.querySelector(".auth-form .btn");
+        const passwordRect = passwordInput.getBoundingClientRect();
+        const forgotRect = forgotLink.getBoundingClientRect();
+        const submitRect = submitBtn.getBoundingClientRect();
+
         test(
             `"Forgot password?" link is at least 24px tall (WCAG 2.5.8 AA touch-target minimum; was 17px)`,
             forgotRect.height >= 24,
             `${forgotRect.height}px`
         );
         test(
-            "the padding technique doesn't shift the link's visible position (negative margin offsets the added padding)",
-            getComputedStyle(forgotLink).marginTop.startsWith("-") || getComputedStyle(forgotLink).marginTop === "0px",
+            `"Forgot password?" link is at least 24px wide (WCAG 2.5.8 AA touch-target minimum)`,
+            forgotRect.width >= 24,
+            `${forgotRect.width}px`
+        );
+        test(
+            "the link does not use a negative top margin to reach its size (that's what caused the overlap — F1)",
+            !getComputedStyle(forgotLink).marginTop.startsWith("-"),
             getComputedStyle(forgotLink).marginTop
+        );
+        test(
+            "the link's rendered box does not overlap the password input at any pixel (F1 regression guard)",
+            forgotRect.top >= passwordRect.bottom,
+            `password bottom=${passwordRect.bottom}, link top=${forgotRect.top}`
+        );
+        test(
+            "the link's rendered box does not overlap the submit button",
+            submitRect.top >= forgotRect.bottom,
+            `link bottom=${forgotRect.bottom}, submit top=${submitRect.top}`
         );
 
         // --- Fix 2: navbar/footer layout-shift reservation ----------------------
@@ -124,7 +154,88 @@
             cardImageLink.getAttribute("aria-label")
         );
 
+        // --- Fix 4: skip-link renders above the navbar when focused (PR #27
+        // review finding F2). Real skip-link + real navbar markup, both
+        // carrying their real CSS classes, inserted as the first children of
+        // <body> — matching production exactly (js/core/layout.js's
+        // insertSkipLink() does `document.body.insertAdjacentHTML("afterbegin",
+        // ...)`, and <nav id="navbar"> is the next element in every page's raw
+        // HTML) — rather than nested inside #fixture, whose own position deep
+        // in this test page's body would make the "do they actually overlap"
+        // check below vacuously true regardless of the real z-index/DOM-order
+        // relationship this fix depends on.
+        const skipFixtureWrap = document.createElement("div");
+        skipFixtureWrap.innerHTML = `
+            <a href="#skipTarget" id="skipLinkFixture" class="skip-link">Skip to content</a>
+            <nav class="navbar" id="navbarFixture"></nav>
+        `;
+        const skipLinkEl = skipFixtureWrap.querySelector("#skipLinkFixture");
+        const navbarEl = skipFixtureWrap.querySelector("#navbarFixture");
+        document.body.prepend(navbarEl);
+        document.body.prepend(skipLinkEl);
+
+        skipLinkEl.focus();
+        // .skip-link has `transition: top .15s ease` — getBoundingClientRect()
+        // right after .focus() would measure the transition's just-started,
+        // barely-moved position, not its resting focused position. Wait out
+        // the transition before measuring.
+        await new Promise(r => setTimeout(r, 250));
+
+        const skipZIndex = parseInt(getComputedStyle(skipLinkEl).zIndex, 10);
+        const navZIndex = parseInt(getComputedStyle(navbarEl).zIndex, 10);
+
+        test(
+            "the skip link's stacking order is above the navbar's (F2 regression guard — both used to be 1000)",
+            skipZIndex > navZIndex,
+            `skip-link z-index=${skipZIndex}, navbar z-index=${navZIndex}`
+        );
+
+        // The z-index check alone doesn't prove anything renders differently
+        // unless the two actually overlap on screen — confirm that, then
+        // hit-test the focused link's own visible center to prove the navbar
+        // isn't intercepting it.
+        const skipRectFocused = skipLinkEl.getBoundingClientRect();
+        const navRectFixture = navbarEl.getBoundingClientRect();
+        const rectsOverlap =
+            skipRectFocused.left < navRectFixture.right &&
+            skipRectFocused.right > navRectFixture.left &&
+            skipRectFocused.top < navRectFixture.bottom &&
+            skipRectFocused.bottom > navRectFixture.top;
+
+        test(
+            "the focused skip-link's box actually overlaps the navbar's box in this fixture (proves the z-index check above is meaningful, not vacuous)",
+            rectsOverlap,
+            `skip=${JSON.stringify(skipRectFocused)}, nav=${JSON.stringify(navRectFixture)}`
+        );
+
+        const hitEl = document.elementFromPoint(
+            skipRectFocused.left + skipRectFocused.width / 2,
+            skipRectFocused.top + skipRectFocused.height / 2
+        );
+
+        test(
+            "pointer hit-testing at the focused skip-link's own center resolves to the skip-link itself, not the navbar (F2 regression guard)",
+            hitEl === skipLinkEl,
+            hitEl ? hitEl.tagName + (hitEl.id ? "#" + hitEl.id : "") : "null"
+        );
+
+        // --- Fix 5: results doc no longer claims card footers are landmarks ----
+        const resultsDocText = await (await fetch("../docs/milestones/MILESTONE_27A_PR5_ACCESSIBILITY_PERFORMANCE_RESULTS.md")).text();
+
+        test(
+            "the results doc no longer claims BlueprintCard footers are landmarks (F2/landmark correction regression guard)",
+            !resultsDocText.includes("Multiple non-page `<footer>` landmarks per page is a real semantic-HTML quirk"),
+            "old inaccurate claim text still present"
+        );
+        test(
+            "the results doc records the corrected landmark finding (only one contentinfo landmark exists)",
+            resultsDocText.includes("no landmark role at all") && resultsDocText.includes("exactly **one**"),
+            "corrected claim text not found"
+        );
+
         // --- Render ---------------------------------------------------------
+        skipLinkEl.remove();
+        navbarEl.remove();
         fixture.remove();
         const resultsEl = document.getElementById("results");
         const passed = results.filter(r => r.pass).length;
