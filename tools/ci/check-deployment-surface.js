@@ -78,7 +78,7 @@ const SECRET_PATTERNS = [
 ];
 
 function trackedFiles() {
-    const out = execFileSync("git", ["ls-tree", "-r", "--name-only", "HEAD"], {
+    const out = execFileSync("git", ["ls-files"], {
         cwd: ROOT,
         encoding: "utf8",
     });
