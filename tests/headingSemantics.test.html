@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sitewide heading semantics — one meaningful h1 per page</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+        #scratch { position: absolute; left: -99999px; top: -99999px; }
+    </style>
+</head>
+<body>
+    <h2>Sitewide heading semantics</h2>
+    <p>
+        Covers two things: (1) the shared navbar brand/logo (<code>js/core/layout.js</code>'s
+        <code>loadNavbar()</code>) must never render as an <code>&lt;h1&gt;</code> or carry
+        heading semantics, since it renders on every page and would duplicate that page's own
+        primary heading; (2) every complete application page resolves, in its final DOM state,
+        to exactly one meaningful, visible <code>&lt;h1&gt;</code>.
+    </p>
+    <p>
+        <strong>Audited complete-page set:</strong> discovered automatically at run time from
+        <code>tests/generated/pageManifest.json</code> (written fresh by
+        <code>tools/ci/generate-page-manifest.js</code>, which reads git-tracked
+        <code>*.html</code> files at the repo root plus everything under <code>pages/</code> —
+        untracked/scratch files are never included). Pages under <code>pages/categories/</code>
+        are dynamically rendered (zero static <code>&lt;h1&gt;</code> by design) and are verified
+        by Group B instead of the generic per-page check. Any other discovered page whose raw
+        source has zero <em>visible</em> <code>&lt;h1&gt;</code> but at least one hidden one (the
+        fail-closed gated pattern) must be explicitly registered in <code>registeredGatedPages</code>
+        below and is verified dynamically by Group C — an unregistered page in that state fails
+        loudly with its path. Every other discovered page (including <code>design-system.html</code>,
+        which no longer carries a second real <code>&lt;h1&gt;</code> — see Group E) must resolve
+        to exactly one visible <code>&lt;h1&gt;</code> in its raw source. <code>tests/*.test.html</code>
+        files are the test harness itself, not application pages, and are excluded by construction
+        (the manifest generator never queries <code>tests/</code>).
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="navbar"></div>
+    <div id="scratch"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function waitFor(predicate, timeoutMs = 5000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                const check = () => {
+                    if (predicate()) return resolve();
+                    if (Date.now() - start > timeoutMs) return reject(new Error("timed out: " + predicate.toString()));
+                    setTimeout(check, 10);
+                };
+                check();
+            });
+        }
+
+        // Real primary headings visible in a parsed-but-unrendered document:
+        // an <h1> counts unless it or an ancestor carries the boolean
+        // `hidden` attribute — the exact mechanism this app's own gated
+        // pages use (loadFeedbackQueue.js/loadModerationQueue.js), so this
+        // mirrors the real show/hide contract rather than guessing at CSS.
+        function visibleH1s(root) {
+            return [...root.querySelectorAll("h1")].filter(h1 => {
+                let node = h1;
+                while (node && node !== root) {
+                    if (node.hasAttribute && node.hasAttribute("hidden")) return false;
+                    node = node.parentElement;
+                }
+                return true;
+            });
+        }
+
+        // === Group A — discovered complete pages: exactly one visible h1 ==
+        // Pages requiring real dynamic verification (their raw source ships
+        // with every <h1> hidden by default — the fail-closed gated
+        // pattern) must be registered here explicitly. An unregistered
+        // page discovered in that state fails loudly below, by design: it
+        // means a new gated page shipped without dynamic heading coverage.
+        const registeredGatedPages = {
+            "pages/feedback.html": {
+                label: "pages/feedback.html",
+                loaderModuleUrl: "../js/pages/feedback/loadFeedbackQueue.js",
+                loaderExportName: "loadFeedbackQueue",
+                renderModuleRelativeSpecifier: "./renderFeedbackPage.js",
+                renderExportName: "renderFeedbackPage",
+                denyRoles: [],
+            },
+            "pages/moderation.html": {
+                label: "pages/moderation.html",
+                loaderModuleUrl: "../js/pages/moderation/loadModerationQueue.js",
+                loaderExportName: "loadModerationQueue",
+                renderModuleRelativeSpecifier: "./renderModerationPage.js",
+                renderExportName: "renderModerationPage",
+                denyRoles: [],
+            },
+        };
+
+        const manifest = await (await fetch("generated/pageManifest.json")).json();
+        test(
+            "page manifest was generated and is non-empty (run `node tools/ci/generate-page-manifest.js` if this fails standalone)",
+            Array.isArray(manifest.pages) && manifest.pages.length > 0,
+            `found ${manifest.pages?.length ?? 0} entries`
+        );
+
+        const parser = new DOMParser();
+        const discoveredCategoryPages = [];
+
+        for (const { path, bucket } of manifest.pages) {
+            const fetchPath = `../${path}`;
+            const text = await (await fetch(fetchPath)).text();
+            const doc = parser.parseFromString(text, "text/html");
+            const visible = visibleH1s(doc);
+            const raw = doc.querySelectorAll("h1").length;
+
+            if (bucket === "category") {
+                discoveredCategoryPages.push(path);
+                test(
+                    `[discovered:category] ${path} ships zero static <h1> (dynamic-only, verified in Group B)`,
+                    raw === 0,
+                    `found ${raw} raw h1(s) — a category page should never carry a static heading`
+                );
+                continue;
+            }
+
+            if (visible.length === 1) {
+                test(`[discovered] ${path} has exactly one visible <h1> in its raw source`, true);
+            } else if (visible.length === 0 && raw === 0) {
+                test(
+                    `[discovered] ${path} has a heading path (static or registered-dynamic)`,
+                    false,
+                    `UNCOVERED PAGE: ${path} has zero <h1> anywhere in its raw source and is not a category page — add a static <h1> or register it in registeredGatedPages`
+                );
+            } else if (visible.length === 0 && raw > 0) {
+                const isRegistered = Object.prototype.hasOwnProperty.call(registeredGatedPages, path);
+                test(
+                    `[discovered] ${path}'s fail-closed gated headings are covered by a registered dynamic check`,
+                    isRegistered,
+                    isRegistered ? "" : `UNCOVERED GATED PAGE: ${path} ships ${raw} hidden-by-default <h1>(s) but is not in registeredGatedPages — register it or fix its markup`
+                );
+            } else {
+                test(
+                    `[discovered] ${path} has exactly one visible <h1> in its raw source`,
+                    false,
+                    `found ${visible.length} simultaneously visible h1(s) — real duplicate-heading defect`
+                );
+            }
+        }
+
+        // Consistency guard: every registered gated page must still exist
+        // in the discovered manifest (catches a stale registry entry for a
+        // renamed/deleted file).
+        for (const path of Object.keys(registeredGatedPages)) {
+            test(
+                `registeredGatedPages entry "${path}" matches a discovered page`,
+                manifest.pages.some((p) => p.path === path)
+            );
+        }
+
+        // === Group B — dynamically-rendered category pages ================
+        // renderCategoryPage.js ships its <main data-category="..."> with
+        // zero static h1 — the heading only exists after this module runs.
+        // Mocks its data-layer dependencies; only the synchronous DOM-shell
+        // part (renderShell) matters for heading structure, so the async
+        // builds fetch is left to reject harmlessly into its own
+        // already-handled error branch.
+        {
+            const scratch = document.getElementById("scratch");
+            scratch.innerHTML = `<main id="scratchMain" data-category="pc_build"></main>`;
+
+            const categoriesMockSrc = `
+                export const CATEGORIES = [
+                    { id: "pc_build", slug: "pc-builds", title: "PC Builds", subtitle: "Test subtitle", accent: "#4F7DFF", description: "Test description", highlights: [] }
+                ];
+            `;
+            const buildRepoMockSrc = `export async function getBuildsByCategory() { throw new Error("mocked: no network in test"); }`;
+            const profileRepoMockSrc = `export async function attachBuildProfiles(x) { return x; }`;
+            const mediaRepoMockSrc = `export async function resolveBuildImageUrls(x) { return x; }`;
+            const blueprintFeedMockSrc = `export function BlueprintFeed() {}`;
+            const escapeHtmlUrl = new URL("../js/utils/escapeHtml.js", location.href).href;
+
+            const realCategorySrc = await (await fetch("../js/pages/categories/renderCategoryPage.js")).text();
+            let rewrittenCategorySrc = realCategorySrc;
+            for (const [from, to] of Object.entries({
+                '"../../config/categories.js"': blobUrl(categoriesMockSrc),
+                '"../../repositories/buildRepository.js"': blobUrl(buildRepoMockSrc),
+                '"../../repositories/profileRepository.js"': blobUrl(profileRepoMockSrc),
+                '"../../repositories/mediaRepository.js"': blobUrl(mediaRepoMockSrc),
+                '"../../components/BlueprintFeed.js"': blobUrl(blueprintFeedMockSrc),
+                '"../../utils/escapeHtml.js"': escapeHtmlUrl,
+            })) {
+                rewrittenCategorySrc = rewrittenCategorySrc.replaceAll(from, `"${to}"`);
+            }
+
+            // renderCategoryPage() looks up document.getElementById("main") —
+            // temporarily rename the harness's own scratch container to that
+            // id, matching every real category page's own <main id="main">.
+            document.getElementById("scratchMain").id = "main";
+            const { renderCategoryPage } = await import(blobUrl(rewrittenCategorySrc));
+            await renderCategoryPage("../");
+            const categoryMain = document.getElementById("main");
+
+            const categoryH1s = categoryMain.querySelectorAll("h1");
+            test(
+                "[dynamic] a rendered category page has exactly one <h1>",
+                categoryH1s.length === 1,
+                `found ${categoryH1s.length}`
+            );
+            test(
+                "[dynamic] the category page's <h1> is the category title",
+                categoryH1s[0]?.textContent.trim() === "PC Builds",
+                `got "${categoryH1s[0]?.textContent.trim()}"`
+            );
+
+            categoryMain.id = "scratchMain";
+            scratch.innerHTML = "";
+        }
+
+        // === Group C — auth-gated pages (registeredGatedPages entries) ====
+        // Each registered page ships every <h1> hidden by default in its
+        // raw source (an access-denied one and the real content one), each
+        // inside a container that starts `hidden` —
+        // loadFeedbackQueue.js/loadModerationQueue.js (or a future
+        // registrant's equivalent loader) are responsible for ensuring
+        // exactly one is ever un-hidden. Exercised here in both resolved
+        // states (denied, allowed) against the real fetched markup, not a
+        // hand-written approximation of it.
+        async function testGatedPage(label, pageUrl, loaderModuleUrl, loaderExportName, renderModuleRelativeSpecifier, renderExportName, denyRoles) {
+            const scratch = document.getElementById("scratch");
+            const pageText = await (await fetch(pageUrl)).text();
+            const pageDoc = parser.parseFromString(pageText, "text/html");
+            const mainMarkup = pageDoc.getElementById("main").innerHTML;
+
+            async function runWithRoles(roles) {
+                scratch.innerHTML = "";
+                const container = document.createElement("div");
+                container.innerHTML = mainMarkup;
+                scratch.appendChild(container);
+
+                const authMockSrc = `export async function requireAuth() { return { id: "test-user" }; }`;
+                const communityMockSrc = `export async function getProfileRoles() { return ${JSON.stringify(roles)}; }`;
+                // renderFeedbackPage()/renderModerationPage() themselves
+                // reach real Supabase data (feedbackRepository.js /
+                // moderationRepository.js) once called — irrelevant to
+                // heading structure (verified by source inspection: neither
+                // creates, removes, or touches any <h1>, only reads
+                // #feedbackPageHeading/#moderationOpenHeading by id for
+                // focus management) and already covered by
+                // feedbackQueue.test.html/moderationQueue.test.html. Mocked
+                // to a no-op here so this test never depends on live
+                // network access.
+                const renderMockSrc = `export async function ${renderExportName}() {}`;
+
+                const realSrc = await (await fetch(loaderModuleUrl)).text();
+                let rewritten = realSrc;
+                for (const [from, to] of Object.entries({
+                    '"../../core/auth.js"': blobUrl(authMockSrc),
+                    '"../../repositories/communityRepository.js"': blobUrl(communityMockSrc),
+                    [`"${renderModuleRelativeSpecifier}"`]: blobUrl(renderMockSrc),
+                })) {
+                    rewritten = rewritten.replaceAll(from, `"${to}"`);
+                }
+                const mod = await import(blobUrl(rewritten));
+                await mod[loaderExportName]();
+
+                return visibleH1s(container);
+            }
+
+            const deniedResult = await runWithRoles(denyRoles);
+            test(
+                `[dynamic] ${label}: denied state shows exactly one visible <h1>`,
+                deniedResult.length === 1,
+                `found ${deniedResult.length}`
+            );
+
+            const allowedResult = await runWithRoles(["moderator"]);
+            test(
+                `[dynamic] ${label}: allowed (moderator) state shows exactly one visible <h1>`,
+                allowedResult.length === 1,
+                `found ${allowedResult.length}`
+            );
+
+            scratch.innerHTML = "";
+        }
+
+        for (const [path, entry] of Object.entries(registeredGatedPages)) {
+            await testGatedPage(
+                entry.label,
+                `../${path}`,
+                entry.loaderModuleUrl,
+                entry.loaderExportName,
+                entry.renderModuleRelativeSpecifier,
+                entry.renderExportName,
+                entry.denyRoles
+            );
+        }
+
+        // === Group D — the navbar brand must never be a heading ===========
+        {
+            const supabaseMockSrc = `
+                export const supabase = {
+                    auth: { signOut: async () => ({ error: null }) },
+                    from() {
+                        return { select() { return { eq() { return { single: async () => ({ data: { username: "tester", onboarding_welcomed_at: "2026-01-01T00:00:00Z" } }) }; } }; } };
+                    }
+                };
+            `;
+            const authMockSrc = `export function getCurrentUser() { return Promise.resolve(null); }
+                export function clearCurrentUserCache() {}`;
+            const notificationBellMockSrc = `export async function initNotificationBell() {}`;
+            const onboardingMockSrc = `export function maybeShowWelcome() {}`;
+            const communityMockSrc = `export async function getProfileRoles() { return []; }`;
+            const escapeHtmlUrl = new URL("../js/utils/escapeHtml.js", location.href).href;
+            const iconsUrl = new URL("../js/utils/icons.js", location.href).href;
+
+            const realSrc = await (await fetch("../js/core/layout.js")).text();
+            let rewritten = realSrc;
+            for (const [from, to] of Object.entries({
+                '"./supabase.js"': blobUrl(supabaseMockSrc),
+                '"./auth.js"': blobUrl(authMockSrc),
+                '"./notificationBell.js"': blobUrl(notificationBellMockSrc),
+                '"./onboarding.js"': blobUrl(onboardingMockSrc),
+                '"../repositories/communityRepository.js"': blobUrl(communityMockSrc),
+                '"../utils/escapeHtml.js"': escapeHtmlUrl,
+                '"../utils/icons.js"': iconsUrl,
+            })) {
+                rewritten = rewritten.replaceAll(from, `"${to}"`);
+            }
+
+            const { loadNavbar } = await import(blobUrl(rewritten));
+            await loadNavbar("");
+            await waitFor(() => document.querySelector(".logo") !== null);
+
+            const navbar = document.getElementById("navbar");
+            const logo = navbar.querySelector(".logo");
+            const logoLink = logo?.querySelector("a");
+
+            test("the navbar brand element is not an <h1>...<h6>", logo && !/^H[1-6]$/.test(logo.tagName));
+            test("the navbar brand element carries no role=\"heading\"", logo?.getAttribute("role") !== "heading");
+            test("the navbar brand element carries no aria-level", !logo?.hasAttribute("aria-level"));
+            test("no heading element exists anywhere inside the navbar", navbar.querySelectorAll("h1, h2, h3, h4, h5, h6, [role=\"heading\"]").length === 0);
+            test("the brand is still a real link", logoLink?.tagName === "A");
+            test("the brand link still points at index.html", logoLink?.getAttribute("href") === "index.html");
+            test("the brand link's accessible name is preserved", logoLink?.textContent.trim() === "SPECBOUND");
+            test("the brand link remains in the normal tab order (no explicit tabindex removing it)", logoLink && logoLink.tabIndex !== -1);
+        }
+
+        // === Group E — design-system.html's typography-preview sample =====
+        // No longer an exception: the sample now renders as a plain
+        // .typography-preview-display element (css/pages/design-system/
+        // design-system.css), never a real <h1>, so design-system.html is
+        // fully covered by the generic Group A check above (exactly one
+        // visible <h1>, the real page heading). This group only guards the
+        // specific replacement markup itself against regressing back into
+        // a heading via tag, role, or aria-level.
+        {
+            const text = await (await fetch("../design-system.html")).text();
+            const doc = parser.parseFromString(text, "text/html");
+            const sample = doc.querySelector(".typography-preview-display");
+
+            test("design-system.html's typography-preview sample element exists", sample !== null);
+            test(
+                "the typography-preview sample is not an <h1>...<h6>",
+                sample && !/^H[1-6]$/.test(sample.tagName)
+            );
+            test("the typography-preview sample carries no role=\"heading\"", sample?.getAttribute("role") !== "heading");
+            test("the typography-preview sample carries no aria-level", !sample?.hasAttribute("aria-level"));
+            test(
+                "the typography-preview sample keeps its original text",
+                sample?.textContent.trim() === "Display Heading"
+            );
+        }
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`headingSemantics.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>
