@@ -22,6 +22,7 @@ jobs:
       - run: node tools/ci/check-auth-redirects.js
       - run: node tools/ci/check-security-headers.js
       - run: node tools/ci/check-crawl-policy.js
+      - run: node tools/ci/check-deployment-surface.js
 
   browser-tests:
     name: Browser test suite (tests/*.test.html)
