@@ -9,6 +9,7 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { readdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
@@ -16,6 +17,11 @@ import { chromium } from "playwright";
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(SCRIPT_DIR, "..", "..");
 const PORT = 4173;
+
+// Regenerated fresh on every run so headingSemantics.test.html's discovered
+// page list can never drift from what's actually tracked in git -- see
+// generate-page-manifest.js for the discovery rules.
+execFileSync(process.execPath, [join(SCRIPT_DIR, "generate-page-manifest.js")], { stdio: "inherit" });
 
 const MIME_TYPES = {
     ".html": "text/html; charset=utf-8",

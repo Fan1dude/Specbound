@@ -74,6 +74,18 @@
     gap: var(--space-2);
 }
 
+/* Non-heading preview sample for the type scale's largest step — visually
+   identical to a real <h1> (same 4 properties as css/base/typography.css's
+   `h1` rule, copied explicitly, same reasoning as .logo in
+   css/layout/navbar.css) without being a second document-level heading. */
+.typography-preview-display {
+    font-size: clamp(3rem, 7vw, 5.5rem);
+    font-weight: 800;
+    line-height: .95;
+    letter-spacing: -.05em;
+    color: var(--text);
+}
+
 .form-preview-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
