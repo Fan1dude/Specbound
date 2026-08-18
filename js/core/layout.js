@@ -114,11 +114,11 @@ export async function loadNavbar(pathPrefix = "") {
 
     navbar.innerHTML = `
         <div class="navbar-inner">
-            <h1 class="logo">
+            <div class="logo">
                 <a href="${pathPrefix}index.html">
                     SPECBOUND
                 </a>
-            </h1>
+            </div>
 
             <button
                 class="nav-toggle"

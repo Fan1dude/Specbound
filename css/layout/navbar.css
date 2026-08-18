@@ -52,6 +52,12 @@
        faux-bold instead of a true weight. */
     font-weight: 800;
     letter-spacing: -.05em;
+    /* Was inherited implicitly from css/base/typography.css's global `h1`
+       type-selector rule while this element was a real <h1> (a11y fix,
+       Milestone: heading semantics — the navbar brand must never be the
+       page's h1). Set explicitly now so removing the h1 element type
+       doesn't change the logo's rendered line height. */
+    line-height: .95;
 }
 
 .logo a {
