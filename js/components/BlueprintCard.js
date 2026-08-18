@@ -62,7 +62,7 @@ export function BlueprintCard(build, pathPrefix = "", options = {}) {
             <a
                 class="blueprint-card-image"
                 href="${buildUrl}"
-                aria-label="View ${escapeHtml(build.title || "Untitled Blueprint")}"
+                aria-label="View ${escapeHtml(build.title || "Untitled Blueprint")} — ${escapeHtml(stage.label)}"
             >
                 <img
                     src="${escapeAttribute(imageUrl)}"

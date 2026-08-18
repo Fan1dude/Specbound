@@ -7,6 +7,14 @@
    split, just on the inner element now instead of .footer itself. */
 .footer {
     width: 100%;
+    /* Reserves the real rendered height before loadFooter() (js/core/layout.js)
+       populates it — <footer id="footer"> ships empty in every page's raw HTML, so with
+       no floor here the page jumps once the fetch resolves, measured contributing ~0.2-
+       0.3 CLS on several pages during the 27A PR5 audit (2026-08-15). Value is this
+       breakpoint's real measured height (4-column desktop grid), not a guess; the two
+       media queries below carry the matching values for the 2-column and stacked
+       layouts. Adjust all three together with any future footer content change. */
+    min-height: 228px;
 }
 
 .footer-inner {
@@ -117,6 +125,12 @@
    balanced 2-column grid beside/below it instead of either the full
    4-across desktop row or a single fully-stacked mobile column. */
 @media (max-width: 900px) {
+    .footer {
+        /* 2-column wrap is taller than the 4-column desktop row — see the base
+           .footer rule above for why this reservation exists at all. */
+        min-height: 391px;
+    }
+
     .footer-inner {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -125,6 +139,12 @@
 /* Mobile: brand first (already first in DOM), then every nav group in
    its own full-width column below it. */
 @media (max-width: 560px) {
+    .footer {
+        /* Fully-stacked single column is the tallest layout — see the base .footer
+           rule above for why this reservation exists at all. */
+        min-height: 659px;
+    }
+
     .footer-inner {
         grid-template-columns: 1fr;
         gap: var(--space-3);

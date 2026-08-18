@@ -21,6 +21,13 @@
     top: 0;
     z-index: 1000;
     width: 100%;
+    /* Reserves the shell's real rendered height before loadNavbar() (js/core/layout.js)
+       populates it — <nav id="navbar"> ships empty in every page's raw HTML, so with no
+       floor here the page starts at 0 height and jumps once the fetch resolves, measured
+       contributing ~0.2 CLS on several pages during the 27A PR5 audit (2026-08-15). Value
+       is this breakpoint's real measured height, not a guess; adjust together with any
+       future navbar content change. */
+    min-height: 79px;
     /* Frosted-glass treatment (already existed pre-refresh, kept — just
        repointed from a hardcoded rgba to the new --color-bg value). */
     background: rgba(10, 11, 15, .78);
@@ -157,6 +164,12 @@
    identically to Desktop and only Mobile (700px and below) collapses to
    the hamburger pattern below. */
 @media (max-width: 700px) {
+    .navbar {
+        /* Wrapped mobile layout is taller than desktop's single row — see the base
+           .navbar rule above for why this reservation exists at all. */
+        min-height: 171px;
+    }
+
     .navbar-inner {
         flex-wrap: wrap;
     }

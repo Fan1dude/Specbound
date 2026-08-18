@@ -72,11 +72,24 @@ table {
     border: 0;
 }
 
+/* z-index: 1001, one above .navbar's own 1000 (css/layout/navbar.css) — with
+   equal z-index the two ties on DOM order instead, and .navbar (inserted later
+   in <body> by loadNavbar(), js/core/layout.js) painted over this link whenever
+   it was focused, making it invisible to sighted keyboard users and putting the
+   navbar's own logo link at this link's coordinates for pointer hit-testing —
+   found during PR #27 review (2026-08-15) via a real keyboard Tab producing no
+   visible change and elementFromPoint() resolving to the navbar instead of this
+   link. That first fix repaired visibility and pointer hit-testing only —
+   #main had no tabindex at the time, so activating the link changed
+   location.hash but never moved real keyboard/AT focus off <body>. A second
+   PR #27 follow-up (2026-08-15) closed that gap by giving #main
+   tabindex="-1" (js/core/layout.js's insertSkipLink()); see the #main:focus
+   rule below for why its own focus-visible outline is suppressed. */
 .skip-link {
     position: absolute;
     top: -100%;
     left: 12px;
-    z-index: 1000;
+    z-index: 1001;
     padding: 10px 16px;
     background: var(--surface);
     color: var(--text);
@@ -88,4 +101,16 @@ table {
 
 .skip-link:focus {
     top: 12px;
+}
+
+/* #main only ever receives focus via the skip-link's fragment navigation
+   (tabindex="-1" keeps it out of the normal Tab sequence entirely, so no
+   keyboard user tabbing through the page can land here and lose their own
+   focus indicator) — the sitewide :focus-visible outline rendering as a 2px
+   box around the entire page's main-content landmark reads as broken UI, not
+   a focus indicator, since #main isn't a real interactive control. The
+   scroll-into-view that comes with the jump is the actual, correct visual
+   cue; no separate outline is needed on top of it. */
+#main:focus {
+    outline: none;
 }

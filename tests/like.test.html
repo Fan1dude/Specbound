@@ -218,6 +218,26 @@
 
         mockHasLiked = false;
 
+        // --- Case 10: aria-label includes the visible count (27A PR5) --------
+        // aria-label on the button suppresses #likeCount's text from the
+        // accessible name entirely, so the visible number was previously
+        // announced to no one — flagged by Lighthouse as a name/content
+        // mismatch on the production build page.
+        calls.length = 0;
+
+        await renderLike({ id: "build-3", visibility: "public", likes_count: 5 }, null);
+        test("aria-label includes the current like count", button.getAttribute("aria-label") === "Like this project (5 likes)", button.getAttribute("aria-label"));
+
+        await renderLike({ id: "build-4", visibility: "public", likes_count: 1 }, null);
+        test("aria-label uses singular \"like\" for a count of exactly 1", button.getAttribute("aria-label") === "Like this project (1 like)", button.getAttribute("aria-label"));
+
+        mockHasLiked = false;
+        await renderLike(publicBuild, userA);
+        button.click();
+        await waitFor(() => calls.some(c => c[0] === "setBuildLike"));
+        await waitFor(() => button.disabled === false);
+        test("aria-label stays in sync with the count after a click updates it", button.getAttribute("aria-label") === `Like this project (${countEl.textContent} likes)`, button.getAttribute("aria-label"));
+
         // --- Render + report ------------------------------------------------
         const resultsEl = document.getElementById("results");
         resultsEl.innerHTML = results
