@@ -21,10 +21,20 @@ a from-empty-database dry run revealed `profiles`/`builds`/`build_revisions`
 were never created by any tracked migration (see that file's own header).
 Every other migration still only ever moves forward from `0001`.
 
+**Production verification (2026-08-19)**: `supabase migration list --linked`
+confirmed the remote ledger contains `0000`-`0041` with no gaps, and
+`supabase db push --linked --dry-run` reported the database up to date
+(`upToDate: true`, no pending migrations). No migration or production write
+was performed during that verification session. Every migration below whose
+Status line says "Applied to production — see the verification note above"
+was confirmed by this check; it establishes only that each is currently
+recorded as applied, not the original application date or actor.
+
 ## 0000_baseline_pre_tracked_tables
 
-- **Status**: Proposed — not yet applied to the real project. Depends on
-  nothing (this is the new floor of the migration sequence).
+- **Status**: Applied to production — see the verification note above.
+  Does not by itself close the separate "Known limitation" below. Depends
+  on nothing (this is the new floor of the migration sequence).
 - **File**: `migrations/0000_baseline_pre_tracked_tables.sql`
 - **Rollback**: `rollbacks/0000_baseline_pre_tracked_tables_rollback.sql`
 - **Adds**: `public.profiles`, `public.builds`, `public.build_revisions`,
@@ -278,8 +288,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0007_comments
 
-- **Status**: Proposed — not yet applied. Depends on 0001-0006 being
-  applied first.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0001-0006 being applied first.
 - **File**: `migrations/0007_comments.sql`
 - **Rollback**: `rollbacks/0007_comments_rollback.sql`
 - **Adds**: `comments` (`build_id`, not `revision_id` — comments belong
@@ -310,8 +320,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0008_project_likes
 
-- **Status**: Proposed — not yet applied. Depends on 0001-0007 being
-  applied first.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0001-0007 being applied first.
 - **File**: `migrations/0008_project_likes.sql`
 - **Rollback**: `rollbacks/0008_project_likes_rollback.sql`
 - **Adds**: `likes` (`build_id`, `user_id`, `unique (build_id, user_id)` —
@@ -351,8 +361,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0009_saved_builds
 
-- **Status**: Proposed — not yet applied. Depends on 0001-0008 being
-  applied first.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0001-0008 being applied first.
 - **File**: `migrations/0009_saved_builds.sql`
 - **Rollback**: `rollbacks/0009_saved_builds_rollback.sql`
 - **Adds**: `saved_builds` (`build_id`, `user_id`,
@@ -379,8 +389,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0010_build_view_tracking
 
-- **Status**: Proposed — not yet applied. Depends on 0001-0009 being
-  applied first.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0001-0009 being applied first.
 - **File**: `migrations/0010_build_view_tracking.sql`
 - **Rollback**: `rollbacks/0010_build_view_tracking_rollback.sql`
 - **Adds**: `build_view_cooldowns` — a bounded UPSERT table (one row per
@@ -408,8 +418,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0011_notifications
 
-- **Status**: Proposed — not yet applied. Depends on 0001-0010 being
-  applied first.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0001-0010 being applied first.
 - **File**: `migrations/0011_notifications.sql`
 - **Rollback**: `rollbacks/0011_notifications_rollback.sql`
 - **Adds**: `notifications` (`recipient_id`, `actor_id`, `type` — CHECK
@@ -447,8 +457,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0012_follows
 
-- **Status**: Proposed — not yet applied. Depends on 0001-0011 being
-  applied first.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0001-0011 being applied first.
 - **File**: `migrations/0012_follows.sql`
 - **Rollback**: `rollbacks/0012_follows_rollback.sql`
 - **Adds**: `follows` (`follower_id`, `following_id`,
@@ -476,8 +486,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0013_activity_feed
 
-- **Status**: Proposed — not yet applied. Depends on 0001-0012 being
-  applied first.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0001-0012 being applied first.
 - **File**: `migrations/0013_activity_feed.sql`
 - **Rollback**: `rollbacks/0013_activity_feed_rollback.sql`
 - **Adds**: `public.get_activity_feed(p_scope, p_before_created_at,
@@ -515,8 +525,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0014_storage_visibility_fix
 
-- **Status**: Proposed — not yet applied. Depends on 0001-0013 being
-  applied first.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0001-0013 being applied first.
 - **File**: `migrations/0014_storage_visibility_fix.sql`
 - **Rollback**: `rollbacks/0014_storage_visibility_fix_rollback.sql`
 - **Fixes**: a real privacy gap found in the Milestone 8 audit —
@@ -543,8 +553,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0015_index_hardening
 
-- **Status**: Proposed — not yet applied. Depends on 0001-0014 being
-  applied first.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0001-0014 being applied first.
 - **File**: `migrations/0015_index_hardening.sql`
 - **Rollback**: `rollbacks/0015_index_hardening_rollback.sql`
 - **Adds**: a unique index on `builds.slug` (with a preflight duplicate
@@ -566,8 +576,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0016_security_definer_hygiene
 
-- **Status**: Proposed — not yet applied. Depends on 0001-0015 being
-  applied first.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0001-0015 being applied first.
 - **File**: `migrations/0016_security_definer_hygiene.sql`
 - **Rollback**: `rollbacks/0016_security_definer_hygiene_rollback.sql`
 - **Fixes**: the one gap found by a full re-audit of every custom
@@ -588,8 +598,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0017_storage_rls_hardening
 
-- **Status**: Proposed — not yet applied. Depends on 0001-0016 being
-  applied first.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0001-0016 being applied first.
 - **File**: `migrations/0017_storage_rls_hardening.sql`
 - **Rollback**: `rollbacks/0017_storage_rls_hardening_rollback.sql`
 - **Fixes**: four `storage.objects` policies confirmed live via a direct
@@ -624,8 +634,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0018_legacy_media_linkage_backfill
 
-- **Status**: Proposed — not yet applied. Depends on 0001-0017 being
-  applied first.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0001-0017 being applied first.
 - **File**: `migrations/0018_legacy_media_linkage_backfill.sql`
 - **Rollback**: `rollbacks/0018_legacy_media_linkage_backfill_rollback.sql`
 - **Adds**: 7 `revision_media` rows (`desk`'s 5 revisions, `trap-open`'s
@@ -660,8 +670,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0019_fix_record_build_view_ambiguity
 
-- **Status**: Proposed — not yet applied. Depends on 0001-0018 being
-  applied first.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0001-0018 being applied first.
 - **File**: `migrations/0019_fix_record_build_view_ambiguity.sql`
 - **Rollback**: `rollbacks/0019_fix_record_build_view_ambiguity_rollback.sql`
 - **Fixes**: two confirmed issues in `record_build_view()` (0010), both
@@ -694,7 +704,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0020_components_catalog
 
-- **Status**: Proposed — not yet applied. Depends on 0001-0019.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0001-0019.
 - **File**: `migrations/0020_components_catalog.sql`
 - **Rollback**: `rollbacks/0020_components_catalog_rollback.sql`
 - **REWRITTEN for production compatibility** (2026-08-05): a real `db
@@ -760,7 +771,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0021_component_aliases
 
-- **Status**: Proposed — not yet applied. Depends on 0020.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0020.
 - **File**: `migrations/0021_component_aliases.sql`
 - **Rollback**: `rollbacks/0021_component_aliases_rollback.sql`
 - **REWRITTEN for production compatibility**, same pass and same reason
@@ -791,7 +803,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0022_component_submissions
 
-- **Status**: Proposed — not yet applied. Depends on 0020, 0021.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0020, 0021.
 - **File**: `migrations/0022_component_submissions.sql`
 - **Rollback**: `rollbacks/0022_component_submissions_rollback.sql`
 - **Reviewed (not changed) for production compatibility**, same pass as
@@ -824,7 +837,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0023_retailers_and_retail_variants
 
-- **Status**: Proposed — not yet applied. Depends on 0020.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0020.
 - **File**: `migrations/0023_retailers_and_retail_variants.sql`
 - **Rollback**: `rollbacks/0023_retailers_and_retail_variants_rollback.sql`
 - **Adds**: `retailers`, `component_retail_variants` (a specific buyable
@@ -843,7 +857,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0024_profile_headline_and_featured_build
 
-- **Status**: Proposed — not yet applied. Depends on 0000-0023.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0000-0023.
 - **File**: `migrations/0024_profile_headline_and_featured_build.sql`
 - **Rollback**: `rollbacks/0024_profile_headline_and_featured_build_rollback.sql`
 - **Adds**: two nullable columns on `profiles` — `headline` (short hero
@@ -868,7 +883,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0025_profile_onboarding_welcomed
 
-- **Status**: Proposed — not yet applied. Depends on 0000-0024.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0000-0024.
 - **File**: `migrations/0025_profile_onboarding_welcomed.sql`
 - **Rollback**: `rollbacks/0025_profile_onboarding_welcomed_rollback.sql`
 - **Adds**: one nullable column on `profiles` — `onboarding_welcomed_at`,
@@ -888,7 +904,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0026_social_connections
 
-- **Status**: Proposed — not yet applied. Depends on 0000-0025.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0000-0025.
 - **File**: `migrations/0026_social_connections.sql`
 - **Rollback**: `rollbacks/0026_social_connections_rollback.sql`
 - **Adds**: `social_connections` — a mirror of a builder's connected
@@ -908,7 +925,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0027_profile_roles
 
-- **Status**: Proposed — not yet applied. Depends on 0000-0026.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0000-0026.
 - **File**: `migrations/0027_profile_roles.sql`
 - **Rollback**: `rollbacks/0027_profile_roles_rollback.sql`
 - **Adds**: `profile_roles` (manually-awarded and permission-bearing
@@ -925,7 +943,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0028_moderation
 
-- **Status**: Proposed — not yet applied. Depends on 0000-0027.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0000-0027.
 - **File**: `migrations/0028_moderation.sql`
 - **Rollback**: `rollbacks/0028_moderation_rollback.sql`
 - **Adds**: `content_reports`, `moderation_actions`,
@@ -943,7 +962,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0029_feedback_submissions
 
-- **Status**: Proposed — not yet applied. Depends on 0000-0028.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0000-0028.
 - **File**: `migrations/0029_feedback_submissions.sql`
 - **Rollback**: `rollbacks/0029_feedback_submissions_rollback.sql`
 - **Adds**: `feedback_submissions`, `submit_feedback()`. `user_id` is
@@ -956,7 +976,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0030_beta_invites
 
-- **Status**: Proposed — not yet applied. Depends on 0000-0029.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0000-0029.
 - **File**: `migrations/0030_beta_invites.sql`
 - **Rollback**: `rollbacks/0030_beta_invites_rollback.sql`
 - **Adds**: `beta_invites`, `redeem_beta_invite()`. Narrowed scope per
@@ -970,8 +991,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0031_guidelines_and_notification_types
 
-- **Status**: Proposed — not yet applied. Depends on 0000-0030 (and must
-  be applied together with `0028`, see that entry above).
+- **Status**: Applied to production (together with `0028`, per that entry
+  above) — see the verification note above. Depends on 0000-0030.
 - **File**: `migrations/0031_guidelines_and_notification_types.sql`
 - **Rollback**: `rollbacks/0031_guidelines_and_notification_types_rollback.sql`
 - **Adds**: `profiles.guidelines_accepted_at` (one nullable timestamp).
@@ -988,7 +1009,8 @@ Every other migration still only ever moves forward from `0001`.
 
 ## 0032_restrict_profile_roles_visibility
 
-- **Status**: Proposed — not yet applied. Depends on 0000-0031.
+- **Status**: Applied to production — see the verification note above.
+  Depends on 0000-0031.
 - **File**: `migrations/0032_restrict_profile_roles_visibility.sql`
 - **Rollback**: `rollbacks/0032_restrict_profile_roles_visibility_rollback.sql`
 - **Fixes**: a data-exposure finding from the Milestone 20 Builder
