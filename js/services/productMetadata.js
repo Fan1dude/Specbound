@@ -1,4 +1,5 @@
 import { supabase } from "../core/supabase.js";
+import { isSafeHttpUrl } from "../utils/safeUrl.js";
 
 // Client wrapper for the supabase/functions/product-metadata Edge
 // Function (Milestone 23). supabase.functions.invoke() automatically
@@ -30,14 +31,10 @@ export async function fetchProductMetadata(url) {
     // A same-shape "invalid" outcome as the edge function's own scheme/
     // parse check (spec §5.2 steps 1-2), caught client-side so an
     // obviously malformed URL never spends a network round trip (or a
-    // rate-limit slot) just to be told it's malformed.
-    let parsed;
-    try {
-        parsed = new URL(url);
-    } catch {
-        throw new Error(REASON_MESSAGES.invalid);
-    }
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    // rate-limit slot) just to be told it's malformed. isSafeHttpUrl()
+    // (js/utils/safeUrl.js) is this exact check, extracted so this file
+    // and js/utils/affiliateLink.js share one implementation.
+    if (!isSafeHttpUrl(url)) {
         throw new Error(REASON_MESSAGES.invalid);
     }
 

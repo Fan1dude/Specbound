@@ -13,8 +13,11 @@
        0.3 CLS on several pages during the 27A PR5 audit (2026-08-15). Value is this
        breakpoint's real measured height (4-column desktop grid), not a guess; the two
        media queries below carry the matching values for the 2-column and stacked
-       layouts. Adjust all three together with any future footer content change. */
-    min-height: 228px;
+       layouts. Adjust all three together with any future footer content change.
+       Bumped 228px -> 298px when the Amazon Associates disclosure row
+       (.footer-disclosure) was added -- re-measured via Playwright against
+       this exact markup, not estimated. */
+    min-height: 298px;
 }
 
 .footer-inner {
@@ -49,6 +52,20 @@
     margin-top: var(--space-1);
     font-size: var(--font-size-xs);
     color: var(--text-muted);
+}
+
+/* Required Amazon Associates disclosure (js/core/layout.js's
+   loadFooter()) -- its own full-width row below the brand/nav columns at
+   every breakpoint, not squeezed into one column. --text-secondary (not
+   --text-muted) so it reads as a real disclosure, not throwaway metadata
+   like .footer-version above. */
+.footer-disclosure {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: var(--font-size-xs);
 }
 
 /* Each nav group (Platform/Builders/Legal) is its own <nav> landmark —
@@ -127,8 +144,9 @@
 @media (max-width: 900px) {
     .footer {
         /* 2-column wrap is taller than the 4-column desktop row — see the base
-           .footer rule above for why this reservation exists at all. */
-        min-height: 391px;
+           .footer rule above for why this reservation exists at all. Bumped
+           391px -> 461px alongside the base rule's own bump (see above). */
+        min-height: 461px;
     }
 
     .footer-inner {
@@ -141,8 +159,9 @@
 @media (max-width: 560px) {
     .footer {
         /* Fully-stacked single column is the tallest layout — see the base .footer
-           rule above for why this reservation exists at all. */
-        min-height: 659px;
+           rule above for why this reservation exists at all. Bumped 659px ->
+           721px alongside the base rule's own bump (see above). */
+        min-height: 721px;
     }
 
     .footer-inner {

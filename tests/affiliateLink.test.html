@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>renderExternalLink() — affiliate link disclosure</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>renderExternalLink() — affiliate link disclosure</h1>
+    <p>
+        Covers js/utils/affiliateLink.js — the one shared way any future
+        Specbound-controlled affiliate link should be rendered. isAffiliate
+        must be an explicit, per-call opt-in: this file never marks a link
+        as affiliate by inspecting its URL, since Specbound also contains
+        ordinary user-submitted Amazon links (resources, setup-inventory
+        product links) that are not under Specbound's control and must
+        never be labeled as if they were.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="stage"></div>
+
+    <script type="module">
+        import { renderExternalLink, AFFILIATE_LINK_LABEL_TEXT } from "../js/utils/affiliateLink.js";
+
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        const stage = document.getElementById("stage");
+
+        // --- The exact required label text --------------------------------
+        test('AFFILIATE_LINK_LABEL_TEXT is exactly "Affiliate link" (not a vague word like "Sponsored" alone)', AFFILIATE_LINK_LABEL_TEXT === "Affiliate link", AFFILIATE_LINK_LABEL_TEXT);
+
+        // --- Case 1: an explicitly marked affiliate link -------------------
+        stage.innerHTML = renderExternalLink({
+            url: "https://www.amazon.com/dp/EXAMPLE123",
+            text: "RTX 4080 on Amazon",
+            isAffiliate: true
+        });
+
+        {
+            const link = stage.querySelector("a");
+            const label = stage.querySelector(".affiliate-link-label");
+
+            test("marked affiliate link renders an <a> tag", link !== null);
+            test("marked affiliate link's visible text is unchanged by the label (accessible name stays the product text)", link?.textContent.trim() === "RTX 4080 on Amazon", link?.textContent);
+            test('marked affiliate link renders a visible "Affiliate link" label', label !== null && label.textContent.trim() === "Affiliate link", label?.textContent);
+
+            // Visible without hovering/opening anything: real rendered size,
+            // not display:none/visibility:hidden/zero-size, and not inside
+            // a title-attribute-only tooltip.
+            const labelStyle = label && getComputedStyle(label);
+            test(
+                "label is visible without hovering (real non-zero rendered size, not display:none/visibility:hidden)",
+                Boolean(label && labelStyle.display !== "none" && labelStyle.visibility !== "hidden" && label.getBoundingClientRect().width > 0 && label.getBoundingClientRect().height > 0),
+                label ? `${labelStyle.display}/${labelStyle.visibility}/${JSON.stringify(label.getBoundingClientRect())}` : "no label"
+            );
+            test("label is not hidden behind a title-attribute tooltip (it's real visible text, not an attribute)", !link.hasAttribute("title") || label !== null);
+
+            // Accessible association: aria-describedby on the link points at
+            // the label's real id, matching this app's existing
+            // aria-describedby convention (js/pages/build/renderComments.js's
+            // commentFormHint, pages/build/build.html's likeHint/saveHint).
+            const describedBy = link?.getAttribute("aria-describedby");
+            test("link has an aria-describedby attribute", Boolean(describedBy));
+            test("aria-describedby points at the visible label's real id (not a dangling reference)", Boolean(describedBy && document.getElementById(describedBy) === label));
+
+            // Dark-theme readability: real computed color/background differ,
+            // text isn't literally invisible against its own background.
+            test(
+                "label text color differs from its own background (readable, not invisible)",
+                Boolean(labelStyle && labelStyle.color !== labelStyle.backgroundColor),
+                labelStyle ? `${labelStyle.color} on ${labelStyle.backgroundColor}` : ""
+            );
+
+            // Responsive: the wrapper doesn't force a fixed width that would
+            // overflow a narrow mobile column — it's an inline-flex that can
+            // wrap, not a block with a hardcoded px width.
+            const wrapper = stage.querySelector(".affiliate-link");
+            const wrapperStyle = wrapper && getComputedStyle(wrapper);
+            test("wrapper uses inline-flex with wrap allowed (no fixed width to overflow at mobile widths)", Boolean(wrapperStyle && wrapperStyle.display === "inline-flex" && wrapperStyle.flexWrap === "wrap"), wrapperStyle?.display + "/" + wrapperStyle?.flexWrap);
+        }
+
+        // --- URL-safety behavior: matches this app's existing external-link
+        // convention (target="_blank" rel="noopener noreferrer" — see
+        // renderResources.js/renderSetupInventory.js) -------------------------
+        {
+            const link = stage.querySelector("a");
+            test('affiliate link opens in a new tab (target="_blank")', link?.getAttribute("target") === "_blank", link?.getAttribute("target"));
+            test('affiliate link carries rel="noopener noreferrer" (this app\'s existing external-link security convention)', link?.getAttribute("rel") === "noopener noreferrer", link?.getAttribute("rel"));
+            test("affiliate link does NOT add nofollow (not part of this app's established link policy — see js/utils/affiliateLink.js's own comment)", !link?.getAttribute("rel")?.includes("nofollow"));
+            test("affiliate link does NOT add sponsored (not part of this app's established link policy)", !link?.getAttribute("rel")?.includes("sponsored"));
+        }
+
+        // --- Case 2: an ordinary (non-affiliate) link, including one that
+        // happens to point at amazon.com — the label must NOT appear just
+        // because the URL contains "amazon" ----------------------------------
+        stage.innerHTML = renderExternalLink({
+            url: "https://www.amazon.com/dp/OTHERPRODUCT",
+            text: "A user-submitted Amazon link",
+            isAffiliate: false
+        });
+
+        {
+            const link = stage.querySelector("a");
+            const label = stage.querySelector(".affiliate-link-label");
+            test("ordinary Amazon link (isAffiliate: false) renders no affiliate label at all", label === null, stage.innerHTML);
+            test("ordinary Amazon link has no aria-describedby (nothing to associate)", !link?.hasAttribute("aria-describedby"));
+            test("ordinary Amazon link still gets the standard external-link security attributes", link?.getAttribute("rel") === "noopener noreferrer" && link?.getAttribute("target") === "_blank");
+        }
+
+        // isAffiliate defaults to false when omitted entirely — the label is
+        // opt-in, not opt-out, so a call site that forgets the option never
+        // accidentally mislabels a link.
+        stage.innerHTML = renderExternalLink({ url: "https://example.com/", text: "Example" });
+        test("isAffiliate defaults to false (label is opt-in, never accidental)", stage.querySelector(".affiliate-link-label") === null);
+
+        // --- URL/text escaping: same convention as every other render
+        // function in this app (escapeHtml/escapeAttribute) -- an
+        // attacker-controlled or malformed value can't break out of the
+        // attribute or inject markup. --------------------------------------
+        stage.innerHTML = renderExternalLink({
+            url: 'https://example.com/?x="><scr' + 'ipt>window.__xss=1</scr' + 'ipt>',
+            text: '<img src=x onerror="window.__xss=2">',
+            isAffiliate: true
+        });
+        {
+            const link = stage.querySelector("a");
+            test("a malicious/malformed URL is escaped in the href attribute, not left able to break out of it", link?.getAttribute("href")?.startsWith("https://example.com/?x="), link?.getAttribute("href"));
+            test("malicious link text is escaped, not rendered as a live element", stage.querySelector("img") === null);
+            test("no injected script ever executed", window.__xss === undefined);
+        }
+
+        // --- URL-protocol safety: HTML-attribute escaping alone does NOT
+        // stop a syntactically-valid javascript:/data: URL from becoming a
+        // live, clickable href -- neither scheme needs a quote or angle
+        // bracket to work, so escapeAttribute() has nothing to catch there.
+        // renderExternalLink() must independently reject anything that
+        // isn't an absolute http:/https: URL (js/utils/safeUrl.js,
+        // isSafeHttpUrl()) and neutralize it: no <a>, no href, no
+        // affiliate label -- just the (still-escaped) text as inert
+        // content. Each case checked for both isAffiliate: false and
+        // isAffiliate: true, since an unsafe URL must never sneak through
+        // just because it was also marked affiliate. --------------------------
+        const unsafeUrls = [
+            ["javascript: URL", 'javascript:alert(document.cookie)'],
+            ["data: URL", "data:text/html,<scr" + "ipt>window.__xss=3</scr" + "ipt>"],
+            ["malformed / non-absolute URL", "not a url"],
+            ["empty string", ""],
+            // No base is ever passed to `new URL()` in isSafeHttpUrl(), so a
+            // bare protocol-relative URL fails to parse as absolute and is
+            // rejected the same way a malformed one is -- this app does not
+            // explicitly support protocol-relative URLs anywhere.
+            ["protocol-relative URL (unsupported)", "//evil.example.com/payload"],
+            ["vbscript: URL", "vbscript:msgbox(1)"],
+            ["file: URL", "file:///etc/passwd"]
+        ];
+
+        for (const [label, badUrl] of unsafeUrls) {
+            for (const isAffiliate of [false, true]) {
+                stage.innerHTML = renderExternalLink({ url: badUrl, text: `Unsafe: ${label}`, isAffiliate });
+                const link = stage.querySelector("a");
+                const label2 = stage.querySelector(".affiliate-link-label");
+
+                test(`${label} (isAffiliate: ${isAffiliate}) renders no <a> element at all`, link === null, stage.innerHTML);
+                test(`${label} (isAffiliate: ${isAffiliate}) renders no affiliate label (nothing to disclose without a real link)`, label2 === null, stage.innerHTML);
+                test(`${label} (isAffiliate: ${isAffiliate}) still renders the escaped text as inert content, not silently dropped`, stage.textContent.includes(`Unsafe: ${label}`), stage.textContent);
+            }
+        }
+
+        // A real, safe https: URL with an embedded data:/javascript:-looking
+        // substring in its query string must NOT be rejected — the check is
+        // on the URL's own scheme, not a substring/keyword scan of the
+        // whole string.
+        stage.innerHTML = renderExternalLink({ url: "https://example.com/?next=javascript:alert(1)", text: "Safe host, suspicious query" });
+        test("a safe https: URL is not rejected just because its query string contains javascript:/data: text", stage.querySelector("a") !== null, stage.innerHTML);
+
+        // The exact same rule also protects the affiliate-marked path: an
+        // unsafe URL can't be laundered into looking like a legitimate,
+        // disclosed affiliate link just by setting isAffiliate: true.
+        stage.innerHTML = renderExternalLink({ url: "javascript:alert(1)", text: "Fake affiliate link", isAffiliate: true });
+        test("isAffiliate: true cannot make an unsafe URL render as a real, disclosed link", stage.querySelector("a") === null && stage.querySelector(".affiliate-link-label") === null, stage.innerHTML);
+
+        // --- className passthrough: existing call sites (renderResources.js,
+        // renderSetupInventory.js) rely on a class name landing on the <a>
+        // itself for their own CSS -------------------------------------------
+        stage.innerHTML = renderExternalLink({ url: "https://example.com/", text: "Styled", className: "resource-link", isAffiliate: false });
+        test("className lands on the <a> element itself", stage.querySelector("a.resource-link") !== null);
+
+        stage.innerHTML = renderExternalLink({ url: "https://example.com/", text: "Styled affiliate", className: "resource-link", isAffiliate: true });
+        test("className still lands on the <a> when the link is also marked affiliate", stage.querySelector("a.resource-link") !== null);
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`affiliateLink.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

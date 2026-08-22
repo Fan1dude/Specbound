@@ -53,7 +53,15 @@
         `;
 
         const realSrc = await (await fetch("../js/services/productMetadata.js")).text();
-        const rewritten = realSrc.replaceAll('"../core/supabase.js"', `"${blobUrl(supabaseSrc)}"`);
+        // isSafeHttpUrl has no imports/network/auth of its own — real,
+        // unmocked file, same convention as escapeHtml.js/icons.js in
+        // tests/homeFooterLinks.test.html. Blob module content has no
+        // directory context of its own, so this relative specifier must be
+        // rewritten to an absolute URL, same as every other rewrite here.
+        const safeUrlUrl = new URL("../js/utils/safeUrl.js", location.href).href;
+        const rewritten = realSrc
+            .replaceAll('"../core/supabase.js"', `"${blobUrl(supabaseSrc)}"`)
+            .replaceAll('"../utils/safeUrl.js"', `"${safeUrlUrl}"`);
         const { fetchProductMetadata } = await import(blobUrl(rewritten));
 
         const GENERIC_FALLBACK = "We couldn't fill in details from this link. You can enter them manually below.";
