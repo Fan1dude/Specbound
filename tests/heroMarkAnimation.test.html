@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Homepage hero mark — clockwise tile-highlight loop</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Homepage hero mark — clockwise tile-highlight loop</h1>
+    <p>
+        Covers index.html's .hero-mark (the prominent homepage logo only —
+        not the navbar/footer wordmark, which has no SVG at all) and
+        css/pages/home/home.css's hero-mark-highlight keyframes: 5 real
+        traced pieces (not the 4 a naive quadrant reading would assume —
+        see index.html's own comment), each getting a ~600ms clockwise
+        turn in a 3s loop, exactly one at peak brightness at any instant,
+        fully disabled under prefers-reduced-motion.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="fixture"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        // --- Static structure: real index.html, untouched geometry ----------
+        const homeHtml = await (await fetch("../index.html")).text();
+        const homeDoc = new DOMParser().parseFromString(homeHtml, "text/html");
+
+        const heroVisual = homeDoc.querySelector(".hero-visual");
+        const heroMark = heroVisual?.querySelector(".hero-mark");
+        const tiles = [...(heroMark?.querySelectorAll(".hero-mark-tile") || [])];
+
+        test(".hero-visual exists and stays aria-hidden (decorative, unaffected by this change)", heroVisual?.getAttribute("aria-hidden") === "true");
+        test(".hero-mark is a real inline <svg> (not an <img>, canvas, GIF, or video)", heroMark?.tagName === "svg");
+        test("exactly 5 real traced tile pieces exist (not 4 — see index.html's own comment on why)", tiles.length === 5, String(tiles.length));
+
+        // Exact byte-for-byte geometry check — proves the animation work
+        // never touched a single coordinate, only added color/glow.
+        const EXPECTED_PATHS = [
+            "M 70.12 50.43 L 51.87 61.0 L 50.59 63.24 L 90.62 89.33 L 91.58 103.26 L 89.17 109.19 L 89.17 134.48 L 92.38 139.45 L 97.66 140.09 L 124.88 124.08 L 128.72 119.91 L 130.0 116.07 L 129.84 85.49 L 125.84 79.89 L 77.17 51.71 Z",
+            "M 80.53 115.59 L 75.89 116.07 L 65.0 122.32 L 61.16 122.16 L 54.75 118.95 L 50.75 119.43 L 47.07 122.32 L 45.79 126.16 L 45.79 143.61 L 46.43 146.49 L 48.83 149.69 L 61.0 157.06 L 66.28 157.7 L 69.64 156.58 L 82.13 148.57 L 84.05 143.61 L 84.05 120.55 L 82.93 117.35 Z",
+            "M 3.2 95.26 L 0.48 99.9 L 0.48 117.19 L 2.56 122.0 L 31.38 139.77 L 35.38 140.25 L 37.94 139.13 L 40.67 134.64 L 40.67 114.15 L 38.9 110.15 L 11.53 93.5 L 6.72 93.34 Z",
+            "M 64.36 0.0 L 58.92 1.12 L 5.12 33.94 L 0.0 42.43 L 0.32 73.97 L 2.24 78.13 L 55.07 108.87 L 71.72 100.54 L 75.41 96.54 L 36.98 73.0 L 35.54 56.35 L 38.58 51.71 L 61.48 37.78 L 74.29 40.67 L 81.81 35.86 L 82.45 11.05 L 79.57 7.68 Z",
+            "M 90.78 19.53 L 88.53 24.01 L 88.53 44.51 L 90.3 48.67 L 118.15 65.64 L 121.83 66.12 L 126.96 63.88 L 129.04 61.32 L 130.0 58.44 L 130.0 40.5 L 128.4 36.5 L 125.84 34.1 L 98.46 18.25 L 94.14 17.77 Z"
+        ];
+        tiles.forEach((tile, i) => {
+            test(`tile ${i} geometry is byte-for-byte unchanged`, tile.getAttribute("d") === EXPECTED_PATHS[i], tile.getAttribute("d"));
+        });
+        test("viewBox is unchanged (no dimension/proportion change)", heroMark?.getAttribute("viewBox") === "-10 -10 150 177.7", heroMark?.getAttribute("viewBox"));
+
+        // --- Static CSS-source checks ----------------------------------------
+        const cssSrc = await (await fetch("../css/pages/home/home.css")).text();
+
+        test("the old hero-mark-spiral animation is fully gone, not just orphaned", !cssSrc.includes("hero-mark-spiral"));
+        test("hero-mark-highlight keyframes exist", /@keyframes\s+hero-mark-highlight\s*\{/.test(cssSrc));
+        test(".hero-mark-tile's no-preference rule references hero-mark-highlight as its second (looping) animation", /animation-name:\s*hero-mark-enter,\s*hero-mark-highlight/.test(cssSrc));
+        test("loop duration is 3s (5 tiles × 600ms)", /animation-duration:\s*\.5s,\s*3s/.test(cssSrc));
+        test("timing is linear (no eased pause/jump at handoff)", /animation-timing-function:\s*var\(--ease-precise\),\s*linear/.test(cssSrc));
+        test("per-tile stagger is 600ms with a 900ms base offset", /animation-delay:\s*calc\(var\(--i\)\s*\*\s*90ms\),\s*calc\(900ms\s*\+\s*var\(--i\)\s*\*\s*600ms\)/.test(cssSrc));
+        test("the loop is infinite", /animation-iteration-count:\s*1,\s*infinite/.test(cssSrc));
+
+        // Reduced motion: the only place `.hero-mark-tile` gets an
+        // animation-name at all is inside the no-preference query — proven
+        // by counting real rule occurrences, not just trusting a comment.
+        const animationNameOccurrences = (cssSrc.match(/\.hero-mark-tile\s*\{[^}]*animation-name/g) || []).length;
+        test("exactly one .hero-mark-tile rule sets animation-name anywhere in this file", animationNameOccurrences === 1, String(animationNameOccurrences));
+        test("no separate prefers-reduced-motion: reduce block re-adds any hero-mark animation", !/prefers-reduced-motion:\s*reduce\)[^]*?hero-mark/.test(cssSrc));
+
+        // Reused tokens only — no new/duplicate hard-coded brand color.
+        const highlightBlock = cssSrc.match(/@keyframes hero-mark-highlight\s*\{[^]*?\n\}/)?.[0] || "";
+        test("highlight color reuses the existing --primary token (no new color introduced)", highlightBlock.includes("var(--primary)"));
+        test("resting color reuses the existing --primary-strong token", highlightBlock.includes("var(--primary-strong)"));
+        test("the glow is a filter: drop-shadow (no box-shadow/outline that could add a layout box)", /filter:\s*drop-shadow\(/.test(highlightBlock));
+        test("glow color is the same reused --primary token, not a new hex/rgb value", /drop-shadow\([^)]*var\(--primary\)\)/.test(highlightBlock));
+
+        // --- No JS timer / canvas / raster replacement -----------------------
+        test("home.css never uses setInterval/setTimeout to drive this animation", !/setInterval|setTimeout/.test(cssSrc));
+        const homeAppSrc = await (await fetch("../js/pages/home/app.js")).text().catch(() => "");
+        test("js/pages/home/app.js has no JS-driven timer animating hero-mark tiles", !/hero-mark/.test(homeAppSrc) && !/setInterval/.test(homeAppSrc));
+        test("no <canvas> element anywhere near the hero mark", !homeHtml.includes("<canvas"));
+        test("no GIF/video reference for the hero mark", !/hero-mark[^>]*\.(gif|mp4|webm)/i.test(homeHtml));
+
+        // --- Shared navbar/footer logo instances are untouched ----------------
+        const layoutSrc = await (await fetch("../js/core/layout.js")).text();
+        test("js/core/layout.js (navbar + footer) has zero references to hero-mark — this animation cannot reach it", !layoutSrc.includes("hero-mark"));
+        test("navbar logo is still the plain text wordmark, not an SVG mark", layoutSrc.includes('<div class="logo">'));
+
+        // --- Live render: real browser-computed animation timing -------------
+        // Inject the real fragment + wait past the one-time entrance
+        // animation (max delay 4*90ms + 500ms duration ~= 860ms) before
+        // inspecting the infinite loop's own computed timing.
+        document.getElementById("fixture").innerHTML = heroVisual.outerHTML;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        const liveTiles = [...document.querySelectorAll("#fixture .hero-mark-tile")];
+        test("live-rendered fixture has all 5 tiles", liveTiles.length === 5, String(liveTiles.length));
+
+        const highlightAnimations = liveTiles.map(tile =>
+            tile.getAnimations().find(a => a.animationName === "hero-mark-highlight")
+        );
+
+        test("every tile has a real, running hero-mark-highlight animation", highlightAnimations.every(a => a && a.playState === "running"), JSON.stringify(highlightAnimations.map(a => a?.playState)));
+
+        const timings = highlightAnimations.map(a => a.effect.getComputedTiming());
+
+        test("computed duration is exactly 3000ms for every tile", timings.every(t => t.duration === 3000), JSON.stringify(timings.map(t => t.duration)));
+        test("iterations is Infinity for every tile", timings.every(t => t.iterations === Infinity));
+
+        const iValues = liveTiles.map(tile => Number(getComputedStyle(tile).getPropertyValue("--i").trim()));
+        test("the 5 tiles carry --i values 0 through 4 (clockwise DOM order, matching the real piece geometry)", JSON.stringify([...iValues].sort()) === JSON.stringify([0, 1, 2, 3, 4]), JSON.stringify(iValues));
+
+        const expectedDelays = iValues.map(i => 900 + i * 600);
+        const actualDelays = timings.map(t => t.delay);
+        // Sub-millisecond tolerance for browser calc()/float rounding
+        // (e.g. 2700 vs 2699.9999999999995) — not a real timing difference.
+        test(
+            "each tile's computed delay matches 900ms + its own --i * 600ms (within 0.01ms)",
+            actualDelays.every((d, idx) => Math.abs(d - expectedDelays[idx]) < 0.01),
+            JSON.stringify({ actualDelays, expectedDelays })
+        );
+
+        // Only one tile ever at full peak brightness at a time: mathematically,
+        // no two distinct tiles' peak instants (delay + 300ms local peak,
+        // mod the 3000ms loop) ever coincide.
+        const peakTimesMod3000 = expectedDelays.map(d => (d + 300) % 3000);
+        const uniquePeakTimes = new Set(peakTimesMod3000);
+        test("all 5 tiles peak at distinct moments within the loop — never two at once", uniquePeakTimes.size === 5, JSON.stringify(peakTimesMod3000));
+
+        // Confirm the actual keyframe shape: peak fill only at the 10%
+        // offset, resting fill at 0%/20%/100%, nothing else.
+        const sampleKeyframes = highlightAnimations[0].effect.getKeyframes();
+        const offsets = sampleKeyframes.map(k => k.offset);
+        test("keyframes include the expected offsets (0, 0.1, 0.2, 1)", [0, 0.1, 0.2, 1].every(o => offsets.includes(o)), JSON.stringify(offsets));
+
+        const peakFrame = sampleKeyframes.find(k => k.offset === 0.1);
+        const restFrames = sampleKeyframes.filter(k => k.offset !== 0.1);
+        test("only the 10% offset carries the highlighted fill — every other offset shares the same resting fill", restFrames.every(k => k.fill === restFrames[0].fill) && peakFrame.fill !== restFrames[0].fill, JSON.stringify(sampleKeyframes.map(k => [k.offset, k.fill])));
+
+        // --- Regression coverage for the live PR-preview bug (2026-08-22):
+        // the active tile appeared to fade out/disappear instead of glowing.
+        // Root cause: fill-opacity was animated in the same keyframe as
+        // filter — unreliable across real (non-headless) browser engines
+        // even though the delta was small (.92 -> 1). Fix: hero-mark-highlight
+        // must NEVER declare opacity or fill-opacity at any offset — only
+        // fill and filter. These checks explicitly reject any regression
+        // back to animating either property in this keyframe. -----------------
+        test(
+            "hero-mark-highlight's keyframe block never declares fill-opacity at any offset",
+            !/fill-opacity/.test(highlightBlock),
+            highlightBlock
+        );
+        test(
+            "hero-mark-highlight's keyframe block never declares opacity at any offset",
+            !/(?<!fill-)\bopacity\s*:/.test(highlightBlock),
+            highlightBlock
+        );
+        test(
+            "no live keyframe object for hero-mark-highlight carries an opacity or fillOpacity property at all",
+            sampleKeyframes.every(k => !("opacity" in k) && !("fillOpacity" in k)),
+            JSON.stringify(sampleKeyframes)
+        );
+
+        // Scrub through the ENTIRE 3000ms loop in fine steps and confirm no
+        // tile's real computed opacity or fill-opacity ever moves from its
+        // constant resting value at any instant — not just at the 5 declared
+        // "peak" moments. This is the direct regression test for "all five
+        // logo pieces must remain continuously visible."
+        const BASE_FILL_OPACITY = getComputedStyle(liveTiles[0]).fillOpacity;
+        let everyInstantFullyVisible = true;
+        let everyInstantConstantFillOpacity = true;
+        const violations = [];
+
+        for (let t = 0; t <= 3000; t += 150) {
+            for (const tile of liveTiles) {
+                const anim = tile.getAnimations().find(a => a.animationName === "hero-mark-highlight");
+                const delay = anim.effect.getComputedTiming().delay;
+                anim.pause();
+                anim.currentTime = delay + t;
+            }
+            const frameState = liveTiles.map(tile => {
+                const s = getComputedStyle(tile);
+                return { opacity: s.opacity, fillOpacity: s.fillOpacity };
+            });
+            if (frameState.some(s => s.opacity !== "1")) {
+                everyInstantFullyVisible = false;
+                violations.push({ t, frameState });
+            }
+            if (frameState.some(s => s.fillOpacity !== BASE_FILL_OPACITY)) {
+                everyInstantConstantFillOpacity = false;
+                violations.push({ t, frameState });
+            }
+        }
+        // Resume only the highlight animation — never touch hero-mark-enter
+        // (a stray .play() on it here previously reset its already-finished,
+        // fill-mode:both state, making every later opacity read come back 0;
+        // that was a bug in this test's own cleanup, not in the product).
+        liveTiles.forEach(tile => {
+            tile.getAnimations().find(a => a.animationName === "hero-mark-highlight")?.play();
+        });
+
+        test("every tile's opacity stays at 1 across the entire loop — no tile ever fades or disappears", everyInstantFullyVisible, JSON.stringify(violations.slice(0, 3)));
+        test(`every tile's fill-opacity stays constant at ${BASE_FILL_OPACITY} across the entire loop — never animated`, everyInstantConstantFillOpacity, JSON.stringify(violations.slice(0, 3)));
+
+        // At each of the 5 real peak instants: every tile still visible,
+        // and exactly one shows the highlighted fill color.
+        let allPeaksClean = true;
+        const peakDetail = [];
+        for (let target = 0; target < 5; target++) {
+            for (const tile of liveTiles) {
+                const i = Number(getComputedStyle(tile).getPropertyValue("--i").trim());
+                const anim = tile.getAnimations().find(a => a.animationName === "hero-mark-highlight");
+                const delay = anim.effect.getComputedTiming().delay;
+                anim.pause();
+                anim.currentTime = delay + ((i === target) ? 300 : 1500);
+            }
+            const state = liveTiles.map(tile => ({
+                i: Number(getComputedStyle(tile).getPropertyValue("--i").trim()),
+                opacity: getComputedStyle(tile).opacity,
+                fillOpacity: getComputedStyle(tile).fillOpacity,
+                fill: getComputedStyle(tile).fill
+            }));
+            const allVisible = state.every(s => s.opacity === "1" && parseFloat(s.fillOpacity) > 0);
+            const distinctFills = new Set(state.map(s => s.fill));
+            // Exactly 2 distinct fill colors present (muted + highlighted),
+            // and exactly one tile (the targeted one, by its own --i) carries
+            // the minority (highlighted) color.
+            const targetFill = state.find(s => s.i === target).fill;
+            const exactlyOneHighlighted = distinctFills.size === 2
+                && state.filter(s => s.fill === targetFill).length === 1;
+            if (!allVisible || !exactlyOneHighlighted) {
+                allPeaksClean = false;
+                peakDetail.push({ target, state });
+            }
+        }
+        liveTiles.forEach(tile => {
+            tile.getAnimations().find(a => a.animationName === "hero-mark-highlight")?.play();
+        });
+        test("at every one of the 5 peak instants, all tiles stay visible and exactly one shows the highlighted color", allPeaksClean, JSON.stringify(peakDetail));
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`heroMarkAnimation.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

@@ -134,12 +134,16 @@
                          read var(--i) all fell back to the same value, so
                          every tile animated in lockstep instead of
                          staggered). See css/pages/home/home.css's
-                         hero-mark-enter/hero-mark-spiral keyframes, which
-                         stagger every piece's opacity/scale off this single
-                         number. No piece ever translates, rotates, or
-                         leaves its exact resting position: the motion is
-                         opacity + scale only, so the mark itself never
-                         appears to spin as one object. -->
+                         hero-mark-enter/hero-mark-highlight keyframes,
+                         which stagger every piece's entrance and
+                         highlight timing off this single number.
+                         hero-mark-enter is opacity + scale only (one pass,
+                         on page load); hero-mark-highlight (the infinite
+                         loop) is fill color + a drop-shadow glow only —
+                         no piece ever translates, rotates, scales, or
+                         leaves its exact resting position, so the mark
+                         itself never appears to spin or resize as one
+                         object, only the highlighted tile visibly changes. -->
                     <svg class="hero-mark" viewBox="-10 -10 150 177.7" xmlns="http://www.w3.org/2000/svg">
                         <g class="hero-mark-tiles">
                             <path class="hero-mark-tile" d="M 70.12 50.43 L 51.87 61.0 L 50.59 63.24 L 90.62 89.33 L 91.58 103.26 L 89.17 109.19 L 89.17 134.48 L 92.38 139.45 L 97.66 140.09 L 124.88 124.08 L 128.72 119.91 L 130.0 116.07 L 129.84 85.49 L 125.84 79.89 L 77.17 51.71 Z"></path>
