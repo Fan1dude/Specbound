@@ -2,6 +2,7 @@ import { loadNavbar, loadFooter } from "../../core/layout.js";
 import { supabase } from "../../core/supabase.js";
 import { showToast } from "../../core/toast.js";
 import { requireAuth } from "../../core/auth.js";
+import { isFeatureEnabled } from "../../core/featureFlags.js";
 import { updateAvatarPath, getProfileBuilds } from "../../repositories/profileRepository.js";
 import { resolveAvatarUrl } from "../../repositories/mediaRepository.js";
 import { uploadAvatar } from "../../services/imageService.js";
@@ -32,6 +33,18 @@ const user = await requireAuth("login.html");
 if (user) {
     initPasswordForm(user);
 
+    // Beta launch gate (js/core/featureFlags.js) — while `discordConnections`
+    // is off, the entire Connected Accounts card stays hidden (ships
+    // `hidden` in pages/settings.html's raw markup) and initDiscordConnection()
+    // never runs at all: no fetch, no listeners, no icon render. Re-enabling
+    // the flag is the only thing that ever needs to change here.
+    const discordConnectionsEnabled = isFeatureEnabled("discordConnections");
+
+    if (discordConnectionsEnabled) {
+        const connectedAccountsCard = document.getElementById("connectedAccountsCard");
+        if (connectedAccountsCard) connectedAccountsCard.hidden = false;
+    }
+
     // Independent of each other — profile/avatar/featured-builds and the
     // Discord connection check don't share any data, so running them
     // sequentially (the original shape: fully finish loadSettings, only
@@ -40,7 +53,7 @@ if (user) {
     // fetch even began.
     await Promise.all([
         loadSettings(user),
-        initDiscordConnection(user)
+        discordConnectionsEnabled ? initDiscordConnection(user) : Promise.resolve()
     ]);
 }
 

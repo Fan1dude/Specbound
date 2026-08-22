@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Settings page — Connected Accounts card hidden while discordConnections is off</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Settings page — Connected Accounts card hidden while discordConnections is off</h1>
+    <p>
+        Real js/pages/settings/app.js, bootstrapped against real
+        pages/settings.html markup, with only network/auth-touching
+        imports mocked (js/core/featureFlags.js is left real — this
+        proves the actual shipped default, not a simulated one).
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="fixture"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function absUrl(path) {
+            return new URL(path, location.href).href;
+        }
+
+        // Real markup, not hand-duplicated — guarantees every id this test
+        // relies on can never drift from what pages/settings.html actually
+        // ships, the same reasoning tests/homeFooterLinks.test.html already
+        // established for index.html.
+        const settingsHtml = await (await fetch("../pages/settings.html")).text();
+        const settingsDoc = new DOMParser().parseFromString(settingsHtml, "text/html");
+        const mainEl = settingsDoc.querySelector("main#main");
+        document.getElementById("fixture").appendChild(document.importNode(mainEl, true));
+
+        globalThis.__discordRepoCalls = [];
+        globalThis.__discordAuthErrorCalls = [];
+        globalThis.__iconCalls = [];
+
+        const layoutMockSrc = `export function loadNavbar() {} export function loadFooter() {}`;
+        const toastMockSrc = `export function showToast() {}`;
+        const authMockSrc = `export async function requireAuth() { return { id: "u1", email: "u1@example.com" }; }`;
+        const profileRepoMockSrc = `
+            export async function updateAvatarPath() {}
+            export async function getProfileBuilds() { return []; }
+        `;
+        const mediaRepoMockSrc = `export async function resolveAvatarUrl() { return null; }`;
+        const imageServiceMockSrc = `export async function uploadAvatar() { return "fake/path.jpg"; }`;
+        const listStateMockSrc = `export function renderErrorState() {}`;
+        const modalMockSrc = `export async function confirmDialog() { return false; }`;
+
+        const supabaseMockSrc = `
+            const FAKE_PROFILE = {
+                id: "u1", display_name: "Alice", username: "alice", headline: "",
+                bio: "", location: "", website: "", github: "", youtube: "",
+                building_since_year: null, featured_build_id: null
+            };
+            export const supabase = {
+                from() {
+                    return {
+                        select() { return { eq() { return { single: async () => ({ data: FAKE_PROFILE, error: null }) }; } }; }
+                    };
+                },
+                auth: {
+                    signInWithPassword: async () => ({ error: null }),
+                    updateUser: async () => ({ error: null })
+                }
+            };
+        `;
+
+        const iconsRealUrl = absUrl("../js/utils/icons.js");
+        const iconsSpySrc = `
+            import { icon as realIcon } from "${iconsRealUrl}";
+            export function icon(name, size) {
+                globalThis.__iconCalls.push(name);
+                return realIcon(name, size);
+            }
+        `;
+
+        const discordRepoSpySrc = `
+            export async function getMyDiscordConnection() { globalThis.__discordRepoCalls.push("getMyDiscordConnection"); return null; }
+            export async function linkDiscord() { globalThis.__discordRepoCalls.push("linkDiscord"); }
+            export async function disconnectDiscord() { globalThis.__discordRepoCalls.push("disconnectDiscord"); }
+            export async function setDiscordVisibility() { globalThis.__discordRepoCalls.push("setDiscordVisibility"); }
+            export async function reconcileDiscordConnection() { globalThis.__discordRepoCalls.push("reconcileDiscordConnection"); return null; }
+        `;
+
+        const discordAuthErrorsSpySrc = `
+            export function describeDiscordLinkError() { globalThis.__discordAuthErrorCalls.push("describeDiscordLinkError"); return ""; }
+            export function readDiscordOAuthRedirectError() { globalThis.__discordAuthErrorCalls.push("readDiscordOAuthRedirectError"); return null; }
+            export function describeDiscordRedirectError() { globalThis.__discordAuthErrorCalls.push("describeDiscordRedirectError"); return null; }
+        `;
+
+        const realSrc = await (await fetch("../js/pages/settings/app.js")).text();
+
+        const rewrites = {
+            '"../../core/layout.js"': blobUrl(layoutMockSrc),
+            '"../../core/supabase.js"': blobUrl(supabaseMockSrc),
+            '"../../core/toast.js"': blobUrl(toastMockSrc),
+            '"../../core/auth.js"': blobUrl(authMockSrc),
+            // featureFlags.js is deliberately NOT mocked — this test
+            // exercises the real, shipped default.
+            '"../../core/featureFlags.js"': absUrl("../js/core/featureFlags.js"),
+            '"../../repositories/profileRepository.js"': blobUrl(profileRepoMockSrc),
+            '"../../repositories/mediaRepository.js"': blobUrl(mediaRepoMockSrc),
+            '"../../services/imageService.js"': blobUrl(imageServiceMockSrc),
+            '"../../utils/listState.js"': blobUrl(listStateMockSrc),
+            '"./discordConnectionTracker.js"': absUrl("../js/pages/settings/discordConnectionTracker.js"),
+            '"../../utils/escapeHtml.js"': absUrl("../js/utils/escapeHtml.js"),
+            '"../../utils/avatarInitial.js"': absUrl("../js/utils/avatarInitial.js"),
+            '"../../utils/icons.js"': blobUrl(iconsSpySrc),
+            '"../../repositories/discordRepository.js"': blobUrl(discordRepoSpySrc),
+            '"../../utils/modal.js"': blobUrl(modalMockSrc),
+            '"../../utils/discordAuthErrors.js"': blobUrl(discordAuthErrorsSpySrc)
+        };
+
+        let rewritten = realSrc;
+        for (const [from, to] of Object.entries(rewrites)) {
+            rewritten = rewritten.replaceAll(from, `"${to}"`);
+        }
+
+        const consoleErrors = [];
+        const originalConsoleError = console.error;
+        console.error = (...args) => { consoleErrors.push(args); };
+
+        await import(blobUrl(rewritten));
+        // The module's top-level `if (user) { ... await Promise.all([...]) }`
+        // needs a tick to settle after import() resolves the module graph.
+        await new Promise(resolve => setTimeout(resolve, 60));
+
+        console.error = originalConsoleError;
+
+        // --- Core assertions --------------------------------------------------
+        const card = document.getElementById("connectedAccountsCard");
+
+        test("Connected Accounts card is present in the DOM", card !== null);
+        test("Connected Accounts card stays hidden (discordConnections is off by default)", card?.hidden === true);
+
+        const cardRect = card?.getBoundingClientRect();
+        test(
+            "the hidden card contributes no visible box (no gap, no empty heading) — zero rendered size",
+            Boolean(cardRect && cardRect.width === 0 && cardRect.height === 0),
+            cardRect ? `${cardRect.width}x${cardRect.height}` : "no card"
+        );
+
+        test("no Discord repository function was ever called", globalThis.__discordRepoCalls.length === 0, JSON.stringify(globalThis.__discordRepoCalls));
+        test("no Discord OAuth-error helper was ever called (callback params are never read/acted on while disabled)", globalThis.__discordAuthErrorCalls.length === 0, JSON.stringify(globalThis.__discordAuthErrorCalls));
+        test('the "discord" icon was never requested', !globalThis.__iconCalls.includes("discord"), JSON.stringify(globalThis.__iconCalls));
+        test("no console.error occurred during bootstrap", consoleErrors.length === 0, JSON.stringify(consoleErrors));
+
+        // --- Direct DOM manipulation can't reach Discord behavior either ------
+        // The Connect/Refresh/Disconnect buttons and the menu trigger still
+        // physically exist in the DOM (inside the hidden card) — proving
+        // clicking them does nothing is what actually shows no listener was
+        // ever attached, not just that initDiscordConnection() wasn't called.
+        const connectBtn = document.getElementById("connectDiscordBtn");
+        const refreshBtn = document.getElementById("refreshDiscordBtn");
+        const disconnectBtn = document.getElementById("disconnectDiscordBtn");
+        const menuTrigger = document.getElementById("discordMenuTrigger");
+        const menuDropdown = document.getElementById("discordMenuDropdown");
+
+        connectBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        refreshBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        disconnectBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        menuTrigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 20));
+
+        test(
+            "clicking Connect/Refresh/Disconnect (even though hidden) triggers no Discord repository call — no listener was ever attached",
+            globalThis.__discordRepoCalls.length === 0,
+            JSON.stringify(globalThis.__discordRepoCalls)
+        );
+        test(
+            "clicking the menu trigger does not open the dropdown — menu logic was never initialized",
+            menuDropdown?.classList.contains("show-dropdown") !== true,
+            menuDropdown?.className
+        );
+        test(
+            "the menu trigger's aria-expanded stays at its static default (never flipped by a real handler)",
+            menuTrigger?.getAttribute("aria-expanded") === "false"
+        );
+
+        // --- Unrelated Settings functionality still works normally ------------
+        test("Profile form still populates normally (Discord gating didn't break the rest of Settings)", document.getElementById("displayName")?.value === "Alice", document.getElementById("displayName")?.value);
+        test("username field still populates", document.getElementById("username")?.value === "alice");
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`settingsDiscordCard.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

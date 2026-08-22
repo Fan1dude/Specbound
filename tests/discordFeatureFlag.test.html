@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Beta launch gate — discordConnections feature flag</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Beta launch gate — discordConnections feature flag</h1>
+    <p>
+        Discord launch is deferred until Specbound reaches 100 legitimate
+        published community builds (docs/ROADMAP.md, "Deferred: Discord
+        Launch Gate"). Covers js/core/featureFlags.js's default state and
+        js/repositories/discordRepository.js's guards — every exported
+        function must refuse to touch Supabase/Discord while the flag is
+        off, and must work exactly as before once it's back on, proving
+        the implementation was preserved rather than deleted.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        // --- The flag itself -------------------------------------------------
+        const { FEATURE_FLAGS, isFeatureEnabled } = await import("../js/core/featureFlags.js");
+
+        test("discordConnections defaults to false", FEATURE_FLAGS.discordConnections === false, String(FEATURE_FLAGS.discordConnections));
+        test("isFeatureEnabled('discordConnections') returns false by default", isFeatureEnabled("discordConnections") === false);
+        test("an unknown flag name is also treated as disabled (no silent 'undefined is truthy' bug)", isFeatureEnabled("someFlagThatDoesNotExist") === false);
+
+        // Checks actual usage (a call or property access), not just the bare
+        // word — the file's own explanatory comment says "not backed by
+        // localStorage" in prose, which a plain substring match would
+        // wrongly flag as a violation.
+        const featureFlagsSrc = await (await fetch("../js/core/featureFlags.js")).text();
+        test("featureFlags.js never calls/reads localStorage", !/localStorage\s*[.\[(]/.test(featureFlagsSrc), featureFlagsSrc.match(/.{0,20}localStorage.{0,20}/g)?.join(" | "));
+        test("featureFlags.js never reads URLSearchParams/location.search", !/URLSearchParams|location\.search/.test(featureFlagsSrc));
+        test("featureFlags.js never reads document.cookie", !/document\.cookie/.test(featureFlagsSrc));
+        test("FEATURE_FLAGS is frozen (can't be silently mutated at runtime, e.g. from DevTools)", Object.isFrozen(FEATURE_FLAGS));
+
+        // Belt-and-suspenders: even if someone *did* mutate the frozen
+        // object's underlying store some other way, confirm assignment is
+        // actually rejected in this environment (frozen objects silently
+        // no-op assignment outside strict mode) rather than assuming
+        // Object.isFrozen() alone proves runtime behavior.
+        {
+            const before = FEATURE_FLAGS.discordConnections;
+            try { FEATURE_FLAGS.discordConnections = true; } catch { /* strict-mode throw is also fine */ }
+            test("assigning to the frozen flag object has no effect", FEATURE_FLAGS.discordConnections === before);
+        }
+
+        // --- discordRepository.js: every exported function, flag OFF ---------
+        // Real featureFlags.js (unmocked) is used for this whole section —
+        // this is the actual shipped default, not a simulated one.
+        function makeSupabaseSpy() {
+            const calls = [];
+            const chain = {
+                select: (...a) => { calls.push(["select", ...a]); return chain; },
+                update: (...a) => { calls.push(["update", ...a]); return chain; },
+                delete: (...a) => { calls.push(["delete", ...a]); return chain; },
+                eq: (...a) => { calls.push(["eq", ...a]); return chain; },
+                maybeSingle: async (...a) => { calls.push(["maybeSingle", ...a]); return { data: { provider_username: "SHOULD-NOT-BE-REACHED" }, error: null }; }
+            };
+            const supabase = {
+                from: (...a) => { calls.push(["from", ...a]); return chain; },
+                rpc: async (...a) => { calls.push(["rpc", ...a]); return { data: { ok: true }, error: null }; },
+                auth: {
+                    linkIdentity: async (...a) => { calls.push(["auth.linkIdentity", ...a]); return { data: {}, error: null }; },
+                    unlinkIdentity: async (...a) => { calls.push(["auth.unlinkIdentity", ...a]); return { error: null }; },
+                    getUserIdentities: async (...a) => {
+                        calls.push(["auth.getUserIdentities", ...a]);
+                        return { data: { identities: [{ provider: "discord" }] }, error: null };
+                    }
+                }
+            };
+            return { supabase, calls };
+        }
+
+        async function loadDiscordRepository({ flagEnabled }) {
+            const src = await (await fetch("../js/repositories/discordRepository.js")).text();
+            const { supabase, calls } = makeSupabaseSpy();
+            const supabaseMockSrc = `let __s; export function __setSupabase(s) { __s = s; } export const supabase = new Proxy({}, { get: (_, k) => __s[k] });`;
+            const supabaseBlobUrl = blobUrl(supabaseMockSrc);
+
+            // Blob modules have no directory context of their own, so even
+            // the "use the real file" case must rewrite this to an absolute
+            // URL — a bare relative specifier can't resolve inside a blob.
+            const featureFlagsUrl = flagEnabled
+                ? blobUrl(`export function isFeatureEnabled() { return true; }`)
+                : new URL("../js/core/featureFlags.js", location.href).href;
+
+            const rewrites = {
+                '"../core/supabase.js"': supabaseBlobUrl,
+                '"../core/featureFlags.js"': featureFlagsUrl
+            };
+
+            let rewritten = src;
+            for (const [from, to] of Object.entries(rewrites)) {
+                rewritten = rewritten.replaceAll(from, `"${to}"`);
+            }
+
+            const mod = await import(blobUrl(rewritten));
+            const { __setSupabase } = await import(supabaseBlobUrl);
+            __setSupabase(supabase);
+
+            return { ...mod, calls };
+        }
+
+        {
+            const repo = await loadDiscordRepository({ flagEnabled: false });
+
+            const publicResult = await repo.getPublicDiscordConnection("u1");
+            test("getPublicDiscordConnection() resolves null while disabled", publicResult === null, JSON.stringify(publicResult));
+            test("getPublicDiscordConnection() never queries Supabase while disabled", repo.calls.length === 0, JSON.stringify(repo.calls));
+        }
+
+        {
+            const repo = await loadDiscordRepository({ flagEnabled: false });
+            const myResult = await repo.getMyDiscordConnection("u1");
+            test("getMyDiscordConnection() resolves null while disabled", myResult === null);
+            test("getMyDiscordConnection() never queries Supabase while disabled", repo.calls.length === 0, JSON.stringify(repo.calls));
+        }
+
+        {
+            const repo = await loadDiscordRepository({ flagEnabled: false });
+            let thrown = null;
+            try {
+                await repo.linkDiscord("https://example.com/settings");
+                test("linkDiscord() throws while disabled", false, "did not throw");
+            } catch (error) {
+                thrown = error;
+            }
+            test("linkDiscord() throws a DiscordFeatureDisabledError (typed, not a generic Error)", thrown?.name === "DiscordFeatureDisabledError", thrown?.name);
+            test("linkDiscord()'s error message exposes no provider/config detail", !/supabase|xpxjqyraizntbtijzoyp|gotrue|manual.linking/i.test(thrown?.message || ""), thrown?.message);
+            test("linkDiscord() never calls supabase.auth.linkIdentity while disabled — never redirects to Discord", repo.calls.length === 0, JSON.stringify(repo.calls));
+        }
+
+        {
+            const repo = await loadDiscordRepository({ flagEnabled: false });
+            let thrown = null;
+            try {
+                await repo.syncDiscordIdentity();
+            } catch (error) {
+                thrown = error;
+            }
+            test("syncDiscordIdentity() throws DiscordFeatureDisabledError while disabled", thrown?.name === "DiscordFeatureDisabledError");
+            test("syncDiscordIdentity() never calls the sync_discord_identity RPC while disabled", repo.calls.length === 0, JSON.stringify(repo.calls));
+        }
+
+        {
+            const repo = await loadDiscordRepository({ flagEnabled: false });
+            let thrown = null;
+            try {
+                await repo.setDiscordVisibility("u1", true);
+            } catch (error) {
+                thrown = error;
+            }
+            test("setDiscordVisibility() throws DiscordFeatureDisabledError while disabled", thrown?.name === "DiscordFeatureDisabledError");
+            test("setDiscordVisibility() never touches social_connections while disabled", repo.calls.length === 0, JSON.stringify(repo.calls));
+        }
+
+        {
+            const repo = await loadDiscordRepository({ flagEnabled: false });
+            let thrown = null;
+            try {
+                await repo.disconnectDiscord();
+            } catch (error) {
+                thrown = error;
+            }
+            test("disconnectDiscord() throws DiscordFeatureDisabledError while disabled", thrown?.name === "DiscordFeatureDisabledError");
+            test(
+                "disconnectDiscord() never calls getUserIdentities/unlinkIdentity/delete while disabled — an existing identity is left completely untouched",
+                repo.calls.length === 0,
+                JSON.stringify(repo.calls)
+            );
+        }
+
+        {
+            const repo = await loadDiscordRepository({ flagEnabled: false });
+            const result = await repo.reconcileDiscordConnection("u1");
+            test("reconcileDiscordConnection() resolves null while disabled", result === null);
+            test("reconcileDiscordConnection() never queries Supabase while disabled", repo.calls.length === 0, JSON.stringify(repo.calls));
+        }
+
+        // --- discordRepository.js, flag ON: proves the implementation was
+        // preserved, not deleted — every function behaves exactly as it did
+        // before this pass, once re-enabled. ----------------------------------
+        {
+            const repo = await loadDiscordRepository({ flagEnabled: true });
+            const result = await repo.getPublicDiscordConnection("u1");
+            test("[flag ON] getPublicDiscordConnection() actually queries Supabase and returns real data", result?.provider_username === "SHOULD-NOT-BE-REACHED");
+            test("[flag ON] the query targets social_connections filtered by discord + is_public", repo.calls.some(c => c[0] === "from" && c[1] === "social_connections") && repo.calls.some(c => c[0] === "eq" && c[1] === "provider" && c[2] === "discord"), JSON.stringify(repo.calls));
+        }
+
+        {
+            const repo = await loadDiscordRepository({ flagEnabled: true });
+            await repo.linkDiscord("https://example.com/settings");
+            test("[flag ON] linkDiscord() actually calls supabase.auth.linkIdentity", repo.calls.some(c => c[0] === "auth.linkIdentity"), JSON.stringify(repo.calls));
+        }
+
+        {
+            const repo = await loadDiscordRepository({ flagEnabled: true });
+            await repo.disconnectDiscord();
+            test("[flag ON] disconnectDiscord() actually calls getUserIdentities/unlinkIdentity/delete", repo.calls.some(c => c[0] === "auth.getUserIdentities") && repo.calls.some(c => c[0] === "auth.unlinkIdentity") && repo.calls.some(c => c[0] === "delete"), JSON.stringify(repo.calls));
+        }
+
+        // --- Other auth flows must never have been entangled with Discord ----
+        // Static source check on the real, unmocked files — proves no import
+        // of discordRepository.js/discordAuthErrors.js/featureFlags.js was
+        // introduced into unrelated auth callback handling.
+        for (const path of ["../js/pages/forgotPassword/app.js", "../js/pages/updatePassword/app.js", "../js/pages/login/app.js", "../js/pages/signup/app.js"]) {
+            const src = await (await fetch(path)).text();
+            test(`${path} has no dependency on Discord-specific modules`, !/discordRepository|discordAuthErrors|featureFlags/.test(src), path);
+        }
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`discordFeatureFlag.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

@@ -112,6 +112,12 @@
         // renderProfileHero.js has its own transitive import of
         // mediaRepository.js (a real Supabase call) — patched the same way
         // as the top-level orchestrator below, one level deeper.
+        // Beta launch gate — js/core/featureFlags.js is left real (not
+        // mocked) here too, same reasoning as the discord*/media mocks
+        // above/below: Case 1b/1c exercise the actual shipped default
+        // (disabled). A second, separately-patched import further down
+        // (with this one specifier mocked to force the flag on) proves the
+        // pre-gate rendering behavior was preserved, not deleted.
         const renderProfileHeroUrl = await loadPatched("../js/pages/profile/renderProfileHero.js", {
             "../../repositories/mediaRepository.js": mediaRepoMockUrl,
             "../../utils/escapeHtml.js": absUrl("../js/utils/escapeHtml.js"),
@@ -121,7 +127,8 @@
             // Milestone 22 — RoleBadge.js (and its own transitive import,
             // communityRecognition.js) are pure/DOM-only, same reasoning
             // as every other section component below.
-            "../../components/RoleBadge.js": absUrl("../js/components/RoleBadge.js")
+            "../../components/RoleBadge.js": absUrl("../js/components/RoleBadge.js"),
+            "../../core/featureFlags.js": absUrl("../js/core/featureFlags.js")
         });
 
         // Every other section component has no network-touching imports
@@ -232,6 +239,15 @@
         test("Project Gallery excludes the build shown as Featured", !document.getElementById("profileBuilds").textContent.includes("Robot Arm") && document.getElementById("profileBuilds").textContent.includes("Desk Setup"));
         test("Technology Breakdown is visible with 2 public builds across 2 categories", document.getElementById("profileTechBreakdown").hidden === false);
         test("About Builder shows the bio text", document.getElementById("profileAbout").textContent.includes("I build robots."));
+
+        // Beta launch gate — unrelated free-text profile links (website/
+        // GitHub) are completely unaffected by the Discord gating below;
+        // YouTube is correctly omitted since fullProfile leaves it blank.
+        const profileLinksEls = [...document.getElementById("profileLinks").querySelectorAll("a")];
+        test("Website link still renders, unaffected by Discord gating", profileLinksEls.some(a => a.getAttribute("href") === "https://alice.dev"), JSON.stringify(profileLinksEls.map(a => a.href)));
+        test("GitHub link still renders, unaffected by Discord gating", profileLinksEls.some(a => a.getAttribute("href") === "https://github.com/alice"), JSON.stringify(profileLinksEls.map(a => a.href)));
+        test("YouTube link is correctly omitted (blank in the source profile)", !profileLinksEls.some(a => a.href.includes("youtube")));
+
         test("Connected Accounts area is hidden when no discordConnection is passed", document.getElementById("profileConnectedAccounts").hidden === true);
 
         // Milestone 23 §6 — a null building_since_year is omitted entirely,
@@ -255,8 +271,15 @@
         test("a set building_since_year renders a \"Building Since\" stat with the year", buildingSinceStatsText.includes("Building Since") && buildingSinceStatsText.includes("2019"));
         test("\"Building Since\" appears alongside \"Member Since\", not instead of it", buildingSinceStatsText.includes("Member Since"));
 
-        // --- Case 1b: a public Discord connection renders as a real,
-        // separate clickable area (not folded into .profile-links) -----------
+        // --- Case 1b: beta launch gate — Discord is deferred (see
+        // docs/ROADMAP.md, "Deferred: Discord Launch Gate"), so a public
+        // Discord connection must stay completely hidden by default, EVEN
+        // WITH real, valid stored connection data present — this is the
+        // "even if an old social_connections row exists" requirement, not
+        // a hypothetical: getPublicDiscordConnection() itself also refuses
+        // to fetch while the flag is off (see discordFeatureFlag.test.html),
+        // but this proves the render layer independently refuses too, in
+        // case data ever reaches here some other way. -----------------------
         resetDom();
         mockAvatarUrl = "";
 
@@ -270,14 +293,37 @@
         });
 
         const connectedAccountsEl = document.getElementById("profileConnectedAccounts");
-        const discordLink = connectedAccountsEl.querySelector("a");
 
-        test("a public Discord connection unhides the Connected Accounts area", connectedAccountsEl.hidden === false);
-        test("the Discord button is a real link, not the old non-clickable span", discordLink !== null);
-        test("it links to the real Discord profile deep link built from provider_user_id", discordLink?.getAttribute("href") === "https://discord.com/users/123456789012345678");
-        test("it opens in a new tab without leaking a window.opener reference", discordLink?.getAttribute("target") === "_blank" && discordLink?.getAttribute("rel")?.includes("noopener"));
-        test("the visible username is shown and escaped safely", connectedAccountsEl.textContent.includes("alice#0001"));
-        test("it is NOT folded into the separate free-text .profileLinks area", !document.getElementById("profileLinks").innerHTML.includes("alice#0001"));
+        test("a public Discord connection does NOT unhide the Connected Accounts area while discordConnections is off", connectedAccountsEl.hidden === true);
+        test("no Discord link renders at all, even with valid stored connection data", connectedAccountsEl.querySelector("a") === null);
+        test("no Discord username/branding text leaks into the DOM anywhere in the hero", !document.getElementById("profileHero").textContent.includes("alice#0001"));
+        test("the Discord data is still not folded into the separate free-text .profileLinks area", !document.getElementById("profileLinks").innerHTML.includes("alice#0001"));
+
+        // --- Case 1b (flag ON): proves the pre-gate rendering behavior was
+        // preserved, not deleted — a separately-patched import with
+        // featureFlags.js forced on renders exactly as it always did. -------
+        const enabledFeatureFlagsMockUrl = blobUrl(`export function isFeatureEnabled() { return true; }`);
+        const renderProfileHeroEnabledUrl = await loadPatched("../js/pages/profile/renderProfileHero.js", {
+            "../../repositories/mediaRepository.js": mediaRepoMockUrl,
+            "../../utils/escapeHtml.js": absUrl("../js/utils/escapeHtml.js"),
+            "../../utils/avatarInitial.js": absUrl("../js/utils/avatarInitial.js"),
+            "../../utils/icons.js": absUrl("../js/utils/icons.js"),
+            "./formatJoinDate.js": absUrl("../js/pages/profile/formatJoinDate.js"),
+            "../../components/RoleBadge.js": absUrl("../js/components/RoleBadge.js"),
+            "../../core/featureFlags.js": enabledFeatureFlagsMockUrl
+        });
+        const { renderProfileHero: renderProfileHeroEnabled } = await import(renderProfileHeroEnabledUrl);
+
+        resetDom();
+        await renderProfileHeroEnabled(fullProfile, { provider_user_id: "123456789012345678", provider_username: "alice#0001" }, []);
+
+        const discordLinkEnabled = connectedAccountsEl.querySelector("a");
+
+        test("[flag ON] a public Discord connection unhides the Connected Accounts area", connectedAccountsEl.hidden === false);
+        test("[flag ON] the Discord button is a real link, not the old non-clickable span", discordLinkEnabled !== null);
+        test("[flag ON] it links to the real Discord profile deep link built from provider_user_id", discordLinkEnabled?.getAttribute("href") === "https://discord.com/users/123456789012345678");
+        test("[flag ON] it opens in a new tab without leaking a window.opener reference", discordLinkEnabled?.getAttribute("target") === "_blank" && discordLinkEnabled?.getAttribute("rel")?.includes("noopener"));
+        test("[flag ON] the visible username is shown and escaped safely", connectedAccountsEl.textContent.includes("alice#0001"));
 
         // --- Case 1c: a connection missing provider_user_id (defensive —
         // shouldn't happen given getPublicDiscordConnection's own select,

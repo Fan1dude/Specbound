@@ -4,6 +4,7 @@ import { avatarInitial } from "../../utils/avatarInitial.js";
 import { icon } from "../../utils/icons.js";
 import { formatJoinDate } from "./formatJoinDate.js";
 import { renderRoleBadges } from "../../components/RoleBadge.js";
+import { isFeatureEnabled } from "../../core/featureFlags.js";
 
 // Identity block — Milestone 20 Builder Portfolio. Left-aligned (avatar +
 // text side by side), not centered — a centered identity block reads as a
@@ -131,7 +132,12 @@ function renderConnectedAccounts(discordConnection) {
 
     if (!el) return;
 
-    if (!discordConnection?.provider_username || !discordConnection?.provider_user_id) {
+    // Beta launch gate (js/core/featureFlags.js) — a second, independent
+    // guard on top of loadProfile.js's own: even if a real discordConnection
+    // object somehow reached this function (e.g. old/mocked data), nothing
+    // Discord-related renders while the flag is off. No old social_connections
+    // row is deleted or touched by this — it's just never displayed.
+    if (!isFeatureEnabled("discordConnections") || !discordConnection?.provider_username || !discordConnection?.provider_user_id) {
         el.hidden = true;
         el.innerHTML = "";
         return;

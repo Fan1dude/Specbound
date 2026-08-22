@@ -22,13 +22,31 @@ This is a live pointer to the approved milestone plan, not a third copy of it. D
 | 19 | Structured parts catalog, moderated submissions, paste-list import, and affiliate-link schema | Complete — merged to main |
 | 20 | Builder Portfolio — redefined public profile page | Complete — merged to main |
 | 21 | First-time builder experience — Welcome dialog, onboarding, contextual editor hints | Complete — merged to main |
-| 22 | Community foundation — Discord linking, roles, reporting, feedback, beta invites, Community Guidelines | Complete — merged to main |
+| 22 | Community foundation — Discord linking, roles, reporting, feedback, beta invites, Community Guidelines | Complete — merged to main. **Update (2026-08-22)**: Discord server launch, account linking, verification, and automatic role assignment are deferred pending a growth gate — see "Deferred: Discord Launch Gate" below. Nothing about this milestone's implementation changed; only its user-facing availability is currently gated off. |
 | 23 | Setup Inventory, scoped search, builder dates | Complete — merged to main, deployed to production |
 | 24 | Moderator Report Queue — moderator-facing interface for content reports filed since Milestone 22 | Complete — see `docs/milestones/MILESTONE_24_MODERATOR_REPORT_QUEUE_SPECIFICATION.md`; merged and deployed to production |
 | 25 | Follow Notifications — notify a builder when someone follows them | Complete — see `docs/milestones/MILESTONE_25_FOLLOW_NOTIFICATIONS_SPECIFICATION.md`; merged and deployed to production, including the follow-up security-hardening migration `0038` |
 | 26 | Feedback Review — moderator/staff feedback triage workflow and a submitter-facing My Feedback page | Complete — see `docs/milestones/MILESTONE_26_FEEDBACK_REVIEW_SPECIFICATION.md`; merged and deployed to production (migration `0039`), including a same-week signed-out login-redirect hotfix |
 | 27A | Launch Readiness, engineering track (PR1 signup posture, PR2 DB hardening, PR3 security headers/SEO, PR4 operator documentation, PR5 accessibility/performance) | PR2 (migrations `0040`/`0041`), PR3 (Stage 1 HSTS, security-header CI check, crawl/noindex fix), and PR5 (audit plus narrowly-scoped a11y/CLS/touch-target fixes — see `docs/milestones/MILESTONE_27A_PR5_ACCESSIBILITY_PERFORMANCE_RESULTS.md`) are all complete, merged (PR #27, merge commit `fdce9d2c275498f68306be707d61dc888d6e458d`), and deployed to production. PR4 is documentation-only — no production operation, merged. **27A as a whole is not complete** — PR1 (signup posture) remains blocked pending 27B (public signup stays held in its current invite-gated posture until then), and Storage bucket configuration, backup verification, monitoring setup, and staff bootstrap (documented in `docs/OPERATIONS.md` as adult-owner actions) remain outstanding manual steps. |
 | 27B | Launch Readiness, legal/policy track — Terms of Service, Privacy Policy, age rules, cookie disclosure, adult-owner review | **In progress.** PR1 (legal-readiness inventory and adult-owner decision packet — see `docs/milestones/MILESTONE_27B_LEGAL_READINESS_SPECIFICATION.md` and `docs/milestones/MILESTONE_27B_ADULT_OWNER_DECISION_PACKET.md`) is documentation/planning only: no legal page has been published, no legal text has been approved, and public signup remains closed to the general public (invite-gated) pending the adult-owner decisions that inventory identifies. Those decisions, and the legal-page drafting/publication PRs that follow them, remain the current launch blocker. |
+
+---
+
+# Deferred: Discord Launch Gate
+
+Discord server access, account linking (Settings → Connected Accounts and the public-profile Connected Accounts display), verification, and automatic role assignment — all built and merged as part of Milestone 22 — are **not currently available**. As of 2026-08-22 this is hidden behind a disabled feature flag (`discordConnections: false`, `js/core/featureFlags.js`), not removed: every migration, RLS policy, RPC, repository method, and UI component from Milestone 22 stays in the codebase, tested, and ready to re-enable. See `docs/CHANGELOG.md`'s Milestone 22 entry for the original, unmodified implementation record — this is a launch-sequencing decision made afterward, not a correction to that history.
+
+**Unlock target**: 100 legitimate published community builds.
+
+- Each project counts once, regardless of edits or revision history.
+- Drafts, test records, seed content, and spam are excluded from the count.
+- Uploads must be distributed across real builders, not generated primarily by one account.
+
+The Discord server itself remains private during this phase and is not promoted anywhere on Specbound — no invite link, no "join our Discord" copy, no deep link a signed-out visitor could reach.
+
+**Before the flag is enabled**, a security/configuration review of the Discord OAuth setup and the production Supabase environment is still required — this deferral is a launch-timing decision, not a substitute for that review.
+
+See `js/core/featureFlags.js` for the flag itself.
 
 ---
 
