@@ -307,7 +307,7 @@
    opt-in inside the no-preference query below, never the reverse, so
    there's no window where motion could flash before a browser applies
    the query. This also directly satisfies "show the complete static
-   logo, no staggered animation" for prefers-reduced-motion: reduce —
+   logo, no cycling animation" for prefers-reduced-motion: reduce —
    that state needs no separate rule of its own, it's just what happens
    when the query below doesn't match.
 
@@ -320,26 +320,35 @@
       Each tile fades and scales in, staggered 90ms apart in DOM/
       clockwise order — "pieces appear one after another around the
       circle."
-   2. hero-mark-spiral — infinite, starts only once the entire mark has
-      finished entering (900ms, just after the last tile's own enter
+   2. hero-mark-highlight — infinite, starts only once the entire mark
+      has finished entering (900ms, just after the last tile's own enter
       finishes at 4*90ms + 500ms = 860ms). Delayed a further
-      var(--i) * 1600ms per tile — 1600ms is exactly 1/5 of the 8s loop,
-      so the five tiles are always evenly spaced around the cycle. (An
-      earlier 4s/800ms pass read as too fast — this is the same design
-      at half speed, nothing else changed.) Each tile's own keyframe
-      dips low then recovers once per loop; because every tile runs the
-      identical keyframe just phase-shifted by a fifth of the loop, the
-      single dip appears to travel continuously clockwise around the
-      mark forever — "once all pieces are visible, the first
-      disappears, then the next, continuing around" — without ever
-      touching position or rotation, so the mark itself never reads as
-      spinning, only the gap moves. */
+      var(--i) * 600ms per tile — 600ms is exactly 1/5 of the 3s loop
+      (5 real pieces, not the 4 a quadrant reading would suggest — see
+      index.html's comment on why two of the pieces are large multi-
+      corner "hook" shapes with no clean single quadrant of their own),
+      so the five tiles are always evenly spaced and each gets exactly
+      one ~600ms "turn" per loop. Each tile's own keyframe rises to the
+      highlight color+glow then falls back to the resting muted color
+      once per loop, peaking at local 10% (300ms into its own 600ms
+      window) with symmetric 300ms fade ramps on either side — because
+      every tile runs the identical keyframe just phase-shifted by a
+      fifth of the loop, tile i's fade-out (ending at its local 20%)
+      lands on the exact same global instant as tile i+1's fade-in
+      (starting at its own local 0%), so the highlight travels
+      continuously clockwise around the mark with no pause or jump at
+      the wrap, and only one tile is ever at full peak brightness at a
+      time (peaks are a full 600ms apart). linear timing (not an eased
+      curve) keeps that handoff at a constant, un-hesitating pace.
+      Piece geometry, position, and scale are never touched — this only
+      ever animates fill color + a filter drop-shadow, both visual-only
+      and incapable of shifting layout. */
 @media (prefers-reduced-motion: no-preference) {
     .hero-mark-tile {
-        animation-name: hero-mark-enter, hero-mark-spiral;
-        animation-duration: .5s, 8s;
-        animation-timing-function: var(--ease-precise), var(--ease-standard);
-        animation-delay: calc(var(--i) * 90ms), calc(900ms + var(--i) * 1600ms);
+        animation-name: hero-mark-enter, hero-mark-highlight;
+        animation-duration: .5s, 3s;
+        animation-timing-function: var(--ease-precise), linear;
+        animation-delay: calc(var(--i) * 90ms), calc(900ms + var(--i) * 600ms);
         animation-iteration-count: 1, infinite;
         animation-fill-mode: both, none;
     }
@@ -357,31 +366,38 @@
     }
 }
 
-/* 0%/100% are identical (opacity 1, scale 1) so the infinite loop never
-   shows a jump at the wrap. The dip window is exactly 76%-96% — the
-   full 20% (1/5) per-tile stagger, not a narrower slice with idle time
-   on either side — so that the instant one tile finishes recovering
-   (96% of its own cycle) is the exact same global moment the next tile
-   in line starts dipping (76% of its own cycle, since consecutive
-   tiles are offset by exactly one stagger step = 20% of the loop): as
-   one piece finishes appearing, the next one immediately begins
-   disappearing, with no static all-visible pause between handoffs. */
-@keyframes hero-mark-spiral {
+/* Deliberate, narrowly-scoped exception to docs/BRAND.md's mark-usage
+   "Never: ... Add glows... Recolor individual tiles" rule — approved
+   2026-08-22, homepage hero mark only (see that file's own note next to
+   the rule). --primary is the same "brightened" token this app already
+   uses for hover/emphasis elsewhere (e.g. footer.css's link hover); no
+   new color introduced. The glow is a CSS filter: drop-shadow, not a
+   box-shadow/outline — purely visual, adds no layout box, so it can
+   never shift anything around it or create overflow.
+
+   Fixed 2026-08-22 (live PR preview bug): the first version of this
+   keyframe also animated fill-opacity (.92 -> 1 -> .92) alongside fill
+   and filter. In real (non-headless) browser rendering that combination
+   read as the active tile fading toward transparent/disappearing rather
+   than glowing — animating opacity of any kind on the SAME element a
+   filter is simultaneously transitioning on is unreliable across engines
+   even when the opacity delta is small. fill-opacity (and opacity) are
+   now never touched by this keyframe at all — it stays fixed at the base
+   .hero-mark-tile rule's .92 for the tile's entire lifetime, active or
+   not. Only `fill` (a solid color swap, always fully opaque) and
+   `filter` change, which is what actually produces a highlight+glow
+   without ever risking a fade-to-invisible in any browser. */
+@keyframes hero-mark-highlight {
     0%,
-    76% {
-        opacity: 1;
-        transform: scale(1);
-    }
-
-    86% {
-        opacity: .12;
-        transform: scale(.92);
-    }
-
-    96%,
+    20%,
     100% {
-        opacity: 1;
-        transform: scale(1);
+        fill: var(--primary-strong);
+        filter: none;
+    }
+
+    10% {
+        fill: var(--primary);
+        filter: drop-shadow(0 0 4px var(--primary));
     }
 }
 
