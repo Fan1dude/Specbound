@@ -1,10 +1,26 @@
 import { supabase } from "../core/supabase.js";
+import { isFeatureEnabled } from "../core/featureFlags.js";
 
 // OAuth itself is entirely Supabase Auth's native identity-linking
 // (linkIdentity/unlinkIdentity/getUserIdentities) — this repository never
 // touches a token, only the public identity mirror row. See
 // supabase/migrations/0026_social_connections.sql and Milestone 22 spec
 // §4 for the full design.
+
+// Thrown by every mutating/OAuth-initiating export below when the
+// `discordConnections` feature flag is off — a distinct, typed error so a
+// caller (or a test) can tell "deliberately disabled right now" apart
+// from a real Supabase/network failure, without this module describing
+// *why* it's disabled or leaking any provider/config detail to whoever
+// catches it. Read-only exports return `null` instead (see each
+// function's own guard) — a controlled disabled-feature result, matching
+// the shape they already return for "no connection exists."
+export class DiscordFeatureDisabledError extends Error {
+    constructor() {
+        super("Discord connections are not available right now.");
+        this.name = "DiscordFeatureDisabledError";
+    }
+}
 
 // Public profile pages (Builder Portfolio) only ever need this narrower,
 // visibility-filtered read — RLS already enforces is_public = true for
@@ -13,6 +29,8 @@ import { supabase } from "../core/supabase.js";
 // the same convention Milestone 20's resolveFeaturedBuild.js already
 // established.
 export async function getPublicDiscordConnection(userId) {
+    if (!isFeatureEnabled("discordConnections")) return null;
+
     const { data, error } = await supabase
         .from("social_connections")
         .select("provider_user_id, provider_username, provider_avatar_url")
@@ -26,6 +44,8 @@ export async function getPublicDiscordConnection(userId) {
 }
 
 export async function getMyDiscordConnection(userId) {
+    if (!isFeatureEnabled("discordConnections")) return null;
+
     const { data, error } = await supabase
         .from("social_connections")
         .select("*")
@@ -38,6 +58,8 @@ export async function getMyDiscordConnection(userId) {
 }
 
 export async function linkDiscord(redirectTo) {
+    if (!isFeatureEnabled("discordConnections")) throw new DiscordFeatureDisabledError();
+
     const { data, error } = await supabase.auth.linkIdentity({
         provider: "discord",
         options: { redirectTo }
@@ -48,6 +70,8 @@ export async function linkDiscord(redirectTo) {
 }
 
 export async function syncDiscordIdentity() {
+    if (!isFeatureEnabled("discordConnections")) throw new DiscordFeatureDisabledError();
+
     const { data, error } = await supabase.rpc("sync_discord_identity");
     if (error) throw error;
     return data;
@@ -61,6 +85,8 @@ export async function syncDiscordIdentity() {
 // UI show "Discord is now shown on your public profile" when nothing
 // was actually saved.
 export async function setDiscordVisibility(userId, isPublic) {
+    if (!isFeatureEnabled("discordConnections")) throw new DiscordFeatureDisabledError();
+
     const { data, error } = await supabase
         .from("social_connections")
         .update({ is_public: isPublic })
@@ -75,6 +101,8 @@ export async function setDiscordVisibility(userId, isPublic) {
 }
 
 export async function disconnectDiscord() {
+    if (!isFeatureEnabled("discordConnections")) throw new DiscordFeatureDisabledError();
+
     const { data: identitiesData, error: identitiesError } = await supabase.auth.getUserIdentities();
     if (identitiesError) throw identitiesError;
 
@@ -102,6 +130,8 @@ export async function disconnectDiscord() {
 // on every Settings load rather than trying to detect "did we just come
 // back from a Discord OAuth redirect" specifically.
 export async function reconcileDiscordConnection(userId) {
+    if (!isFeatureEnabled("discordConnections")) return null;
+
     const { data: identitiesData, error: identitiesError } = await supabase.auth.getUserIdentities();
     if (identitiesError) throw identitiesError;
 

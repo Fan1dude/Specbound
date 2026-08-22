@@ -1,6 +1,7 @@
 import { getBuilderPortfolioProfile, getProfileBuilds } from "../../repositories/profileRepository.js";
 import { getCommentCountForBuilds } from "../../repositories/commentRepository.js";
 import { getPublicDiscordConnection } from "../../repositories/discordRepository.js";
+import { isFeatureEnabled } from "../../core/featureFlags.js";
 import { getProfileRoles } from "../../repositories/communityRepository.js";
 import { getAutomaticRole } from "../../services/communityRecognition.js";
 import { getRecentBuilderRevisions } from "../../repositories/revisionRepository.js";
@@ -29,6 +30,13 @@ export async function loadProfile() {
     // batch does. getCurrentUser() is already memoized per page load
     // (core/auth.js), so this doesn't add a second real request even
     // though loadNavbar() also calls it concurrently.
+    // Beta launch gate (js/core/featureFlags.js) — while `discordConnections`
+    // is off, no Discord connection data is requested for this profile at
+    // all (getPublicDiscordConnection() itself also refuses while the flag
+    // is off, but gating here too means no request is even attempted, not
+    // just one that returns nothing).
+    const discordConnectionsEnabled = isFeatureEnabled("discordConnections");
+
     const [
         profileResult,
         rawBuildsResult,
@@ -40,7 +48,7 @@ export async function loadProfile() {
         getBuilderPortfolioProfile(userId),
         getProfileBuilds(userId),
         getCurrentUser(),
-        getPublicDiscordConnection(userId),
+        discordConnectionsEnabled ? getPublicDiscordConnection(userId) : Promise.resolve(null),
         getProfileRoles(userId),
         getRecentBuilderRevisions(userId)
     ]);

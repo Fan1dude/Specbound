@@ -150,7 +150,14 @@
 
         </section>
 
-        <section class="settings-card connected-accounts-card">
+        <!-- Hidden by default: unhidden only by js/pages/settings/app.js when
+             the `discordConnections` feature flag (js/core/featureFlags.js)
+             is on. Discord is not the only conceivable Connected Account this
+             card could ever hold, but it's the only one implemented today —
+             while the flag is off, this entire section (not just its
+             Discord-specific rows) stays hidden so no empty card, heading, or
+             gap is ever shown. -->
+        <section class="settings-card connected-accounts-card" id="connectedAccountsCard" hidden>
 
             <h2>Connected Accounts</h2>
 
