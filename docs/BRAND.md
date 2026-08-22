@@ -38,6 +38,8 @@ Wide gaps between tiles make the mark readable at small sizes. Rounded geometry 
 
 **Never:** close or remove the tile gaps. Sharpen the corners. Stretch, rotate, skew, or outline the mark. Add glows, gradients, bevels, or 3D effects. Recolor individual tiles. Place the mark on a low-contrast background.
 
+**Approved exception (2026-08-22), homepage hero mark only:** the prominent homepage logo (`index.html`'s `.hero-mark`, animated in `css/pages/home/home.css`'s `hero-mark-fade-0` through `hero-mark-fade-4` keyframes) dips toward transparent and back in a continuous clockwise spiral, each tile's own 900ms fade/recover pulse starting 650ms after its predecessor so the next tile begins fading only once the current tile is already partway back through its own recovery (not right at its dip) — a 250ms overlap where the dip reads as one gap continuously traveling around the mark rather than isolated blinks — while every tile stays in the mark's one normal resting fill the entire time. Deliberately narrow — every other instance of the mark (navbar, footer, favicon, any static rendering) is untouched by this exception and still follows the "Never" rule above exactly as written. Disabled entirely under `prefers-reduced-motion: reduce`, which shows the plain static mark this rule already describes.
+
 This replaces the rounded-square badge / two-arc-S mark shipped in Milestone 10 Step 9.
 
 ---

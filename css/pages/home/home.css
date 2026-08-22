@@ -307,7 +307,7 @@
    opt-in inside the no-preference query below, never the reverse, so
    there's no window where motion could flash before a browser applies
    the query. This also directly satisfies "show the complete static
-   logo, no staggered animation" for prefers-reduced-motion: reduce —
+   logo, no cycling animation" for prefers-reduced-motion: reduce —
    that state needs no separate rule of its own, it's just what happens
    when the query below doesn't match.
 
@@ -320,29 +320,82 @@
       Each tile fades and scales in, staggered 90ms apart in DOM/
       clockwise order — "pieces appear one after another around the
       circle."
-   2. hero-mark-spiral — infinite, starts only once the entire mark has
-      finished entering (900ms, just after the last tile's own enter
-      finishes at 4*90ms + 500ms = 860ms). Delayed a further
-      var(--i) * 1600ms per tile — 1600ms is exactly 1/5 of the 8s loop,
-      so the five tiles are always evenly spaced around the cycle. (An
-      earlier 4s/800ms pass read as too fast — this is the same design
-      at half speed, nothing else changed.) Each tile's own keyframe
-      dips low then recovers once per loop; because every tile runs the
-      identical keyframe just phase-shifted by a fifth of the loop, the
-      single dip appears to travel continuously clockwise around the
-      mark forever — "once all pieces are visible, the first
-      disappears, then the next, continuing around" — without ever
-      touching position or rotation, so the mark itself never reads as
-      spinning, only the gap moves. */
+   2. hero-mark-fade-0 through hero-mark-fade-4 — one distinct keyframe
+      per tile (not one shared keyframe + a per-tile animation-delay
+      stagger, which is what earlier revisions of this rule did).
+      Re-timed 2026-08-22: previous passes made the next tile start
+      fading exactly AT the current tile's trough (stagger == fade
+      duration), which reads as too early — the handoff now happens
+      partway through the current tile's own recovery instead. Each
+      tile's own pulse is still 900ms (450ms fade-out, 450ms fade-in),
+      but the phase-stagger between neighbors is now 650ms, not 450ms —
+      the next tile begins fading out 650ms after the current tile
+      started, which is 200ms PAST the current tile's own trough
+      (450ms), landing it ~200/450 of the way through its 450ms
+      recovery ramp: opacity 0.08 + .92 * (200/450) ≈ .489. Five tiles
+      at 650ms stagger tile a 3250ms loop (5 * 650ms = 3250ms, matching
+      animation-duration below) — note this is now a DIFFERENT number
+      from the 900ms pulse, unlike earlier revisions where stagger and
+      pulse were made equal on purpose. All five still share the SAME
+      animation-delay (900ms flat, just past the last tile's own
+      entrance finishing at 4*90ms + 500ms = 860ms) — the stagger lives
+      entirely in each keyframe's own offsets rather than in a per-tile
+      delay, for the same reason as before: staggering via
+      animation-delay instead (var(--i) * 650ms on top of the shared
+      900ms) would make each later tile sit fully visible and idle for
+      up to 2600ms after the entrance finishes before joining the loop
+      for the very first time — a visible "building up tile by tile"
+      during the opening stretch. Baking the stagger into the keyframe
+      shape instead means every tile is already at its correct relative
+      phase from the very first frame the loop is visible, with zero
+      per-tile startup wait beyond the one shared 900ms — the spiral is
+      fully formed and traveling the instant it appears, never
+      assembling itself over the first revolution.
+      Each tile's dip window is 900ms wide but tiles are only 650ms
+      apart, so adjacent tiles' dip windows overlap by exactly 250ms
+      (900ms - 650ms): tile i spends the LAST 250ms of its 450ms
+      recovery ramp (opacity ~.489 -> 1) inside the exact same global
+      250ms window as tile i+1's FIRST 250ms of fade-out (opacity
+      1 -> ~.489) — both visibly partially faded at once, the gap
+      continuously traveling clockwise around the mark. Because both
+      ramps share the same linear slope magnitude but are offset by a
+      constant 200ms, their opacities sum to a CONSTANT throughout that
+      250ms window — (1 + .08) + .92 * (200/450) ≈ 1.489, not simply
+      1 + .08 as a stagger-equals-fade-duration design would give — a
+      precise, checkable signature of this exact handoff shape. Tile i
+      finishes recovering to full opacity (at its own local 900ms)
+      BEFORE tile i+1 reaches its own trough (at tile i+1's own local
+      450ms, which is tile i's local 650+450=1100ms) — recovery
+      completes 200ms ahead of the next trough, never simultaneous with
+      it. Every trough still lands exactly 650ms apart (one every 1/5
+      of the loop), so only one tile is ever exactly at minimum opacity
+      at a time. The 5th-to-1st wrap (hero-mark-fade-4's own recovery
+      ramp crosses the 100%/0% keyframe boundary) uses the identical
+      ramp shape and the identical 250ms overlap as every other tile's
+      handoff, just split across the loop seam, so that handoff behaves
+      identically to every other one — no special-casing, no pause, no
+      jump. linear timing (not an eased curve) keeps every ramp at a
+      constant, un-hesitating pace, matching the literal 450ms/900ms/
+      650ms time budget above exactly.
+      Piece geometry, position, color, and scale are never touched — this
+      only ever animates opacity, incapable of shifting layout. */
 @media (prefers-reduced-motion: no-preference) {
     .hero-mark-tile {
-        animation-name: hero-mark-enter, hero-mark-spiral;
-        animation-duration: .5s, 8s;
-        animation-timing-function: var(--ease-precise), var(--ease-standard);
-        animation-delay: calc(var(--i) * 90ms), calc(900ms + var(--i) * 1600ms);
+        animation-duration: .5s, 3.25s;
+        animation-timing-function: var(--ease-precise), linear;
+        animation-delay: calc(var(--i) * 90ms), 900ms;
         animation-iteration-count: 1, infinite;
         animation-fill-mode: both, none;
     }
+
+    /* One dedicated fade keyframe per tile (not a shared one) — see the
+       comment above for why the stagger lives here instead of in
+       animation-delay. */
+    .hero-mark-tile:nth-child(1) { animation-name: hero-mark-enter, hero-mark-fade-0; }
+    .hero-mark-tile:nth-child(2) { animation-name: hero-mark-enter, hero-mark-fade-1; }
+    .hero-mark-tile:nth-child(3) { animation-name: hero-mark-enter, hero-mark-fade-2; }
+    .hero-mark-tile:nth-child(4) { animation-name: hero-mark-enter, hero-mark-fade-3; }
+    .hero-mark-tile:nth-child(5) { animation-name: hero-mark-enter, hero-mark-fade-4; }
 }
 
 @keyframes hero-mark-enter {
@@ -357,31 +410,120 @@
     }
 }
 
-/* 0%/100% are identical (opacity 1, scale 1) so the infinite loop never
-   shows a jump at the wrap. The dip window is exactly 76%-96% — the
-   full 20% (1/5) per-tile stagger, not a narrower slice with idle time
-   on either side — so that the instant one tile finishes recovering
-   (96% of its own cycle) is the exact same global moment the next tile
-   in line starts dipping (76% of its own cycle, since consecutive
-   tiles are offset by exactly one stagger step = 20% of the loop): as
-   one piece finishes appearing, the next one immediately begins
-   disappearing, with no static all-visible pause between handoffs. */
-@keyframes hero-mark-spiral {
+/* Homepage hero mark only (see docs/BRAND.md's own note next to its
+   mark-usage rules). Every tile stays in the mark's one normal resting
+   color (`fill: var(--primary-strong)`, set once on .hero-mark-tile
+   above and never touched here) for the tile's entire lifetime — every
+   one of the five keyframes below only ever animates `opacity`. No
+   `fill`, no `filter`, no glow, no scale/translate/rotate anywhere in
+   any of them.
+   .08 (not fully 0) was chosen over the plain-transparent extreme
+   specifically so the trough still reads as "clearly disappearing"
+   without a harsh full-off blink.
+   Each rule is tile 0's own dip shape shifted by exactly i * 20% of the
+   shared 3250ms duration (20% = 650ms / 3250ms, the phase-stagger
+   between neighbors). Tile 0's own shape: dip-start at 0% (opacity 1),
+   trough at 13.846154% (450ms / 3250ms, opacity .08), recovered at
+   27.692308% (900ms / 3250ms, opacity 1 again), then flat rest for the
+   remaining 72.307692% (2350ms) until its own next dip-start at +100%.
+   Note trough (13.846154%) and recovered (27.692308%) are NOT at the
+   same 20%-grid points the dip-starts sit on — that gap between a
+   tile's own 27.692308%-wide pulse and its neighbor's 20%-wide stagger
+   is exactly the 250ms handoff overlap described in the comment above
+   the media query. Only hero-mark-fade-4 (dip-start at 80%) needs a
+   wrap split: its recovered point falls at 80% + 27.692308% =
+   107.692308%, i.e. 7.692308% into the next loop. The value AT the
+   100%/0% seam itself — where its ramp is mid-recovery, not yet fully
+   recovered — is opacity .08 + .92 * (200/450) ≈ .488889 (the same
+   figure the comment above derives for every handoff's midpoint); that
+   exact value is pinned identically at both 100% and 0% so the ramp
+   continues through the seam with no jump, then finishes recovering to
+   1 at 7.692308%. See the comment above the media query for why five
+   separate keyframes (instead of one shared keyframe plus a per-tile
+   animation-delay) is what makes the spiral already fully phase-aligned
+   the instant it appears. */
+@keyframes hero-mark-fade-0 {
     0%,
-    76% {
-        opacity: 1;
-        transform: scale(1);
-    }
-
-    86% {
-        opacity: .12;
-        transform: scale(.92);
-    }
-
-    96%,
     100% {
         opacity: 1;
-        transform: scale(1);
+    }
+
+    13.846154% {
+        opacity: .08;
+    }
+
+    27.692308% {
+        opacity: 1;
+    }
+}
+
+@keyframes hero-mark-fade-1 {
+    0%,
+    20%,
+    100% {
+        opacity: 1;
+    }
+
+    33.846154% {
+        opacity: .08;
+    }
+
+    47.692308% {
+        opacity: 1;
+    }
+}
+
+@keyframes hero-mark-fade-2 {
+    0%,
+    40%,
+    100% {
+        opacity: 1;
+    }
+
+    53.846154% {
+        opacity: .08;
+    }
+
+    67.692308% {
+        opacity: 1;
+    }
+}
+
+@keyframes hero-mark-fade-3 {
+    0%,
+    60%,
+    100% {
+        opacity: 1;
+    }
+
+    73.846154% {
+        opacity: .08;
+    }
+
+    87.692308% {
+        opacity: 1;
+    }
+}
+
+@keyframes hero-mark-fade-4 {
+    0% {
+        opacity: .488889;
+    }
+
+    7.692308% {
+        opacity: 1;
+    }
+
+    80% {
+        opacity: 1;
+    }
+
+    93.846154% {
+        opacity: .08;
+    }
+
+    100% {
+        opacity: .488889;
     }
 }
 

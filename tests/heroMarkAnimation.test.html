@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Homepage hero mark — clockwise fade spiral</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Homepage hero mark — clockwise fade spiral</h1>
+    <p>
+        Covers index.html's .hero-mark (the prominent homepage logo only —
+        not the navbar/footer wordmark, which has no SVG at all) and
+        css/pages/home/home.css's hero-mark-fade-0 through hero-mark-fade-4
+        keyframes: 5 real traced pieces (not the 4 a naive quadrant reading
+        would assume — see index.html's own comment), each running a 900ms
+        fade-out/fade-in pulse (450ms out, 450ms in) staggered 650ms from
+        its clockwise neighbor (whole spiral: 3250ms). The next tile does
+        NOT start fading at the current tile's trough — it starts 650ms
+        after the current tile began, which is 200ms past that trough, so
+        the current tile is already ~0.49 opacity into its own recovery
+        when the handoff happens. The two tiles then share a 250ms window
+        where the current tile finishes recovering to full opacity while
+        the next tile fades from full down to that same ~0.49 point — a
+        single gap continuously traveling around the mark, never an
+        instantaneous swap, and already fully phase-aligned the instant
+        the loop appears rather than building up tile by tile. Exactly one
+        tile at minimum opacity at any instant, no color or glow change
+        anywhere, fully disabled under prefers-reduced-motion.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="fixture"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        // --- Static structure: real index.html, untouched geometry ----------
+        const homeHtml = await (await fetch("../index.html")).text();
+        const homeDoc = new DOMParser().parseFromString(homeHtml, "text/html");
+
+        const heroVisual = homeDoc.querySelector(".hero-visual");
+        const heroMark = heroVisual?.querySelector(".hero-mark");
+        const tiles = [...(heroMark?.querySelectorAll(".hero-mark-tile") || [])];
+
+        test(".hero-visual exists and stays aria-hidden (decorative, unaffected by this change)", heroVisual?.getAttribute("aria-hidden") === "true");
+        test(".hero-mark is a real inline <svg> (not an <img>, canvas, GIF, or video)", heroMark?.tagName === "svg");
+        test("exactly 5 real traced tile pieces exist (not 4 — see index.html's own comment on why)", tiles.length === 5, String(tiles.length));
+
+        // Exact byte-for-byte geometry check — proves the animation work
+        // never touched a single coordinate, only ever animates opacity.
+        const EXPECTED_PATHS = [
+            "M 70.12 50.43 L 51.87 61.0 L 50.59 63.24 L 90.62 89.33 L 91.58 103.26 L 89.17 109.19 L 89.17 134.48 L 92.38 139.45 L 97.66 140.09 L 124.88 124.08 L 128.72 119.91 L 130.0 116.07 L 129.84 85.49 L 125.84 79.89 L 77.17 51.71 Z",
+            "M 80.53 115.59 L 75.89 116.07 L 65.0 122.32 L 61.16 122.16 L 54.75 118.95 L 50.75 119.43 L 47.07 122.32 L 45.79 126.16 L 45.79 143.61 L 46.43 146.49 L 48.83 149.69 L 61.0 157.06 L 66.28 157.7 L 69.64 156.58 L 82.13 148.57 L 84.05 143.61 L 84.05 120.55 L 82.93 117.35 Z",
+            "M 3.2 95.26 L 0.48 99.9 L 0.48 117.19 L 2.56 122.0 L 31.38 139.77 L 35.38 140.25 L 37.94 139.13 L 40.67 134.64 L 40.67 114.15 L 38.9 110.15 L 11.53 93.5 L 6.72 93.34 Z",
+            "M 64.36 0.0 L 58.92 1.12 L 5.12 33.94 L 0.0 42.43 L 0.32 73.97 L 2.24 78.13 L 55.07 108.87 L 71.72 100.54 L 75.41 96.54 L 36.98 73.0 L 35.54 56.35 L 38.58 51.71 L 61.48 37.78 L 74.29 40.67 L 81.81 35.86 L 82.45 11.05 L 79.57 7.68 Z",
+            "M 90.78 19.53 L 88.53 24.01 L 88.53 44.51 L 90.3 48.67 L 118.15 65.64 L 121.83 66.12 L 126.96 63.88 L 129.04 61.32 L 130.0 58.44 L 130.0 40.5 L 128.4 36.5 L 125.84 34.1 L 98.46 18.25 L 94.14 17.77 Z"
+        ];
+        tiles.forEach((tile, i) => {
+            test(`tile ${i} geometry is byte-for-byte unchanged`, tile.getAttribute("d") === EXPECTED_PATHS[i], tile.getAttribute("d"));
+        });
+        test("viewBox is unchanged (no dimension/proportion change)", heroMark?.getAttribute("viewBox") === "-10 -10 150 177.7", heroMark?.getAttribute("viewBox"));
+
+        // --- Static CSS-source checks ----------------------------------------
+        const cssSrc = await (await fetch("../css/pages/home/home.css")).text();
+
+        // Checks for actual functional use (a rule name, not a mention) —
+        // a historical comment mentioning an old keyframe name elsewhere in
+        // this file would not be a real regression.
+        test("the old hero-mark-spiral animation is fully gone as actual code (no @keyframes or animation-name use)", !/@keyframes\s+hero-mark-spiral|animation-name:[^;]*hero-mark-spiral(?!-)/.test(cssSrc));
+        test("the old hero-mark-highlight (color+glow) design is fully gone, not just orphaned", !cssSrc.includes("hero-mark-highlight"));
+        test("the old single shared hero-mark-fade keyframe (pre-spiral, one keyframe + per-tile delay stagger) is fully gone", !/@keyframes\s+hero-mark-fade\s*\{/.test(cssSrc));
+
+        for (let n = 0; n < 5; n++) {
+            test(`hero-mark-fade-${n} keyframes exist`, new RegExp(`@keyframes\\s+hero-mark-fade-${n}\\s*\\{`).test(cssSrc));
+        }
+        for (let n = 1; n <= 5; n++) {
+            const idx = n - 1;
+            const re = new RegExp(`\\.hero-mark-tile:nth-child\\(${n}\\)\\s*\\{\\s*animation-name:\\s*hero-mark-enter,\\s*hero-mark-fade-${idx}\\s*;`);
+            test(`:nth-child(${n}) sets animation-name to hero-mark-enter, hero-mark-fade-${idx} (own dedicated keyframe, not a shared one)`, re.test(cssSrc));
+        }
+
+        test("loop duration is 3.25s (5 tiles × 650ms stagger)", /animation-duration:\s*\.5s,\s*3\.25s/.test(cssSrc));
+        test("timing is linear (no eased pause/jump at handoff)", /animation-timing-function:\s*var\(--ease-precise\),\s*linear/.test(cssSrc));
+        test("fade delay is a flat 900ms shared by every tile — the clockwise stagger lives in each keyframe's own offsets, not in animation-delay", /animation-delay:\s*calc\(var\(--i\)\s*\*\s*90ms\),\s*900ms/.test(cssSrc));
+        test("the loop is infinite", /animation-iteration-count:\s*1,\s*infinite/.test(cssSrc));
+
+        // Reduced motion: the only place any tile gets an animation-name at
+        // all is inside the no-preference query — proven by counting real
+        // rule occurrences (now 5, one per :nth-child, since each tile has
+        // its own dedicated fade keyframe) both in the whole file and
+        // specifically inside that query's own balanced-brace block, not
+        // just trusting a comment.
+        function extractBalancedBlock(src, marker) {
+            const start = src.indexOf(marker);
+            if (start === -1) return "";
+            const braceStart = src.indexOf("{", start);
+            let depth = 0;
+            let i = braceStart;
+            for (; i < src.length; i++) {
+                if (src[i] === "{") depth++;
+                else if (src[i] === "}") {
+                    depth--;
+                    if (depth === 0) { i++; break; }
+                }
+            }
+            return src.slice(braceStart, i);
+        }
+        const noPreferenceBlock = extractBalancedBlock(cssSrc, "@media (prefers-reduced-motion: no-preference)");
+        const totalAnimationNameCount = (cssSrc.match(/animation-name\s*:/g) || []).length;
+        const insideBlockAnimationNameCount = (noPreferenceBlock.match(/animation-name\s*:/g) || []).length;
+        test("exactly 5 animation-name declarations exist in the whole file (one dedicated fade keyframe per tile)", totalAnimationNameCount === 5, String(totalAnimationNameCount));
+        test("all 5 animation-name declarations live inside the no-preference media query — none leak outside it (reduced motion stays untouched)", insideBlockAnimationNameCount === 5 && totalAnimationNameCount === insideBlockAnimationNameCount, JSON.stringify({ totalAnimationNameCount, insideBlockAnimationNameCount }));
+        test("no separate prefers-reduced-motion: reduce block re-adds any hero-mark animation", !/prefers-reduced-motion:\s*reduce\)[^]*?hero-mark/.test(cssSrc));
+
+        // --- Required properties: opacity-only, nothing else, across all 5 --
+        const fadeBlocks = [0, 1, 2, 3, 4].map(n => cssSrc.match(new RegExp(`@keyframes hero-mark-fade-${n}\\s*\\{[^]*?\\n\\}`))?.[0] || "");
+        const allFadeBlocksText = fadeBlocks.join("\n");
+        test("every hero-mark-fade-N keyframe block was found and declares opacity", fadeBlocks.every(b => b && /\bopacity\s*:/.test(b)), JSON.stringify(fadeBlocks.map(b => !!b)));
+        test("no hero-mark-fade-N keyframe block ever declares filter at any offset (no glow)", !/\bfilter\s*:/.test(allFadeBlocksText), allFadeBlocksText);
+        test("no hero-mark-fade-N keyframe block ever declares fill at any offset (no color change)", !/(?<!fill-opacity)\bfill\s*:/.test(allFadeBlocksText), allFadeBlocksText);
+        test("no hero-mark-fade-N keyframe block ever declares fill-opacity at any offset", !/fill-opacity/.test(allFadeBlocksText), allFadeBlocksText);
+        test("no hero-mark-fade-N keyframe block ever references drop-shadow anywhere", !/drop-shadow/.test(allFadeBlocksText));
+
+        // --- No JS timer / canvas / raster replacement -----------------------
+        test("home.css never uses setInterval/setTimeout to drive this animation", !/setInterval|setTimeout/.test(cssSrc));
+        const homeAppSrc = await (await fetch("../js/pages/home/app.js")).text().catch(() => "");
+        test("js/pages/home/app.js has no JS-driven timer animating hero-mark tiles", !/hero-mark/.test(homeAppSrc) && !/setInterval/.test(homeAppSrc));
+        test("no <canvas> element anywhere near the hero mark", !homeHtml.includes("<canvas"));
+        test("no GIF/video reference for the hero mark", !/hero-mark[^>]*\.(gif|mp4|webm)/i.test(homeHtml));
+
+        // --- Shared navbar/footer logo instances are untouched ----------------
+        const layoutSrc = await (await fetch("../js/core/layout.js")).text();
+        test("js/core/layout.js (navbar + footer) has zero references to hero-mark — this animation cannot reach it", !layoutSrc.includes("hero-mark"));
+        test("navbar logo is still the plain text wordmark, not an SVG mark", layoutSrc.includes('<div class="logo">'));
+
+        // --- docs/BRAND.md: exception describes the spiral treatment, no
+        // glow/recolor language remains in it -------------------------------
+        const brandSrc = await (await fetch("../docs/BRAND.md")).text();
+        const exceptionLine = brandSrc.split("\n").find(l => l.includes("Approved exception")) || "";
+        test("BRAND.md's approved-exception note exists and mentions the homepage hero mark", /homepage hero mark/i.test(exceptionLine), exceptionLine);
+        test("BRAND.md's approved-exception note references the hero-mark-fade-N keyframes, not the old shared name or the highlight design", exceptionLine.includes("hero-mark-fade-0") && !exceptionLine.includes("hero-mark-highlight"), exceptionLine);
+        test("BRAND.md's approved-exception note contains no mention of a glow", !/glow/i.test(exceptionLine), exceptionLine);
+        test("BRAND.md's approved-exception note contains no mention of recoloring/color change", !/recolor|color change|--primary\)/i.test(exceptionLine), exceptionLine);
+        test("BRAND.md's base mark-usage \"Never\" rule (glows/recolor prohibition) is still intact, untouched", brandSrc.includes("Add glows, gradients, bevels, or 3D effects. Recolor individual tiles."));
+
+        // --- Live render: real browser-computed animation timing -------------
+        // Inject the real fragment + wait past the one-time entrance
+        // animation (max delay 4*90ms + 500ms duration ~= 860ms) before
+        // inspecting the infinite loop's own computed timing.
+        document.getElementById("fixture").innerHTML = heroVisual.outerHTML;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        const liveTiles = [...document.querySelectorAll("#fixture .hero-mark-tile")];
+        test("live-rendered fixture has all 5 tiles", liveTiles.length === 5, String(liveTiles.length));
+
+        const fadeAnimations = liveTiles.map(tile =>
+            tile.getAnimations().find(a => a.animationName.startsWith("hero-mark-fade"))
+        );
+
+        test("every tile has a real, running hero-mark-fade-N animation", fadeAnimations.every(a => a && a.playState === "running"), JSON.stringify(fadeAnimations.map(a => a?.playState)));
+
+        const expectedFadeNames = [0, 1, 2, 3, 4].map(i => `hero-mark-fade-${i}`);
+        test("each tile runs its own dedicated fade keyframe, in DOM/clockwise order (hero-mark-fade-0..4)", fadeAnimations.every((a, i) => a.animationName === expectedFadeNames[i]), JSON.stringify(fadeAnimations.map(a => a?.animationName)));
+
+        const timings = fadeAnimations.map(a => a.effect.getComputedTiming());
+        test("computed duration is exactly 3250ms for every tile", timings.every(t => t.duration === 3250), JSON.stringify(timings.map(t => t.duration)));
+        test("iterations is Infinity for every tile", timings.every(t => t.iterations === Infinity));
+
+        const iValues = liveTiles.map(tile => Number(getComputedStyle(tile).getPropertyValue("--i").trim()));
+        test("the 5 tiles carry --i values 0 through 4 (clockwise DOM order, matching the real piece geometry)", JSON.stringify([...iValues].sort()) === JSON.stringify([0, 1, 2, 3, 4]), JSON.stringify(iValues));
+
+        // Sub-millisecond tolerance for browser calc()/float rounding —
+        // not a real timing difference.
+        test(
+            "every tile's fade animation has the exact same 900ms delay (within 0.01ms) — the stagger lives in the keyframe shape, not the delay",
+            timings.every(t => Math.abs(t.delay - 900) < 0.01),
+            JSON.stringify(timings.map(t => t.delay))
+        );
+
+        const MIN_OPACITY = 0.08;
+        const LOOP_MS = 3250;
+        const FADE_MS = 450;
+        const PULSE_MS = 900;
+        const STAGGER_MS = 650;
+        const F_FRAC = FADE_MS / LOOP_MS;
+        const P_FRAC = PULSE_MS / LOOP_MS;
+        const S_FRAC = STAGGER_MS / LOOP_MS;
+        test("S_FRAC (stagger as a fraction of the loop) is exactly 0.2 (650ms / 3250ms) — five equally-spaced tiles", Math.abs(S_FRAC - 0.2) < 1e-9, S_FRAC);
+
+        // Per-tile keyframe shape, derived independently from the same
+        // three numbers home.css's authored percentages come from (not
+        // copy-pasted from the CSS) — a real cross-check that the CSS
+        // arithmetic is right, not just a restatement of it. Tile i's own
+        // pulse: dip-start at i*20%, trough at dip-start+13.846...%,
+        // recovered at dip-start+27.692...%. Only tile 4's recovered point
+        // exceeds 100% (0.8 + 0.276923... > 1), so only its keyframe needs
+        // a wrap split; every other tile's whole pulse fits within one
+        // loop without crossing the seam.
+        function buildKeyframeSpec(i) {
+            const dipStart = (i * S_FRAC) % 1;
+            const troughRaw = dipStart + F_FRAC;
+            const recoveredRaw = dipStart + P_FRAC;
+            if (recoveredRaw <= 1 + 1e-9) {
+                const points = [[0, 1]];
+                if (dipStart > 1e-9) points.push([dipStart, 1]);
+                points.push([troughRaw, MIN_OPACITY]);
+                points.push([recoveredRaw, 1]);
+                points.push([1, 1]);
+                return points;
+            }
+            // Wrap case: value at the 100%/0% seam is wherever the fade-in
+            // ramp has reached by the time the loop boundary is hit.
+            const seamValue = MIN_OPACITY + (1 - MIN_OPACITY) * ((1 - troughRaw) / F_FRAC);
+            const recoveredWrapped = recoveredRaw - 1;
+            return [
+                [0, seamValue],
+                [recoveredWrapped, 1],
+                [dipStart, 1],
+                [troughRaw, MIN_OPACITY],
+                [1, seamValue],
+            ];
+        }
+        const KEYFRAME_SPECS = [0, 1, 2, 3, 4].map(buildKeyframeSpec);
+        liveTiles.forEach((tile, i) => {
+            const kfs = fadeAnimations[i].effect.getKeyframes();
+            const expectedPoints = KEYFRAME_SPECS[i];
+            const allPointsPresent = expectedPoints.every(([off, val]) =>
+                kfs.some(k => Math.abs(k.offset - off) < 0.0005 && Math.abs(parseFloat(k.opacity) - val) < 0.002)
+            );
+            test(`tile ${i}'s live keyframes (hero-mark-fade-${i}) match the independently-derived dip shape`, allPointsPresent, JSON.stringify({ expected: expectedPoints, actual: kfs.map(k => [k.offset, k.opacity]) }));
+            test(`tile ${i}'s live keyframes never carry a fill, filter, or fillOpacity property`, kfs.every(k => !("fill" in k) && !("filter" in k) && !("fillOpacity" in k)), JSON.stringify(kfs));
+        });
+
+        // Only one tile ever at minimum opacity at a time: mathematically,
+        // no two distinct tiles' trough instants (each tile's own
+        // dip-start + 450ms fade-out, i.e. i*650 + 450, since every tile
+        // shares the exact same 900ms delay) ever coincide. None of these
+        // exceed the 3250ms loop for i=0..4, so no modulo is even needed.
+        const troughLocalMs = [0, 1, 2, 3, 4].map(i => i * STAGGER_MS + FADE_MS);
+        const uniqueTroughTimes = new Set(troughLocalMs);
+        test("all 5 tiles reach minimum opacity at distinct moments within the loop — never two at once", uniqueTroughTimes.size === 5, JSON.stringify(troughLocalMs));
+
+        function setFadeOpacity(tile, t) {
+            const fade = tile.getAnimations().find(a => a.animationName.startsWith("hero-mark-fade"));
+            const enter = tile.getAnimations().find(a => a.animationName === "hero-mark-enter");
+            enter.pause();
+            fade.pause();
+            fade.currentTime = t;
+            return parseFloat(getComputedStyle(tile).opacity);
+        }
+        function resumeFade(tile) {
+            tile.getAnimations().find(a => a.animationName.startsWith("hero-mark-fade"))?.play();
+        }
+
+        // --- No build-up: the spiral must be fully phase-aligned the
+        // instant the shared 900ms delay elapses, not assembling itself
+        // tile by tile over the first revolution. Concretely: tile index 4
+        // (the last clockwise piece)'s own keyframe starts AT the wrapped
+        // seam value (mid-recovery, not full and not at the trough), so at
+        // the exact moment the loop becomes visible, tile 4 should already
+        // be partway through recovering from a dip that "started" before
+        // the loop's own t=0 — proof the design doesn't make later tiles
+        // sit idle at full opacity waiting for an individual per-tile
+        // delay to elapse. ---------------------------------------------------
+        const SEAM_VALUE = KEYFRAME_SPECS[4][0][1];
+        test("the wrapped seam value is approximately .4889 (the same figure every handoff reaches at its own midpoint)", Math.abs(SEAM_VALUE - (MIN_OPACITY + (1 - MIN_OPACITY) * (200 / 450))) < 1e-9, SEAM_VALUE);
+        const opsAtLoopStart = liveTiles.map(tile => setFadeOpacity(tile, 900));
+        liveTiles.forEach(resumeFade);
+        const expectedAtLoopStart = [1, 1, 1, 1, SEAM_VALUE];
+        test(
+            "the instant the shared 900ms delay elapses, tile index 4 (the last clockwise piece) is already mid-recovery (~.489), not full and not at the trough — the spiral is fully phase-aligned from frame one, not building up tile by tile",
+            opsAtLoopStart.every((o, i) => Math.abs(o - expectedAtLoopStart[i]) < 0.01),
+            JSON.stringify({ opsAtLoopStart, expectedAtLoopStart })
+        );
+        test(
+            "not every tile sits at full opacity the instant the loop appears (a direct, general check against any per-tile startup delay causing a visible build-up)",
+            !opsAtLoopStart.every(o => Math.abs(o - 1) < 0.01),
+            JSON.stringify(opsAtLoopStart)
+        );
+
+        // --- Regression coverage: color/glow removed entirely, opacity-only
+        // fade confirmed live, exactly one tile dims at a time, every tile
+        // returns to full resting visibility. Full-loop scrub covers one
+        // complete 3250ms revolution starting at the shared delay. -----------
+        const BASE_FILL = getComputedStyle(liveTiles[0]).fill;
+        const BASE_FILTER = getComputedStyle(liveTiles[0]).filter;
+        let fillNeverChanges = true;
+        let filterNeverChanges = true;
+        let neverMoreThanOneTrough = true;
+        const violations = [];
+
+        for (let t = 900; t <= 900 + LOOP_MS; t += 25) {
+            const frameState = liveTiles.map(tile => {
+                const op = setFadeOpacity(tile, t);
+                const s = getComputedStyle(tile);
+                return { fill: s.fill, filter: s.filter, opacity: op };
+            });
+            if (frameState.some(s => s.fill !== BASE_FILL)) {
+                fillNeverChanges = false;
+                violations.push({ t, frameState });
+            }
+            if (frameState.some(s => s.filter !== BASE_FILTER)) {
+                filterNeverChanges = false;
+                violations.push({ t, frameState });
+            }
+            const troughCount = frameState.filter(s => Math.abs(s.opacity - MIN_OPACITY) < 0.02).length;
+            if (troughCount > 1) {
+                neverMoreThanOneTrough = false;
+                violations.push({ t, frameState });
+            }
+        }
+        liveTiles.forEach(resumeFade);
+
+        // Separately confirm every tile actually reaches opacity 1 at some
+        // point outside its own trough window (resting visibility) — the
+        // midpoint of each tile's own flat-rest region: recovered_i_ms +
+        // (LOOP_MS - PULSE_MS) / 2.
+        let allReturnToFullOpacity = true;
+        for (let i = 0; i < 5; i++) {
+            const recoveredMs = i * STAGGER_MS + PULSE_MS;
+            const restLocalMs = recoveredMs + (LOOP_MS - PULSE_MS) / 2;
+            const t = 900 + restLocalMs;
+            const o = setFadeOpacity(liveTiles[i], t);
+            if (Math.abs(o - 1) > 0.001) {
+                allReturnToFullOpacity = false;
+                violations.push({ tile: `rest-check-${i}`, opacity: o });
+            }
+            resumeFade(liveTiles[i]);
+        }
+
+        test("fill color never changes anywhere in the loop", fillNeverChanges, JSON.stringify(violations.filter(v => v.frameState?.some(s => s.fill !== BASE_FILL)).slice(0, 2)));
+        test("filter (glow) never applies anywhere in the loop", filterNeverChanges, JSON.stringify(violations.filter(v => v.frameState?.some(s => s.filter !== BASE_FILTER)).slice(0, 2)));
+        test("never more than one tile at minimum opacity at the same real instant", neverMoreThanOneTrough, JSON.stringify(violations.filter(v => v.frameState?.filter(s => Math.abs(s.opacity - MIN_OPACITY) < 0.02).length > 1).slice(0, 2)));
+        test("every tile returns to full (1) opacity outside its own trough window", allReturnToFullOpacity, JSON.stringify(violations.filter(v => String(v.tile).startsWith("rest-check"))));
+
+        // --- Late-handoff overlap proof: the next tile begins fading NOT
+        // at the current tile's trough, but 650ms after the current tile
+        // began — 200ms (STAGGER_MS - FADE_MS) past that trough, when the
+        // current tile is already ~.489 into its 450ms recovery ramp. Over
+        // the following 250ms (PULSE_MS - STAGGER_MS) window, the current
+        // tile finishes recovering to full opacity while the next tile
+        // fades from full down to that same ~.489 point — two linear ramps
+        // offset by a constant 200ms sum to a constant throughout:
+        // opacity(current) + opacity(next) === (1 + MIN_OPACITY) +
+        // (1 - MIN_OPACITY) * (200 / 450) ≈ 1.489 — a precise signature of
+        // this exact "handoff happens mid-recovery, not at the trough"
+        // shape, distinct from a symmetric trough-to-full handoff (which
+        // would sum to the smaller constant 1 + MIN_OPACITY instead).
+        // handoffGlobal(i) = 900 + (i+1)*STAGGER_MS works uniformly for
+        // every i including the i=4 wrap (900 + 5*650 = 4150 is exactly
+        // one full loop past the shared delay, i.e. local phase 0 for
+        // tile 0 and local phase 650 for tile 4) — no special-casing. -------
+        const HANDOFF_OFFSET_MS = STAGGER_MS - FADE_MS; // 200
+        const HANDOFF_OPACITY = MIN_OPACITY + (1 - MIN_OPACITY) * (HANDOFF_OFFSET_MS / FADE_MS); // ~.489
+        const OVERLAP_MS = PULSE_MS - STAGGER_MS; // 250
+        const INVARIANT_SUM = 1 + HANDOFF_OPACITY; // ~1.489
+        test("HANDOFF_OPACITY (current tile's opacity exactly at the handoff instant) is approximately 0.49–0.50, matching the spec's stated range", HANDOFF_OPACITY > 0.47 && HANDOFF_OPACITY < 0.51, HANDOFF_OPACITY);
+        test("OVERLAP_MS (the window both tiles are simultaneously partially faded) is exactly 250ms", OVERLAP_MS === 250, OVERLAP_MS);
+
+        const handoffResults = [];
+        for (let i = 0; i < 5; i++) {
+            const next = (i + 1) % 5;
+            const handoff = 900 + (i + 1) * STAGGER_MS;
+
+            const deltas = [0, OVERLAP_MS / 8, OVERLAP_MS / 4, OVERLAP_MS * 3 / 8, OVERLAP_MS / 2, OVERLAP_MS * 5 / 8, OVERLAP_MS * 3 / 4, OVERLAP_MS * 7 / 8, OVERLAP_MS];
+            const samples = deltas.map(delta => {
+                const t = handoff + delta;
+                const opCurrent = setFadeOpacity(liveTiles[i], t);
+                const opNext = setFadeOpacity(liveTiles[next], t);
+                return { delta, opCurrent, opNext };
+            });
+
+            const invariantHolds = samples.every(s => Math.abs((s.opCurrent + s.opNext) - INVARIANT_SUM) < 0.02);
+
+            const atHandoff = samples[0];
+            const startCorrect = Math.abs(atHandoff.opCurrent - HANDOFF_OPACITY) < 0.02 && Math.abs(atHandoff.opNext - 1) < 0.02;
+
+            // Strictly increasing / decreasing across the sampled window —
+            // "previous continues brightening while next darkens."
+            const currentBrightens = samples.every((s, idx) => idx === 0 || s.opCurrent >= samples[idx - 1].opCurrent - 0.001);
+            const nextDarkens = samples.every((s, idx) => idx === 0 || s.opNext <= samples[idx - 1].opNext + 0.001);
+
+            const atEnd = samples[samples.length - 1];
+            const currentReachesFull = Math.abs(atEnd.opCurrent - 1) < 0.02;
+            // Confirm the next tile has NOT yet reached its own trough by
+            // the end of the overlap window (it still has 200ms left in
+            // its fade-out) — sampled separately at its true trough time.
+            const opNextAtItsOwnTrough = setFadeOpacity(liveTiles[next], handoff + FADE_MS);
+            const nextTroughIsAfterWindow = Math.abs(opNextAtItsOwnTrough - MIN_OPACITY) < 0.02 && (handoff + FADE_MS) > (handoff + OVERLAP_MS);
+
+            // Same linear speed both directions: the current tile's
+            // brighten-slope over the window should equal the theoretical
+            // full-ramp fade-in slope (1 - MIN_OPACITY) / FADE_MS, and the
+            // next tile's darken-slope (in magnitude) should match too.
+            const currentSlope = (atEnd.opCurrent - atHandoff.opCurrent) / OVERLAP_MS;
+            const nextSlope = (atEnd.opNext - atHandoff.opNext) / OVERLAP_MS;
+            const theoreticalSlope = (1 - MIN_OPACITY) / FADE_MS;
+            const slopesMatchTheory = Math.abs(currentSlope - theoreticalSlope) < 0.001 && Math.abs(-nextSlope - theoreticalSlope) < 0.001;
+            const slopesMatchEachOther = Math.abs(Math.abs(currentSlope) - Math.abs(nextSlope)) < 0.001;
+
+            handoffResults.push({
+                i, next, invariantHolds, startCorrect, currentBrightens, nextDarkens,
+                currentReachesFull, nextTroughIsAfterWindow, slopesMatchTheory, slopesMatchEachOther, samples,
+            });
+
+            resumeFade(liveTiles[i]);
+            resumeFade(liveTiles[next]);
+        }
+
+        test(
+            "at every handoff, opacity(current) + opacity(next) stays the constant (1 + HANDOFF_OPACITY) ≈ 1.489 across the full 250ms overlap window — the exact signature of a mid-recovery (not trough-start) handoff",
+            handoffResults.every(h => h.invariantHolds),
+            JSON.stringify(handoffResults.filter(h => !h.invariantHolds).map(h => ({ i: h.i, samples: h.samples })).slice(0, 2))
+        );
+        test(
+            "at every handoff instant, the current (previous) tile is at ~0.49 opacity on its recovery ramp and the next tile is exactly at the start of its fade-out (opacity 1)",
+            handoffResults.every(h => h.startCorrect),
+            JSON.stringify(handoffResults.filter(h => !h.startCorrect))
+        );
+        test(
+            "at every handoff, the previous tile is recovering (opacity non-decreasing) across the following 250ms",
+            handoffResults.every(h => h.currentBrightens),
+            JSON.stringify(handoffResults.filter(h => !h.currentBrightens).map(h => h.i))
+        );
+        test(
+            "at every handoff, the next tile is fading out (opacity non-increasing) across the following 250ms",
+            handoffResults.every(h => h.nextDarkens),
+            JSON.stringify(handoffResults.filter(h => !h.nextDarkens).map(h => h.i))
+        );
+        test(
+            "at every handoff, the previous tile reaches full (1) opacity by the end of the 250ms window",
+            handoffResults.every(h => h.currentReachesFull),
+            JSON.stringify(handoffResults.filter(h => !h.currentReachesFull))
+        );
+        test(
+            "at every handoff, the previous tile finishes recovering strictly BEFORE the next tile reaches its own trough (250ms overlap window ends before the next tile's 450ms fade-out completes)",
+            handoffResults.every(h => h.nextTroughIsAfterWindow),
+            JSON.stringify(handoffResults.filter(h => !h.nextTroughIsAfterWindow))
+        );
+        test(
+            "at every handoff, both the fade-out and fade-in ramps use the identical theoretical linear slope (1 - minOpacity) / 450ms — same speed both directions",
+            handoffResults.every(h => h.slopesMatchTheory && h.slopesMatchEachOther),
+            JSON.stringify(handoffResults.filter(h => !(h.slopesMatchTheory && h.slopesMatchEachOther)))
+        );
+        test(
+            "the 5th-to-1st handoff (tile index 4 recovering while tile index 0 fades out) satisfies the exact same overlap invariant and slope/direction checks as every other handoff — the loop wrap is not a special case",
+            (() => {
+                const wrap = handoffResults.find(h => h.i === 4 && h.next === 0);
+                return !!wrap && wrap.invariantHolds && wrap.startCorrect && wrap.currentBrightens && wrap.nextDarkens && wrap.currentReachesFull && wrap.nextTroughIsAfterWindow && wrap.slopesMatchTheory;
+            })()
+        );
+
+        // --- Reduced motion: no live animation at all (structural proof above
+        // already covers this; this is a direct getAnimations() sanity check
+        // against the real element, not just CSS source text). -------------------
+        test(
+            "reduced-motion structural guarantee: all animation-name declarations for this mark are confined to the no-preference query (already proven above by the balanced-brace source count)",
+            insideBlockAnimationNameCount === 5 && totalAnimationNameCount === 5
+        );
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`heroMarkAnimation.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

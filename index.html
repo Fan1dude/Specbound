@@ -133,13 +133,34 @@
                          (confirmed live: the animation-delay calc()s that
                          read var(--i) all fell back to the same value, so
                          every tile animated in lockstep instead of
-                         staggered). See css/pages/home/home.css's
-                         hero-mark-enter/hero-mark-spiral keyframes, which
-                         stagger every piece's opacity/scale off this single
-                         number. No piece ever translates, rotates, or
-                         leaves its exact resting position: the motion is
-                         opacity + scale only, so the mark itself never
-                         appears to spin as one object. -->
+                         staggered). --i still drives hero-mark-enter's
+                         per-piece entrance stagger (css/pages/home/
+                         home.css), but NOT the infinite fade loop's
+                         timing — that's hero-mark-fade-0 through
+                         hero-mark-fade-4, five separate keyframes (one
+                         per :nth-child position) rather than one shared
+                         keyframe plus a var(--i)-based delay, so every
+                         piece is already at its correct phase the
+                         instant the loop appears instead of joining in
+                         one by one over the opening stretch. See that
+                         file's comment for why. hero-mark-enter is
+                         opacity + scale only (one pass, on page load);
+                         hero-mark-fade-N (the infinite loop) is opacity
+                         only — no fill/color change, no glow, no piece
+                         ever translates, rotates, scales, or leaves its
+                         exact resting position, so the mark itself never
+                         appears to spin or resize as one object. Each
+                         piece's own fade/recover pulse is 900ms,
+                         staggered 650ms from its clockwise neighbor
+                         (whole spiral: 3250ms) — the next piece doesn't
+                         start fading until the current piece is already
+                         200ms past its own dip, partway back through
+                         recovery, so a piece's own last 250ms of
+                         recovering overlaps the next piece's first
+                         250ms of fading out in a single continuously
+                         traveling gap rather than one piece dimming in
+                         isolation — see home.css's hero-mark-fade-N
+                         comments for the exact overlap timing. -->
                     <svg class="hero-mark" viewBox="-10 -10 150 177.7" xmlns="http://www.w3.org/2000/svg">
                         <g class="hero-mark-tiles">
                             <path class="hero-mark-tile" d="M 70.12 50.43 L 51.87 61.0 L 50.59 63.24 L 90.62 89.33 L 91.58 103.26 L 89.17 109.19 L 89.17 134.48 L 92.38 139.45 L 97.66 140.09 L 124.88 124.08 L 128.72 119.91 L 130.0 116.07 L 129.84 85.49 L 125.84 79.89 L 77.17 51.71 Z"></path>
