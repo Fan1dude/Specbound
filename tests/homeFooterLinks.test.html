@@ -246,6 +246,49 @@
         test("the signed-out login-redirect guard still exists in loadFooter()", guardIndex !== -1);
         test("the login-redirect guard still runs before the feedback flow can open (signed-out never reaches it)", guardIndex !== -1 && dynamicImportIndex !== -1 && guardIndex < dynamicImportIndex);
 
+        // --- Amazon Associates disclosure (required, verbatim, sitewide) -----
+        // loadFooter() is the one shared function every page's bootstrap calls
+        // (37 call sites at last count), so proving it renders here proves it
+        // renders everywhere — no per-page duplication to separately verify.
+        const disclosure = footer.querySelector(".footer-disclosure");
+        test("footer renders the Amazon Associates disclosure element", disclosure !== null);
+        test(
+            "disclosure text matches the required statement exactly",
+            disclosure?.textContent.trim() === "As an Amazon Associate I earn from qualifying purchases.",
+            disclosure?.textContent
+        );
+
+        const disclosureStyle = disclosure && getComputedStyle(disclosure);
+        test(
+            "disclosure is actually visible (not display:none/visibility:hidden/zero size)",
+            Boolean(
+                disclosureStyle &&
+                disclosureStyle.display !== "none" &&
+                disclosureStyle.visibility !== "hidden" &&
+                disclosure.getBoundingClientRect().width > 0 &&
+                disclosure.getBoundingClientRect().height > 0
+            ),
+            disclosureStyle ? `display:${disclosureStyle.display} visibility:${disclosureStyle.visibility} rect:${JSON.stringify(disclosure.getBoundingClientRect())}` : "no element"
+        );
+        test(
+            "disclosure is not an sr-only/visually-hidden element (readable without special AT, not just present in the DOM)",
+            disclosure ? !["0px", ""].includes(disclosureStyle.fontSize) && parseFloat(disclosureStyle.fontSize) > 0 && disclosureStyle.position !== "absolute" : false,
+            disclosureStyle?.fontSize
+        );
+        test(
+            "disclosure text color is readable against the dark footer background (not the same color as the background)",
+            Boolean(disclosureStyle && disclosureStyle.color !== disclosureStyle.backgroundColor && disclosureStyle.color !== "rgba(0, 0, 0, 0)"),
+            disclosureStyle?.color
+        );
+
+        // Static source check too — proves the exact required sentence is a
+        // literal string in loadFooter(), not assembled/translated/truncated
+        // at render time in a way this one live check could miss.
+        test(
+            "the exact required sentence is a literal string in js/core/layout.js's loadFooter()",
+            realFooterSrc.includes("As an Amazon Associate I earn from qualifying purchases."),
+        );
+
         // --- Brand area ---------------------------------------------------------
         const brand = footer.querySelector(".footer-brand");
         test("brand keeps SPECBOUND", brand?.querySelector("h2")?.textContent.trim() === "SPECBOUND");

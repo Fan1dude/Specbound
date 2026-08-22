@@ -305,6 +305,14 @@ export function loadFooter(pathPrefix = "") {
                 <a href="${pathPrefix}pages/legal/terms.html">Terms</a>
                 <a href="${pathPrefix}pages/legal/community-guidelines.html">Community Guidelines</a>
             </nav>
+
+            <!-- Required, verbatim Amazon Associates Operating Agreement
+                 disclosure -- must appear on every public page, in plain
+                 visible text (never hover-only), regardless of whether any
+                 given page happens to render an affiliate link itself. See
+                 js/utils/affiliateLink.js for the per-link "Affiliate
+                 link" label this complements. -->
+            <p class="footer-disclosure">As an Amazon Associate I earn from qualifying purchases.</p>
         </div>
     `;
 
