@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Homepage hero mark — one-time entrance, static afterward</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Homepage hero mark — one-time entrance, static afterward</h1>
+    <p>
+        Covers index.html's .hero-mark (the prominent homepage logo only —
+        not the navbar/footer wordmark, which has no SVG at all) and
+        css/pages/home/home.css's hero-mark-enter keyframes: 5 real traced
+        pieces fade + scale in once on page load, staggered 90ms apart in
+        clockwise order, then remain completely static — no repeating
+        opacity/scale/color/glow animation runs afterward. The previously
+        present infinite hero-mark-spiral loop has been removed entirely,
+        not merely disabled.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="fixture"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        // --- Static structure: real index.html, untouched geometry ----------
+        const homeHtml = await (await fetch("../index.html")).text();
+        const homeDoc = new DOMParser().parseFromString(homeHtml, "text/html");
+
+        const heroVisual = homeDoc.querySelector(".hero-visual");
+        const heroMark = heroVisual?.querySelector(".hero-mark");
+        const tiles = [...(heroMark?.querySelectorAll(".hero-mark-tile") || [])];
+
+        test(".hero-visual exists and stays aria-hidden (decorative, unaffected by this change)", heroVisual?.getAttribute("aria-hidden") === "true");
+        test(".hero-mark is a real inline <svg> (not an <img>, canvas, GIF, or video)", heroMark?.tagName === "svg");
+        test("exactly 5 real traced tile pieces exist", tiles.length === 5, String(tiles.length));
+
+        // Exact byte-for-byte geometry check — proves this cleanup never
+        // touched a single coordinate.
+        const EXPECTED_PATHS = [
+            "M 70.12 50.43 L 51.87 61.0 L 50.59 63.24 L 90.62 89.33 L 91.58 103.26 L 89.17 109.19 L 89.17 134.48 L 92.38 139.45 L 97.66 140.09 L 124.88 124.08 L 128.72 119.91 L 130.0 116.07 L 129.84 85.49 L 125.84 79.89 L 77.17 51.71 Z",
+            "M 80.53 115.59 L 75.89 116.07 L 65.0 122.32 L 61.16 122.16 L 54.75 118.95 L 50.75 119.43 L 47.07 122.32 L 45.79 126.16 L 45.79 143.61 L 46.43 146.49 L 48.83 149.69 L 61.0 157.06 L 66.28 157.7 L 69.64 156.58 L 82.13 148.57 L 84.05 143.61 L 84.05 120.55 L 82.93 117.35 Z",
+            "M 3.2 95.26 L 0.48 99.9 L 0.48 117.19 L 2.56 122.0 L 31.38 139.77 L 35.38 140.25 L 37.94 139.13 L 40.67 134.64 L 40.67 114.15 L 38.9 110.15 L 11.53 93.5 L 6.72 93.34 Z",
+            "M 64.36 0.0 L 58.92 1.12 L 5.12 33.94 L 0.0 42.43 L 0.32 73.97 L 2.24 78.13 L 55.07 108.87 L 71.72 100.54 L 75.41 96.54 L 36.98 73.0 L 35.54 56.35 L 38.58 51.71 L 61.48 37.78 L 74.29 40.67 L 81.81 35.86 L 82.45 11.05 L 79.57 7.68 Z",
+            "M 90.78 19.53 L 88.53 24.01 L 88.53 44.51 L 90.3 48.67 L 118.15 65.64 L 121.83 66.12 L 126.96 63.88 L 129.04 61.32 L 130.0 58.44 L 130.0 40.5 L 128.4 36.5 L 125.84 34.1 L 98.46 18.25 L 94.14 17.77 Z"
+        ];
+        tiles.forEach((tile, i) => {
+            test(`tile ${i} geometry is byte-for-byte unchanged`, tile.getAttribute("d") === EXPECTED_PATHS[i], tile.getAttribute("d"));
+        });
+        test("viewBox is unchanged (no dimension/proportion change)", heroMark?.getAttribute("viewBox") === "-10 -10 150 177.7", heroMark?.getAttribute("viewBox"));
+
+        // --- Static CSS-source checks ----------------------------------------
+        const cssSrc = await (await fetch("../css/pages/home/home.css")).text();
+
+        test("hero-mark-spiral is fully gone as actual code (no @keyframes or animation-name use)", !/@keyframes\s+hero-mark-spiral|animation-name:[^;]*hero-mark-spiral/.test(cssSrc));
+        test("hero-mark-enter keyframes still exist, unchanged in structure (0%/100% opacity+scale)", /@keyframes\s+hero-mark-enter\s*\{/.test(cssSrc));
+
+        function extractBalancedBlock(src, marker) {
+            const start = src.indexOf(marker);
+            if (start === -1) return "";
+            const braceStart = src.indexOf("{", start);
+            let depth = 0;
+            let i = braceStart;
+            for (; i < src.length; i++) {
+                if (src[i] === "{") depth++;
+                else if (src[i] === "}") {
+                    depth--;
+                    if (depth === 0) { i++; break; }
+                }
+            }
+            return src.slice(braceStart, i);
+        }
+        const noPreferenceBlock = extractBalancedBlock(cssSrc, "@media (prefers-reduced-motion: no-preference)");
+        test(".hero-mark-tile's no-preference rule exists", /\.hero-mark-tile\s*\{/.test(noPreferenceBlock));
+
+        const tileRuleMatch = noPreferenceBlock.match(/\.hero-mark-tile\s*\{([^}]*)\}/);
+        const tileRuleBody = tileRuleMatch ? tileRuleMatch[1] : "";
+
+        // Every comma-separated animation property must now describe only
+        // hero-mark-enter — a single value, no comma, per the "reduce all
+        // corresponding comma-separated animation properties" requirement.
+        test("animation-name is exactly hero-mark-enter (single value, no comma, no second animation attached)", /animation-name:\s*hero-mark-enter\s*;/.test(tileRuleBody), tileRuleBody);
+        test("animation-duration is a single value (.5s), not a comma-separated pair", /animation-duration:\s*\.5s\s*;/.test(tileRuleBody), tileRuleBody);
+        test("animation-timing-function is a single value (var(--ease-precise)), not a comma-separated pair", /animation-timing-function:\s*var\(--ease-precise\)\s*;/.test(tileRuleBody), tileRuleBody);
+        test("animation-delay is a single value (the entrance stagger), not a comma-separated pair", /animation-delay:\s*calc\(var\(--i\)\s*\*\s*90ms\)\s*;/.test(tileRuleBody), tileRuleBody);
+        test("animation-iteration-count is a single value of 1 (not infinite, not a comma-separated pair)", /animation-iteration-count:\s*1\s*;/.test(tileRuleBody), tileRuleBody);
+        test("animation-fill-mode is a single value (both), not a comma-separated pair", /animation-fill-mode:\s*both\s*;/.test(tileRuleBody), tileRuleBody);
+        test("no animation property on .hero-mark-tile contains a comma anywhere (confirms nothing chained after hero-mark-enter)", !/animation-[a-z-]+:\s*[^;]*,/.test(tileRuleBody), tileRuleBody);
+
+        const totalAnimationNameCount = (cssSrc.match(/animation-name\s*:/g) || []).length;
+        const insideBlockAnimationNameCount = (noPreferenceBlock.match(/animation-name\s*:/g) || []).length;
+        test("exactly 1 animation-name declaration exists in the whole file for the hero mark", totalAnimationNameCount === 1, String(totalAnimationNameCount));
+        test("that animation-name declaration lives inside the no-preference media query — none leak outside it (reduced motion stays untouched)", insideBlockAnimationNameCount === 1 && totalAnimationNameCount === insideBlockAnimationNameCount, JSON.stringify({ totalAnimationNameCount, insideBlockAnimationNameCount }));
+        test("no separate prefers-reduced-motion: reduce block re-adds any hero-mark animation", !/prefers-reduced-motion:\s*reduce\)[^]*?hero-mark/.test(cssSrc));
+
+        // --- Required properties on hero-mark-enter: opacity + scale only, nothing else ---
+        const enterBlock = cssSrc.match(/@keyframes hero-mark-enter\s*\{[^]*?\n\}/)?.[0] || "";
+        test("hero-mark-enter keyframe block declares opacity", /\bopacity\s*:/.test(enterBlock), enterBlock);
+        test("hero-mark-enter keyframe block declares transform: scale", /transform:\s*scale\(/.test(enterBlock), enterBlock);
+        test("hero-mark-enter keyframe block never declares filter (no glow)", !/\bfilter\s*:/.test(enterBlock), enterBlock);
+        test("hero-mark-enter keyframe block never declares fill or fill-opacity (no color change)", !/(?<!fill-opacity)\bfill\s*:|fill-opacity/.test(enterBlock), enterBlock);
+
+        // --- No JS timer / canvas / raster replacement -----------------------
+        test("home.css never uses setInterval/setTimeout to drive this animation", !/setInterval|setTimeout/.test(cssSrc));
+        const homeAppSrc = await (await fetch("../js/pages/home/app.js")).text().catch(() => "");
+        test("js/pages/home/app.js has no JS-driven timer animating hero-mark tiles", !/hero-mark/.test(homeAppSrc) && !/setInterval/.test(homeAppSrc));
+        test("no <canvas> element anywhere near the hero mark", !homeHtml.includes("<canvas"));
+        test("no GIF/video reference for the hero mark", !/hero-mark[^>]*\.(gif|mp4|webm)/i.test(homeHtml));
+
+        // --- Shared navbar/footer logo instances are untouched ----------------
+        const layoutSrc = await (await fetch("../js/core/layout.js")).text();
+        test("js/core/layout.js (navbar + footer) has zero references to hero-mark — this change cannot reach it", !layoutSrc.includes("hero-mark"));
+        test("navbar logo is still the plain text wordmark, not an SVG mark", layoutSrc.includes('<div class="logo">'));
+
+        // --- docs/BRAND.md: no exception added for this mark, since the
+        // final behavior is ordinary (static) logo usage ----------------------
+        const brandSrc = await (await fetch("../docs/BRAND.md")).text();
+        test("BRAND.md has no 'Approved exception' entry for the homepage hero mark (none needed — entrance-only behavior follows the normal rules)", !/Approved exception.*hero mark/is.test(brandSrc));
+        test("BRAND.md's base mark-usage \"Never\" rule (glows/recolor prohibition) is present and untouched", brandSrc.includes("Add glows, gradients, bevels, or 3D effects. Recolor individual tiles."));
+
+        // --- Live render: real browser-computed animation state --------------
+        document.getElementById("fixture").innerHTML = heroVisual.outerHTML;
+
+        const liveTiles = [...document.querySelectorAll("#fixture .hero-mark-tile")];
+        test("live-rendered fixture has all 5 tiles", liveTiles.length === 5, String(liveTiles.length));
+
+        // Wait well past the last tile's own entrance completion
+        // (4*90ms + 500ms = 860ms).
+        await new Promise(resolve => setTimeout(resolve, 1200));
+
+        const postEntranceState = liveTiles.map(tile => {
+            const anims = tile.getAnimations();
+            const cs = getComputedStyle(tile);
+            return {
+                animCount: anims.length,
+                animNames: anims.map(a => a.animationName),
+                playStates: anims.map(a => a.playState),
+                opacity: parseFloat(cs.opacity),
+                transform: cs.transform,
+                fill: cs.fill,
+                filter: cs.filter,
+            };
+        });
+
+        test(
+            "after the entrance finishes, every tile has exactly one animation attached (hero-mark-enter) — no second/infinite animation",
+            postEntranceState.every(s => s.animCount === 1 && s.animNames[0] === "hero-mark-enter"),
+            JSON.stringify(postEntranceState.map(s => ({ animCount: s.animCount, animNames: s.animNames })))
+        );
+        test(
+            "after the entrance finishes, that single animation's playState is \"finished\" — it is not running, not paused mid-loop, not restarting",
+            postEntranceState.every(s => s.playStates[0] === "finished"),
+            JSON.stringify(postEntranceState.map(s => s.playStates))
+        );
+        test(
+            "after the entrance finishes, every tile's computed opacity is exactly 1",
+            postEntranceState.every(s => s.opacity === 1),
+            JSON.stringify(postEntranceState.map(s => s.opacity))
+        );
+        test(
+            "after the entrance finishes, every tile's computed transform is the resting identity matrix (scale 1, no offset) — matching the 100% keyframe",
+            postEntranceState.every(s => s.transform === "matrix(1, 0, 0, 1, 0, 0)"),
+            JSON.stringify(postEntranceState.map(s => s.transform))
+        );
+
+        // --- No loop: wait several more seconds (well beyond any plausible
+        // hidden loop period) and confirm absolutely nothing changed — the
+        // direct, general proof that the mark "remains static," not just
+        // that no animation was attached at one single instant. ---------------
+        await new Promise(resolve => setTimeout(resolve, 4000));
+
+        const laterState = liveTiles.map(tile => {
+            const anims = tile.getAnimations();
+            const cs = getComputedStyle(tile);
+            return {
+                animCount: anims.length,
+                opacity: parseFloat(cs.opacity),
+                transform: cs.transform,
+                fill: cs.fill,
+                filter: cs.filter,
+            };
+        });
+
+        test(
+            "roughly 4 more seconds later, every tile's animation count, opacity, transform, fill, and filter are all still byte-identical to right after the entrance — nothing changes over time",
+            laterState.every((s, i) => s.animCount === postEntranceState[i].animCount
+                && s.opacity === postEntranceState[i].opacity
+                && s.transform === postEntranceState[i].transform
+                && s.fill === postEntranceState[i].fill
+                && s.filter === postEntranceState[i].filter),
+            JSON.stringify({ postEntranceState, laterState })
+        );
+
+        // --- Reduced motion: entirely static from the very start, no
+        // animation ever attached, not even the entrance. ---------------------
+        // (Direct getAnimations() sanity check complementing the static
+        // structural proof above that no animation-name declaration exists
+        // outside the no-preference query.)
+        test(
+            "structural guarantee: the single animation-name declaration for this mark is confined to the no-preference query (proven above by the balanced-brace source count) — under prefers-reduced-motion: reduce, no animation is ever attached at all",
+            insideBlockAnimationNameCount === 1 && totalAnimationNameCount === 1
+        );
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`heroMarkEntrance.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

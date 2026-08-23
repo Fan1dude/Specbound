@@ -311,37 +311,27 @@
    that state needs no separate rule of its own, it's just what happens
    when the query below doesn't match.
 
-   Two chained animations per tile, both driven off the same --i
-   (0-4, clockwise, set inline in index.html — 5 pieces, not 6; see that
-   file's comment for why) so the whole sequence's timing lives in one
-   formula instead of five hand-picked delays:
+   One animation per tile, driven off --i (0-4, clockwise, set inline
+   in index.html — 5 pieces, not 6; see that file's comment for why):
 
-   1. hero-mark-enter — one pass only (animation-iteration-count: 1).
-      Each tile fades and scales in, staggered 90ms apart in DOM/
-      clockwise order — "pieces appear one after another around the
-      circle."
-   2. hero-mark-spiral — infinite, starts only once the entire mark has
-      finished entering (900ms, just after the last tile's own enter
-      finishes at 4*90ms + 500ms = 860ms). Delayed a further
-      var(--i) * 1600ms per tile — 1600ms is exactly 1/5 of the 8s loop,
-      so the five tiles are always evenly spaced around the cycle. (An
-      earlier 4s/800ms pass read as too fast — this is the same design
-      at half speed, nothing else changed.) Each tile's own keyframe
-      dips low then recovers once per loop; because every tile runs the
-      identical keyframe just phase-shifted by a fifth of the loop, the
-      single dip appears to travel continuously clockwise around the
-      mark forever — "once all pieces are visible, the first
-      disappears, then the next, continuing around" — without ever
-      touching position or rotation, so the mark itself never reads as
-      spinning, only the gap moves. */
+   hero-mark-enter — one pass only (animation-iteration-count: 1). Each
+   tile fades and scales in, staggered 90ms apart in DOM/clockwise
+   order — "pieces appear one after another around the circle." Once
+   this finishes, every tile stays put at its resting opacity/scale
+   (animation-fill-mode: both) with nothing else attached — the mark is
+   fully static from then on, matching the ordinary logo-usage rules in
+   docs/BRAND.md (no exception needed). An earlier revision chained a
+   second, infinite hero-mark-spiral animation after this one (a
+   continuously traveling dip effect); that was removed in favor of
+   keeping the mark static post-entrance, not carried forward here. */
 @media (prefers-reduced-motion: no-preference) {
     .hero-mark-tile {
-        animation-name: hero-mark-enter, hero-mark-spiral;
-        animation-duration: .5s, 8s;
-        animation-timing-function: var(--ease-precise), var(--ease-standard);
-        animation-delay: calc(var(--i) * 90ms), calc(900ms + var(--i) * 1600ms);
-        animation-iteration-count: 1, infinite;
-        animation-fill-mode: both, none;
+        animation-name: hero-mark-enter;
+        animation-duration: .5s;
+        animation-timing-function: var(--ease-precise);
+        animation-delay: calc(var(--i) * 90ms);
+        animation-iteration-count: 1;
+        animation-fill-mode: both;
     }
 }
 
@@ -351,34 +341,6 @@
         transform: scale(.92);
     }
 
-    100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-}
-
-/* 0%/100% are identical (opacity 1, scale 1) so the infinite loop never
-   shows a jump at the wrap. The dip window is exactly 76%-96% — the
-   full 20% (1/5) per-tile stagger, not a narrower slice with idle time
-   on either side — so that the instant one tile finishes recovering
-   (96% of its own cycle) is the exact same global moment the next tile
-   in line starts dipping (76% of its own cycle, since consecutive
-   tiles are offset by exactly one stagger step = 20% of the loop): as
-   one piece finishes appearing, the next one immediately begins
-   disappearing, with no static all-visible pause between handoffs. */
-@keyframes hero-mark-spiral {
-    0%,
-    76% {
-        opacity: 1;
-        transform: scale(1);
-    }
-
-    86% {
-        opacity: .12;
-        transform: scale(.92);
-    }
-
-    96%,
     100% {
         opacity: 1;
         transform: scale(1);
