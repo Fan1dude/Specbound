@@ -3,9 +3,29 @@ import { supabase } from "../../core/supabase.js";
 import { showToast } from "../../core/toast.js";
 import { ensureProfile } from "../../repositories/profileRepository.js";
 import { redeemBetaInvite } from "../../repositories/communityRepository.js";
+import { getSafeRedirectTarget } from "../../utils/safeRedirect.js";
 
 loadNavbar("../");
 loadFooter("../");
+
+// Same contract as login/app.js — "../index.html" is this page's own
+// long-standing default, getSafeRedirectTarget() is the one place that
+// decides what a ?redirect= value is allowed to be.
+const rawRedirect = new URLSearchParams(window.location.search).get("redirect");
+const redirectTarget = getSafeRedirectTarget(rawRedirect, "../index.html");
+// Reused below both for "Sign in" (switching forms without losing the
+// continuation) and for the email-confirmation branch, which sends a
+// brand-new signed-out visitor to login.html — the only place that can
+// actually complete the continuation once a session exists.
+const redirectQuery = redirectTarget !== "../index.html"
+    ? `?redirect=${encodeURIComponent(redirectTarget)}`
+    : "";
+
+const loginLink = document.querySelector('.auth-switch a[href="login.html"]');
+
+if (loginLink && redirectQuery) {
+    loginLink.href = `login.html${redirectQuery}`;
+}
 
 // Milestone 22 §10 — the one gate closed-beta signup needs, kept as a
 // single local flag rather than a schema-level requirement: the
@@ -81,7 +101,7 @@ signupForm.addEventListener("submit", async (e) => {
         );
 
         setTimeout(() => {
-            window.location.href = "login.html";
+            window.location.href = `login.html${redirectQuery}`;
         }, 1500);
 
         return;
@@ -114,13 +134,13 @@ signupForm.addEventListener("submit", async (e) => {
             6000
         );
 
-        window.location.href = "../index.html";
+        window.location.href = redirectTarget;
         return;
     }
 
     showToast("Account created.", "success");
 
     setTimeout(() => {
-        window.location.href = "../index.html";
+        window.location.href = redirectTarget;
     }, 800);
 });

@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login / Signup — ?redirect= continuation</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Login / Signup — ?redirect= continuation</h1>
+    <p>
+        Runs the real js/pages/login/app.js and js/pages/signup/app.js
+        against real DOM fixtures matching their own pages' element ids.
+        supabase/toast/profile/invite-redemption are mocked so no real
+        network call is ever made; getSafeRedirectTarget (the actual
+        logic under test) stays real. The one literal line in each file
+        that assigns window.location.href is replaced, in this test's own
+        copy only, with a capture into window.__test_navigation — running
+        the real success path for real would otherwise navigate this test
+        page itself away mid-run. tests/authRedirectPaths.test.html
+        established the same "prove the resolved target, don't actually
+        navigate" approach for a related concern.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        // Must match js/utils/uploadContinuation.js's own internal
+        // STORAGE_KEY. Neither login/app.js nor signup/app.js import that
+        // module or ever touch this key themselves — title restoration is
+        // entirely upload.html's own concern (see
+        // tests/uploadAuthContinuation.test.html) — but that's exactly
+        // what the auth-failure cases below need to prove: a failed
+        // sign-in/sign-up must leave a pre-existing record completely
+        // alone, not just "this file doesn't happen to clear it."
+        const CONTINUATION_KEY = "specbound:createDraftContinuation";
+
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function waitFor(predicate, timeoutMs = 2000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                const check = () => {
+                    // predicate() runs inside a setTimeout callback, not
+                    // directly under this Promise executor — an exception
+                    // here would otherwise become an uncaught error the
+                    // executor never sees, leaving resolve/reject both
+                    // never called and this Promise hanging forever
+                    // instead of failing loudly.
+                    let result;
+                    try {
+                        result = predicate();
+                    } catch (error) {
+                        return reject(error);
+                    }
+                    if (result) return resolve();
+                    if (Date.now() - start > timeoutMs) return reject(new Error("timed out: " + predicate.toString()));
+                    setTimeout(check, 10);
+                };
+                check();
+            });
+        }
+
+        const loginSrc = await (await fetch("../js/pages/login/app.js")).text();
+        const signupSrc = await (await fetch("../js/pages/signup/app.js")).text();
+        // A blob: URL has no directory of its own to resolve a relative
+        // specifier against, so the one dependency deliberately left real
+        // below (safeRedirect.js) has to be rewritten to a real, absolute
+        // URL rather than left as the literal relative path.
+        const safeRedirectAbsoluteUrl = new URL("../js/utils/safeRedirect.js", location.href).href;
+
+        // --- Static source assertions: the success paths use the computed
+        // variable, never a re-hardcoded default, at every redirect point. ---
+        test(
+            "login/app.js's success redirect uses the computed redirectTarget, not a hardcoded \"../index.html\"",
+            /window\.location\.href = redirectTarget;/.test(loginSrc)
+        );
+        test(
+            "signup/app.js's email-confirmation branch redirects to login.html carrying redirectQuery forward",
+            /window\.location\.href = `login\.html\$\{redirectQuery\}`;/.test(signupSrc)
+        );
+        test(
+            "signup/app.js's profile-setup-error branch uses the computed redirectTarget",
+            (signupSrc.match(/window\.location\.href = redirectTarget;/g) || []).length >= 1
+        );
+        test(
+            "signup/app.js's happy-path branch also uses the computed redirectTarget (both occurrences accounted for)",
+            (signupSrc.match(/window\.location\.href = redirectTarget;/g) || []).length === 2
+        );
+        test(
+            "login/app.js imports the shared validator rather than re-implementing its own check",
+            loginSrc.includes('import { getSafeRedirectTarget } from "../../utils/safeRedirect.js"')
+        );
+        test(
+            "signup/app.js imports the same shared validator",
+            signupSrc.includes('import { getSafeRedirectTarget } from "../../utils/safeRedirect.js"')
+        );
+
+        // --- Live scenarios -----------------------------------------------
+        // Each real app.js looks its own elements up via a plain global
+        // document.getElementById/querySelector, not scoped to any one
+        // container — the previous scenario's container is removed
+        // before the next is created so there's never more than one
+        // #email/#loginForm/etc. in the document at once.
+        let previousContainer = null;
+
+        async function runScenario(pageSrc, {
+            pagePath,
+            queryString = "",
+            formId,
+            switchLinkHref,
+            extraFixtureHtml = "",
+            extraMocks = {}
+        }) {
+            if (previousContainer) previousContainer.remove();
+
+            const container = document.createElement("div");
+            container.innerHTML = `
+                <p class="auth-switch"><a href='${switchLinkHref}'>link</a></p>
+                <form id="${formId}">
+                    <input id="email" type="email">
+                    <input id="password" type="password">
+                    ${extraFixtureHtml}
+                    <button type="submit" id="${formId === "loginForm" ? "loginSubmit" : "signupSubmit"}">Go</button>
+                </form>
+            `;
+            document.body.appendChild(container);
+            previousContainer = container;
+
+            const calls = [];
+            globalThis.__mock = {
+                calls,
+                signInResult: { data: { user: { id: "u1", user_metadata: {} } }, error: null },
+                signUpResult: { data: { session: null, user: { id: "u1" } }, error: null },
+                ...extraMocks
+            };
+
+            const supabaseSrc = `
+                export const supabase = {
+                    auth: {
+                        signInWithPassword: async (args) => { globalThis.__mock.calls.push(["signInWithPassword", args]); return globalThis.__mock.signInResult; },
+                        signUp: async (args) => { globalThis.__mock.calls.push(["signUp", args]); return globalThis.__mock.signUpResult; }
+                    }
+                };
+            `;
+            const toastSrc = `export function showToast(message, type) { globalThis.__mock.calls.push(["showToast", message, type]); }`;
+            const layoutSrc = `export function loadNavbar() {} export function loadFooter() {}`;
+            const profileSrc = `export async function ensureProfile() { globalThis.__mock.calls.push(["ensureProfile"]); }`;
+            const inviteSrc = `export async function redeemBetaInvite(code) { globalThis.__mock.calls.push(["redeemBetaInvite", code]); }`;
+
+            const rewrites = {
+                '"../../core/layout.js"': blobUrl(layoutSrc),
+                '"../../core/supabase.js"': blobUrl(supabaseSrc),
+                '"../../core/toast.js"': blobUrl(toastSrc),
+                '"../../repositories/profileRepository.js"': blobUrl(profileSrc),
+                '"../../repositories/communityRepository.js"': blobUrl(inviteSrc),
+                // Deliberately left real — rewritten to its actual
+                // absolute URL rather than mocked, same reasoning as
+                // tests/uploadAuthContinuation.test.html.
+                '"../../utils/safeRedirect.js"': safeRedirectAbsoluteUrl
+            };
+
+            let rewritten = pageSrc;
+            for (const [from, to] of Object.entries(rewrites)) {
+                rewritten = rewritten.replaceAll(from, `"${to}"`);
+            }
+
+            // Never let a real navigation happen mid-test-run — capture
+            // instead of assigning. Matches the exact literal lines
+            // written in each real file.
+            window.__test_navigation = [];
+            rewritten = rewritten
+                .replaceAll("window.location.href = redirectTarget;", "window.__test_navigation.push(redirectTarget);")
+                .replaceAll("window.location.href = `login.html${redirectQuery}`;", "window.__test_navigation.push(`login.html${redirectQuery}`);")
+                // Exposes the computed values for direct assertion, same
+                // idea as the navigation capture above — instrumenting
+                // this test's own copy of the source, not the real file.
+                .replace(
+                    "const redirectTarget = getSafeRedirectTarget(rawRedirect,",
+                    "window.__test_probe = { rawRedirect }; const redirectTarget = window.__test_probe.redirectTarget = getSafeRedirectTarget(rawRedirect,"
+                );
+
+            history.replaceState(null, "", pagePath + queryString);
+            await import(blobUrl(rewritten));
+
+            return {
+                container,
+                calls,
+                form: container.querySelector(`#${formId}`),
+                switchLink: container.querySelector(".auth-switch a"),
+                probe: window.__test_probe,
+                navigation: window.__test_navigation
+            };
+        }
+
+        // Wrapped so a genuine bug or hang in any one scenario shows up as a
+        // failed, named test case with its real error, instead of silently
+        // aborting the rest of the file.
+        try {
+
+        // === login.html ==========================================================
+
+        // Case 1: valid redirect present
+        {
+            const s = await runScenario(loginSrc, {
+                pagePath: "/pages/login.html",
+                queryString: "?redirect=" + encodeURIComponent("upload.html?technology=arduino"),
+                formId: "loginForm",
+                switchLinkHref: "signup.html"
+            });
+            test(
+                "login: a valid ?redirect= resolves to the real absolute upload.html path",
+                s.probe.redirectTarget === "/pages/upload.html?technology=arduino",
+                s.probe.redirectTarget
+            );
+            test(
+                "login: the \"Create one\" link carries the same redirect forward to signup.html",
+                s.switchLink.getAttribute("href") === "signup.html?redirect=" + encodeURIComponent("/pages/upload.html?technology=arduino"),
+                s.switchLink.getAttribute("href")
+            );
+        }
+
+        // Case 2: an external/unsafe redirect falls back, and the switch link is left untouched
+        {
+            const s = await runScenario(loginSrc, {
+                pagePath: "/pages/login.html",
+                queryString: "?redirect=" + encodeURIComponent("https://evil.example/steal"),
+                formId: "loginForm",
+                switchLinkHref: "signup.html"
+            });
+            test("login: an external ?redirect= falls back to the existing default", s.probe.redirectTarget === "../index.html", s.probe.redirectTarget);
+            test(
+                "login: with nothing safe to preserve, the \"Create one\" link stays the plain default from the markup",
+                s.switchLink.getAttribute("href") === "signup.html",
+                s.switchLink.getAttribute("href")
+            );
+        }
+
+        // Case 3: no redirect at all — direct visit keeps the existing default
+        {
+            const s = await runScenario(loginSrc, { pagePath: "/pages/login.html", queryString: "", formId: "loginForm", switchLinkHref: "signup.html" });
+            test("login: a direct visit with no ?redirect= keeps the existing \"../index.html\" default", s.probe.redirectTarget === "../index.html", s.probe.redirectTarget);
+        }
+
+        // Case 4: a full, mocked successful login reaches the captured
+        // navigation with the right (safe) target — proves the wiring
+        // end-to-end, not just the standalone computed value.
+        {
+            const s = await runScenario(loginSrc, {
+                pagePath: "/pages/login.html",
+                queryString: "?redirect=" + encodeURIComponent("upload.html?technology=arduino"),
+                formId: "loginForm",
+                switchLinkHref: "signup.html"
+            });
+            s.container.querySelector("#email").value = "person@example.com";
+            s.container.querySelector("#password").value = "correct horse battery staple";
+            s.form.dispatchEvent(new Event("submit", { cancelable: true }));
+
+            await waitFor(() => s.navigation.length > 0);
+            test(
+                "login: a successful sign-in navigates to the validated continuation target, not the plain homepage default",
+                s.navigation[0] === "/pages/upload.html?technology=arduino",
+                JSON.stringify(s.navigation)
+            );
+        }
+
+        // Case 5: existing invite-code redemption behavior is untouched
+        {
+            const s = await runScenario(loginSrc, {
+                pagePath: "/pages/login.html",
+                queryString: "",
+                formId: "loginForm",
+                switchLinkHref: "signup.html",
+                extraMocks: { signInResult: { data: { user: { id: "u1", user_metadata: { invite_code: "ABC123" } } }, error: null } }
+            });
+            s.container.querySelector("#email").value = "person@example.com";
+            s.container.querySelector("#password").value = "correct horse battery staple";
+            s.form.dispatchEvent(new Event("submit", { cancelable: true }));
+
+            await waitFor(() => s.calls.some(c => c[0] === "redeemBetaInvite"));
+            test(
+                "login: an invite_code captured at signup is still redeemed on first login, unchanged by this fix",
+                s.calls.find(c => c[0] === "redeemBetaInvite")?.[1] === "ABC123"
+            );
+        }
+
+        // Case 5b: a failed login leaves a pre-existing continuation record
+        // untouched, so a retry after fixing the password can still
+        // consume it — login/app.js never imports uploadContinuation.js,
+        // so this proves that at the behavioral level, not just by
+        // absence of an import.
+        {
+            const seeded = { version: 1, technology: "arduino", title: "Untouched by failure", savedAt: Date.now() };
+            localStorage.setItem(CONTINUATION_KEY, JSON.stringify(seeded));
+
+            const s = await runScenario(loginSrc, {
+                pagePath: "/pages/login.html",
+                queryString: "?redirect=" + encodeURIComponent("upload.html?technology=arduino"),
+                formId: "loginForm",
+                switchLinkHref: "signup.html",
+                extraMocks: { signInResult: { data: null, error: { message: "Invalid login credentials" } } }
+            });
+            s.container.querySelector("#email").value = "person@example.com";
+            s.container.querySelector("#password").value = "wrong password";
+            s.form.dispatchEvent(new Event("submit", { cancelable: true }));
+
+            await waitFor(() => s.calls.some(c => c[0] === "showToast"));
+
+            test(
+                "login: a failed sign-in leaves a pre-existing continuation record untouched",
+                localStorage.getItem(CONTINUATION_KEY) === JSON.stringify(seeded),
+                localStorage.getItem(CONTINUATION_KEY)
+            );
+            test("login: a failed sign-in never navigates anywhere", s.navigation.length === 0, JSON.stringify(s.navigation));
+
+            localStorage.removeItem(CONTINUATION_KEY);
+        }
+
+        // === signup.html ==========================================================
+
+        // Case 6: valid redirect present, cross-link to login carries it
+        {
+            const s = await runScenario(signupSrc, {
+                pagePath: "/pages/signup.html",
+                queryString: "?redirect=" + encodeURIComponent("upload.html?technology=robotics"),
+                formId: "signupForm",
+                switchLinkHref: "login.html",
+                extraFixtureHtml: `
+                    <input id="username" value="builder1">
+                    <div id="inviteCodeGroup" hidden><input id="inviteCode"></div>
+                `
+            });
+            test(
+                "signup: a valid ?redirect= resolves the same way login.html's does",
+                s.probe.redirectTarget === "/pages/upload.html?technology=robotics",
+                s.probe.redirectTarget
+            );
+            test(
+                "signup: the \"Sign in\" link carries the same redirect forward to login.html",
+                s.switchLink.getAttribute("href") === "login.html?redirect=" + encodeURIComponent("/pages/upload.html?technology=robotics"),
+                s.switchLink.getAttribute("href")
+            );
+        }
+
+        // Case 7: no redirect — switch link stays the plain default
+        {
+            const s = await runScenario(signupSrc, {
+                pagePath: "/pages/signup.html",
+                queryString: "",
+                formId: "signupForm",
+                switchLinkHref: "login.html",
+                extraFixtureHtml: `
+                    <input id="username" value="builder1">
+                    <div id="inviteCodeGroup" hidden><input id="inviteCode"></div>
+                `
+            });
+            test("signup: with no ?redirect=, the \"Sign in\" link stays the plain default", s.switchLink.getAttribute("href") === "login.html", s.switchLink.getAttribute("href"));
+        }
+
+        // Case 8: email-confirmation-required path (no session yet) sends the
+        // visitor to login.html WITH the continuation attached — the
+        // realistic signup path this app actually uses, confirmed live.
+        {
+            const s = await runScenario(signupSrc, {
+                pagePath: "/pages/signup.html",
+                queryString: "?redirect=" + encodeURIComponent("upload.html?technology=printing"),
+                formId: "signupForm",
+                switchLinkHref: "login.html",
+                extraFixtureHtml: `
+                    <input id="username" value="builder1">
+                    <div id="inviteCodeGroup" hidden><input id="inviteCode" value="INVITE1"></div>
+                `
+            });
+            s.container.querySelector("#email").value = "new@example.com";
+            s.container.querySelector("#password").value = "correct horse battery staple";
+            s.form.dispatchEvent(new Event("submit", { cancelable: true }));
+
+            await waitFor(() => s.calls.some(c => c[0] === "signUp"));
+            await new Promise(r => setTimeout(r, 1600)); // the real 1500ms setTimeout before navigating
+
+            test(
+                "signup: the email-confirmation branch (no session yet) sends the visitor to login.html with the continuation preserved",
+                s.navigation[0] === "login.html?redirect=" + encodeURIComponent("/pages/upload.html?technology=printing"),
+                JSON.stringify(s.navigation)
+            );
+        }
+
+        // Case 9: a failed signUp() call leaves a pre-existing continuation
+        // record untouched, same guarantee as login's failure path above.
+        {
+            const seeded = { version: 1, technology: "printing", title: "Untouched by signup failure", savedAt: Date.now() };
+            localStorage.setItem(CONTINUATION_KEY, JSON.stringify(seeded));
+
+            const s = await runScenario(signupSrc, {
+                pagePath: "/pages/signup.html",
+                queryString: "?redirect=" + encodeURIComponent("upload.html?technology=printing"),
+                formId: "signupForm",
+                switchLinkHref: "login.html",
+                extraFixtureHtml: `
+                    <input id="username" value="builder1">
+                    <div id="inviteCodeGroup" hidden><input id="inviteCode" value="INVITE1"></div>
+                `,
+                extraMocks: { signUpResult: { data: null, error: { message: "User already registered" } } }
+            });
+            s.container.querySelector("#email").value = "new@example.com";
+            s.container.querySelector("#password").value = "correct horse battery staple";
+            s.form.dispatchEvent(new Event("submit", { cancelable: true }));
+
+            await waitFor(() => s.calls.some(c => c[0] === "showToast"));
+
+            test(
+                "signup: a failed signUp() call leaves a pre-existing continuation record untouched",
+                localStorage.getItem(CONTINUATION_KEY) === JSON.stringify(seeded),
+                localStorage.getItem(CONTINUATION_KEY)
+            );
+            test("signup: a failed signUp() call never navigates anywhere", s.navigation.length === 0, JSON.stringify(s.navigation));
+
+            localStorage.removeItem(CONTINUATION_KEY);
+        }
+
+        } catch (crashError) {
+            test("no scenario threw or timed out before the file finished running", false, String(crashError?.stack || crashError));
+        }
+
+        // Don't leak a leftover record into whichever test file the runner
+        // loads next in this same browser context.
+        localStorage.removeItem(CONTINUATION_KEY);
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`loginSignupContinuation.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>
