@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Finding 05 — public renderResources.js URL-scheme validation</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Finding 05 — public renderResources.js URL-scheme validation</h1>
+    <p>
+        Launch Readiness Audit Finding 05: resource.url went straight into
+        href via escapeAttribute() alone, with no scheme check — a stored
+        javascript:/data: URL would become a live, clickable link.
+        isSafeHttpUrl() (js/utils/safeUrl.js, the same canonical check
+        renderSpecifications.js already routes its own link-shaped values
+        through) is now required before a resource renders as a link at
+        all. An unsafe or absent-but-truthy-checked URL never hides the
+        resource entirely — its label still renders as plain text.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <div id="buildResources"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        const { renderResources } = await import("../js/pages/build/renderResources.js");
+        const container = document.getElementById("buildResources");
+
+        function renderOne(resource) {
+            renderResources([resource]);
+            return {
+                linkEl: container.querySelector("a.resource-link"),
+                textEl: container.querySelector("p.resource-link-unsafe"),
+                html: container.innerHTML
+            };
+        }
+
+        // --- Case 1: revision-snapshot null vs. empty-array conventions,
+        // unrelated to this fix but must remain correct. -----------------------
+        renderResources(null);
+        test("resources === null shows the \"not recorded for this revision\" message", container.textContent.includes("not recorded for this revision"));
+
+        renderResources([]);
+        test("an empty array shows \"No resources added yet.\"", container.textContent.includes("No resources added yet."));
+
+        renderResources([{ label: "No URL", url: "" }]);
+        test("a resource with no url at all is still excluded, unchanged pre-existing behavior", !container.querySelector("a.resource-link, p.resource-link-unsafe"));
+
+        // --- Case 2: valid http/https links still work, existing target/rel
+        // contract preserved. -----------------------------------------------------
+        {
+            const s = renderOne({ label: "Datasheet", url: "https://example.com/datasheet.pdf" });
+            test("a valid https url renders a link", !!s.linkEl);
+            test("the link's href is exactly the https URL", s.linkEl?.getAttribute("href") === "https://example.com/datasheet.pdf", s.linkEl?.getAttribute("href"));
+            test("the link's visible text is the label", s.linkEl?.textContent.trim() === "Datasheet", s.linkEl?.textContent);
+            test("the link opens in a new tab", s.linkEl?.getAttribute("target") === "_blank");
+            test("the link uses safe rel (noopener noreferrer)", s.linkEl?.getAttribute("rel") === "noopener noreferrer", s.linkEl?.getAttribute("rel"));
+        }
+        {
+            const s = renderOne({ label: "Reference", url: "http://example.com/ref" });
+            test("a valid http url also renders a link", !!s.linkEl);
+        }
+        {
+            const s = renderOne({ label: "", url: "https://example.com/no-label" });
+            test("a valid url with no label falls back to the url itself as the link text", s.linkEl?.textContent.trim() === "https://example.com/no-label", s.linkEl?.textContent);
+        }
+
+        // --- Case 3: a relative URL is rejected, per isSafeHttpUrl's own
+        // documented contract (no base is ever passed, so a relative value
+        // throws the same as a malformed one). ------------------------------------
+        {
+            const s = renderOne({ label: "Relative Link", url: "/relative/path.html" });
+            test("a relative URL never renders as a link", !s.linkEl, s.html);
+            test("a relative URL's resource still renders its label as plain text, not hidden entirely", s.textEl?.textContent.trim() === "Relative Link", s.textEl?.textContent);
+        }
+
+        // --- Case 4: dangerous and disguised schemes — every one of these
+        // must never appear in an href, while the label still renders. ------------
+        const unsafeUrls = {
+            "javascript: scheme": "javascript:alert(document.cookie)",
+            "mixed-case JavaScript: scheme": "JavaScript:alert(1)",
+            "fully uppercase JAVASCRIPT: scheme": "JAVASCRIPT:alert(1)",
+            "data: scheme": "data:text/html,<script>alert(1)<\/script>",
+            "vbscript: scheme": "vbscript:msgbox(1)",
+            "file: scheme": "file:///etc/passwd",
+            "blob: scheme": "blob:https://example.com/9a1c2b3d-uuid",
+            "protocol-relative URL": "//evil.example/steal",
+            "backslash protocol-relative URL": "/\\evil.example/steal",
+            "double-backslash variant": "\\\\evil.example/steal",
+            "leading-whitespace-obfuscated javascript:": "   javascript:alert(1)",
+            "embedded-tab-obfuscated javascript:": "java\tscript:alert(1)",
+            "embedded-newline-obfuscated javascript:": "java\nscript:alert(1)",
+            "malformed, not a URL at all": "not a url at all"
+        };
+
+        for (const [description, url] of Object.entries(unsafeUrls)) {
+            const s = renderOne({ label: "Suspicious Link", url });
+            test(`${description} never renders as a link`, !s.linkEl, s.html);
+            test(`${description}: href never appears anywhere in the rendered output`, !s.html.includes('href='), s.html);
+            test(`${description}: the resource's label still renders as plain text, not hidden`, s.textEl?.textContent.trim() === "Suspicious Link", s.textEl?.textContent);
+        }
+
+        // -- an unsafe URL with no label falls back to showing the raw url
+        // text itself (safely escaped, never as a link). ---------------------------
+        {
+            const s = renderOne({ label: "", url: "javascript:alert(1)" });
+            test("an unsafe URL with no label falls back to the raw url as escaped plain text", s.textEl?.textContent.trim() === "javascript:alert(1)", s.textEl?.textContent);
+            test("that fallback text never becomes a live link", !s.linkEl);
+        }
+
+        // --- Case 5: whitespace around an otherwise-safe URL is not itself
+        // unsafe (the WHATWG URL parser trims it before scheme resolution) —
+        // confirms the rejections above are about the *scheme*, not merely
+        // the presence of whitespace. -----------------------------------------------
+        {
+            const s = renderOne({ label: "Padded", url: "  https://example.com/padded  " });
+            test("leading/trailing whitespace around a genuinely safe URL still renders a link", !!s.linkEl, s.html);
+        }
+
+        // --- Case 6: escaping remains intact — quotes, angle brackets, and
+        // ampersands in the LABEL must never be interpreted as markup, in
+        // both the link path and the unsafe-plain-text path. ------------------------
+        {
+            const s = renderOne({ label: `<img src=x onerror=alert(1)> & "quoted" 'text'`, url: "https://example.com/safe" });
+            test("HTML-special characters in the label are escaped in the link path, not rendered as markup", !container.querySelector("a.resource-link img"), s.html);
+            test("the escaped label's visible text still reads correctly (link path)", s.linkEl?.textContent.trim() === `<img src=x onerror=alert(1)> & "quoted" 'text'`, s.linkEl?.textContent);
+        }
+        {
+            const s = renderOne({ label: `<img src=x onerror=alert(1)> & "quoted" 'text'`, url: "javascript:alert(1)" });
+            test("HTML-special characters in the label are escaped in the unsafe-text path too", !container.querySelector("p.resource-link-unsafe img"), s.html);
+            test("the escaped label's visible text still reads correctly (unsafe-text path)", s.textEl?.textContent.trim() === `<img src=x onerror=alert(1)> & "quoted" 'text'`, s.textEl?.textContent);
+        }
+
+        // -- quotes/angle-brackets/ampersands inside an otherwise-valid
+        // https URL: the scheme check accepts it (still http/https), so the
+        // escaping burden falls entirely on escapeAttribute() for the href
+        // itself — proves that burden is still met, not bypassed by this fix. ------
+        {
+            const trickyUrl = `https://example.com/?x="><img src=x onerror=alert(1)>&y=<script>alert(2)<\/script>`;
+            const s = renderOne({ label: "Tricky", url: trickyUrl });
+
+            test("a scheme-valid URL containing quotes/angle-brackets/ampersands still renders as a link", !!s.linkEl);
+            test("its href attribute value is exactly the original URL", s.linkEl?.getAttribute("href") === trickyUrl, s.linkEl?.getAttribute("href"));
+            test(
+                "the raw HTML around the link contains no unescaped attribute-breaking tag",
+                !container.querySelector("a.resource-link img"),
+                s.html
+            );
+        }
+
+        // --- Case 7: a mix of safe and unsafe resources — one unsafe entry
+        // must never take down or hide an unrelated safe entry, and vice versa. ----
+        {
+            renderResources([
+                { label: "Safe One", url: "https://example.com/one" },
+                { label: "Unsafe One", url: "javascript:alert(1)" },
+                { label: "Safe Two", url: "http://example.com/two" }
+            ]);
+
+            const links = [...container.querySelectorAll("a.resource-link")];
+            const texts = [...container.querySelectorAll("p.resource-link-unsafe")];
+
+            test("mixed list: exactly two safe links render", links.length === 2, links.length);
+            test("mixed list: exactly one unsafe entry renders as plain text", texts.length === 1, texts.length);
+            test("mixed list: both safe labels are present", links.some(a => a.textContent.trim() === "Safe One") && links.some(a => a.textContent.trim() === "Safe Two"));
+            test("mixed list: the unsafe label is present as text, not a link", texts[0]?.textContent.trim() === "Unsafe One");
+        }
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`renderResources.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

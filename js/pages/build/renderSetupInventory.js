@@ -1,5 +1,6 @@
 import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
 import { icon } from "../../utils/icons.js";
+import { isSafeHttpUrl } from "../../utils/safeUrl.js";
 import {
     normalizeInventory,
     isInventoryEmpty,
@@ -88,10 +89,17 @@ function renderCategory(category, currency) {
 // so its visible text can never grow with the URL's length (tracking
 // parameters and all). The href itself is untouched; only what's
 // *displayed* is decoupled from it.
+//
+// originalUrl is user-controlled free text (product-link import, not a
+// curated field) -- only a genuine http(s) URL (isSafeHttpUrl(),
+// js/utils/safeUrl.js) becomes the link's href. When it isn't, the link
+// control simply doesn't render; the title/price/source above are
+// already independent of it, so an unsafe URL never hides the rest of an
+// otherwise-valid inventory item.
 function renderItem(item, currency) {
     const title = item.title || "Untitled product";
 
-    const linkMarkup = item.originalUrl
+    const linkMarkup = (item.originalUrl && isSafeHttpUrl(item.originalUrl))
         ? `<a class="setup-item-public-link" href="${escapeAttribute(item.originalUrl)}" target="_blank" rel="noopener noreferrer">
                 View product
                 <span aria-hidden="true">${icon("arrow-up-right", 16)}</span>

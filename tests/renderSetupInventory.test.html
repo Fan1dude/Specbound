@@ -288,6 +288,103 @@
         test("Free-only inventory: the section is shown, never hidden just because nothing costs money", section.hidden === false);
         test("Free-only inventory: labeled \"Setup total\" (fully known, since Free counts as known $0)", container.querySelector(".setup-inventory-total-label")?.textContent === "Setup total");
 
+        // === Finding 05 — originalUrl scheme validation =========================
+        // Audit finding: originalUrl went straight into href via
+        // escapeAttribute() alone, with no scheme check — a stored
+        // javascript:/data: URL would become a live, clickable link.
+        // isSafeHttpUrl() (js/utils/safeUrl.js) is now required before the
+        // link renders at all; the title/price/source stay independent of
+        // it (already true structurally, see the comment above renderItem),
+        // so an unsafe URL never hides the rest of an otherwise-valid item.
+        function renderSingleItemWithUrl(url) {
+            renderSetupInventory(makeInventory([
+                baseItem({ id: "item-1", title: "Test Product", originalUrl: url, pricePaid: { cents: 2500, isFree: false } })
+            ]));
+            return {
+                titleEl: container.querySelector(".setup-item-public-title"),
+                linkEl: container.querySelector(".setup-item-public-link"),
+                priceEl: container.querySelector(".setup-item-public-price")
+            };
+        }
+
+        // -- valid links still work, with the existing target/rel contract. ----
+        {
+            const s = renderSingleItemWithUrl("https://example.com/product/123");
+            test("a valid https originalUrl renders a link", !!s.linkEl);
+            test("the link's href is exactly the https URL", s.linkEl?.getAttribute("href") === "https://example.com/product/123", s.linkEl?.getAttribute("href"));
+            test("the link opens in a new tab", s.linkEl?.getAttribute("target") === "_blank");
+            test("the link uses safe rel", s.linkEl?.getAttribute("rel") === "noopener noreferrer", s.linkEl?.getAttribute("rel"));
+        }
+        {
+            const s = renderSingleItemWithUrl("http://example.com/product/123");
+            test("a valid http originalUrl also renders a link", !!s.linkEl);
+            test("the http link's href is exact", s.linkEl?.getAttribute("href") === "http://example.com/product/123", s.linkEl?.getAttribute("href"));
+        }
+
+        // -- a relative URL is rejected, per isSafeHttpUrl's own documented
+        // contract (no base is ever passed, so a relative value throws in
+        // the URL constructor the same as a malformed one, rather than
+        // being silently resolved against the current page). ------------------
+        {
+            const s = renderSingleItemWithUrl("/relative/path.html");
+            test("a relative URL never renders a link", !s.linkEl, s.linkEl?.outerHTML);
+            test("a relative URL still leaves the title/price rendering (item not hidden)", s.titleEl?.textContent === "Test Product" && !!s.priceEl);
+        }
+
+        // -- dangerous and disguised schemes: every one of these must
+        // produce no link at all, while the rest of the item still renders. --
+        const unsafeUrls = {
+            "javascript: scheme": "javascript:alert(document.cookie)",
+            "mixed-case JavaScript: scheme": "JavaScript:alert(1)",
+            "fully uppercase JAVASCRIPT: scheme": "JAVASCRIPT:alert(1)",
+            "data: scheme": "data:text/html,<script>alert(1)<\/script>",
+            "vbscript: scheme": "vbscript:msgbox(1)",
+            "file: scheme": "file:///etc/passwd",
+            "blob: scheme": "blob:https://example.com/9a1c2b3d-uuid",
+            "protocol-relative URL": "//evil.example/steal",
+            "backslash protocol-relative URL": "/\\evil.example/steal",
+            "double-backslash variant": "\\\\evil.example/steal",
+            "leading-whitespace-obfuscated javascript:": "   javascript:alert(1)",
+            "embedded-tab-obfuscated javascript:": "java\tscript:alert(1)",
+            "embedded-newline-obfuscated javascript:": "java\nscript:alert(1)",
+            "malformed, not a URL at all": "not a url at all",
+            "empty string": "",
+            "null": null,
+            "undefined": undefined
+        };
+
+        for (const [description, url] of Object.entries(unsafeUrls)) {
+            const s = renderSingleItemWithUrl(url);
+            test(`${description} never renders a link (href must never receive it)`, !s.linkEl, s.linkEl?.outerHTML);
+            test(`${description}: the item's title/price still render (not hidden just for an unsafe/absent URL)`, s.titleEl?.textContent === "Test Product" && !!s.priceEl);
+        }
+
+        // -- whitespace around an otherwise-safe URL is not itself unsafe
+        // (the WHATWG URL parser trims/strips it before scheme resolution) —
+        // confirms the rejections above are about the *scheme*, not merely
+        // the presence of whitespace. -------------------------------------------
+        {
+            const s = renderSingleItemWithUrl("  https://example.com/padded  ");
+            test("leading/trailing whitespace around a genuinely safe URL still renders a link", !!s.linkEl, s.linkEl?.outerHTML);
+        }
+
+        // -- quotes/angle-brackets/ampersands inside an otherwise-valid
+        // https URL: the scheme check accepts it (still http/https), so the
+        // escaping burden falls entirely on escapeAttribute() — this proves
+        // that burden is still met, not bypassed by this fix. -------------------
+        {
+            const trickyUrl = `https://example.com/?x="><img src=x onerror=alert(1)>&y=<script>alert(2)<\/script>`;
+            const s = renderSingleItemWithUrl(trickyUrl);
+
+            test("a scheme-valid URL containing quotes/angle-brackets/ampersands still renders as a link", !!s.linkEl);
+            test("its href attribute value is exactly the original (unescaped-back) URL", s.linkEl?.getAttribute("href") === trickyUrl, s.linkEl?.getAttribute("href"));
+            test(
+                "the raw HTML around the link contains no unescaped attribute-breaking quote or tag",
+                !container.querySelector(".setup-item-public-link img"),
+                container.innerHTML
+            );
+        }
+
         // --- Render + report ------------------------------------------------
         const resultsEl = document.getElementById("results");
         resultsEl.innerHTML = results

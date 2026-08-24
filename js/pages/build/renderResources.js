@@ -1,4 +1,5 @@
 import { escapeHtml, escapeAttribute } from "../../utils/escapeHtml.js";
+import { isSafeHttpUrl } from "../../utils/safeUrl.js";
 
 // resources === null means "not recorded for this revision" (a revision
 // published before Milestone 5C captured per-revision snapshots) —
@@ -21,12 +22,33 @@ export function renderResources(resources) {
         return;
     }
 
-    container.innerHTML = items
-        .map(resource => `
+    container.innerHTML = items.map(renderResource).join("");
+}
+
+// A resource's url is user-controlled free text -- the editor's own
+// <input type="url"> (renderResourcesSection.js) doesn't stop a builder
+// from pasting a javascript:/data: scheme there, and HTML-attribute
+// escaping alone (escapeAttribute()) only stops markup injection, not a
+// syntactically-valid dangerous scheme from becoming a live href. Only a
+// genuine http(s) URL (isSafeHttpUrl(), js/utils/safeUrl.js -- the same
+// canonical check renderSpecifications.js already routes its own
+// link-shaped values through) becomes a clickable link.
+//
+// An unsafe url still has a real label worth showing, so it renders as
+// plain text instead of the whole resource silently disappearing -- the
+// same "keep what's useful, drop only the dangerous part" treatment
+// renderSetupInventory.js already gives an unsafe product link.
+function renderResource(resource) {
+    const displayText = resource.label?.trim() || resource.url;
+
+    if (isSafeHttpUrl(resource.url)) {
+        return `
             <a class="resource-link" href="${escapeAttribute(resource.url)}" target="_blank" rel="noopener noreferrer">
-                ${escapeHtml(resource.label?.trim() || resource.url)}
+                ${escapeHtml(displayText)}
             </a>
-        `)
-        .join("");
+        `;
+    }
+
+    return `<p class="resource-link resource-link-unsafe">${escapeHtml(displayText)}</p>`;
 }
 
