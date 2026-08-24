@@ -3,9 +3,27 @@ import { supabase } from "../../core/supabase.js";
 import { showToast } from "../../core/toast.js";
 import { ensureProfile } from "../../repositories/profileRepository.js";
 import { redeemBetaInvite } from "../../repositories/communityRepository.js";
+import { getSafeRedirectTarget } from "../../utils/safeRedirect.js";
 
 loadNavbar("../");
 loadFooter("../");
+
+// "../index.html" is this page's own long-standing default — unchanged
+// for a direct visit or an unsafe/missing ?redirect=. getSafeRedirectTarget()
+// (js/utils/safeRedirect.js) is the one place that decides what counts as
+// safe; this file never re-implements that check itself.
+const rawRedirect = new URLSearchParams(window.location.search).get("redirect");
+const redirectTarget = getSafeRedirectTarget(rawRedirect, "../index.html");
+
+// Carries a real continuation forward across "Create one" too, so
+// switching to Signup and back doesn't drop it. Left untouched (the
+// plain static "signup.html" from the markup) when there's nothing worth
+// preserving, rather than adding a no-op "?redirect=..%2Findex.html".
+const signupLink = document.querySelector('.auth-switch a[href="signup.html"]');
+
+if (signupLink && redirectTarget !== "../index.html") {
+    signupLink.href = `signup.html?redirect=${encodeURIComponent(redirectTarget)}`;
+}
 
 const loginForm = document.getElementById("loginForm");
 const loginSubmit = document.getElementById("loginSubmit");
@@ -60,5 +78,5 @@ loginForm.addEventListener("submit", async (e) => {
         }
     }
 
-    window.location.href = "../index.html";
+    window.location.href = redirectTarget;
 });

@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Create Blueprint — auth continuation &amp; double-submit guard</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Create Blueprint — auth continuation &amp; double-submit guard</h1>
+    <p>
+        Runs the real js/pages/upload/app.js against a real DOM fixture
+        matching pages/upload.html's own element ids, with only its
+        external dependencies (layout, toast, auth, draft creation)
+        replaced — the technology config (TECHNOLOGIES/getTechnology) and
+        TechnologyRadioCard rendering stay real, since the restoration
+        behavior under test lives in how app.js drives those, not in a
+        reimplementation of them. Each scenario re-fetches and re-imports
+        a fresh blob URL of the real source against its own isolated DOM
+        container, since the module runs real top-level side effects on
+        import (mirrors tests/editorPublishUnpublish.test.html's own
+        established pattern for this class of page-bootstrap script).
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        // Must match js/utils/uploadContinuation.js's own internal
+        // STORAGE_KEY -- there's no public export for it (deliberately not
+        // part of that module's contract), so scenarios that seed a
+        // fixture or assert on the raw stored record need the literal key.
+        const CONTINUATION_KEY = "specbound:createDraftContinuation";
+
+        // The real, canonical limit -- imported rather than hardcoded so
+        // the boundary tests below stay correct if the app's own title
+        // rule ever changes, instead of silently drifting from it.
+        const { MAX_TITLE_LENGTH } = await import("../js/services/draftValidation.js");
+
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function waitFor(predicate, timeoutMs = 2000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                const check = () => {
+                    // predicate() runs inside a setTimeout callback, not
+                    // directly under this Promise executor — an exception
+                    // here (e.g. a stale element reference resolving to
+                    // null) would otherwise become an uncaught error the
+                    // executor never sees, leaving resolve/reject both
+                    // never called and this Promise hanging forever
+                    // instead of failing loudly.
+                    let result;
+                    try {
+                        result = predicate();
+                    } catch (error) {
+                        return reject(error);
+                    }
+                    if (result) return resolve();
+                    if (Date.now() - start > timeoutMs) return reject(new Error("timed out: " + predicate.toString()));
+                    setTimeout(check, 10);
+                };
+                check();
+            });
+        }
+
+        const realSrc = await (await fetch("../js/pages/upload/app.js")).text();
+        const uploadOrigin = new URL("../js/pages/upload/", location.href).href;
+
+        // One fresh fixture + one fresh mocked import per scenario — a
+        // shared container would leak ids (getElementById would find a
+        // previous scenario's stale elements, since app.js's own code
+        // looks them up via a plain global document.getElementById, not
+        // scoped to any one container) and a shared module import can't
+        // be "reset" (its top-level restoration logic already ran). The
+        // previous scenario's container is removed before the next one
+        // is created so exactly one #technologyPickerGrid/#createDraftForm
+        // exists in the document at a time.
+        let previousContainer = null;
+
+        async function runScenario({
+            queryString = "",
+            requireAuthUser = { id: "user-1" },
+            requireAuthDelayMs = 0,
+            createDraftBehavior = async () => ({ id: "draft-1" }),
+            // Pre-seeds localStorage before the module's top-level
+            // restoration logic runs -- an object is JSON.stringified as a
+            // well-formed-looking record, a string is written verbatim
+            // (for malformed-JSON scenarios). Undefined means "start from
+            // a clean slate," which every scenario gets regardless, so one
+            // scenario's leftover record can never bleed into the next.
+            seedContinuation = undefined
+        }) {
+            if (previousContainer) previousContainer.remove();
+
+            localStorage.removeItem(CONTINUATION_KEY);
+            if (seedContinuation !== undefined) {
+                localStorage.setItem(
+                    CONTINUATION_KEY,
+                    typeof seedContinuation === "string" ? seedContinuation : JSON.stringify(seedContinuation)
+                );
+            }
+
+            const container = document.createElement("div");
+            container.innerHTML = `
+                <div id="technologyPickerGrid"></div>
+                <form id="createDraftForm">
+                    <input id="title" type="text">
+                    <button id="createDraftSubmit" type="submit">Continue to Editor</button>
+                </form>
+            `;
+            document.body.appendChild(container);
+            previousContainer = container;
+
+            const calls = [];
+            const toasts = [];
+
+            globalThis.__mock = {
+                calls,
+                toasts,
+                requireAuthUser,
+                requireAuthDelayMs,
+                createDraftBehavior
+            };
+
+            const layoutSrc = `export function loadNavbar() {} export function loadFooter() {}`;
+            const toastSrc = `export function showToast(message, type) { globalThis.__mock.toasts.push({ message, type }); }`;
+            const authSrc = `
+                export async function requireAuth(redirectPath) {
+                    globalThis.__mock.calls.push(["requireAuth", redirectPath]);
+                    if (globalThis.__mock.requireAuthDelayMs) {
+                        await new Promise(r => setTimeout(r, globalThis.__mock.requireAuthDelayMs));
+                    }
+                    return globalThis.__mock.requireAuthUser;
+                }
+            `;
+            const draftRepoSrc = `
+                export async function createDraft(fields) {
+                    globalThis.__mock.calls.push(["createDraft", fields]);
+                    return globalThis.__mock.createDraftBehavior(fields);
+                }
+            `;
+
+            const rewrites = {
+                '"../../core/layout.js"': blobUrl(layoutSrc),
+                '"../../core/toast.js"': blobUrl(toastSrc),
+                '"../../core/auth.js"': blobUrl(authSrc),
+                '"../../repositories/draftRepository.js"': blobUrl(draftRepoSrc),
+                // Deliberately left real (not mocked) — the restoration
+                // behavior under test lives in how app.js drives these.
+                // A blob: URL has no directory of its own to resolve a
+                // relative specifier against, so each still has to be
+                // rewritten to a real, absolute URL rather than left as
+                // the literal relative path — resolving THAT real URL's
+                // own further relative imports then works normally, same
+                // technique tests/editorPublishUnpublish.test.html uses
+                // for its one deliberately-real dependency.
+                '"../../config/technologies/index.js"': new URL("../../config/technologies/index.js", uploadOrigin).href,
+                '"../../components/TechnologyRadioCard.js"': new URL("../../components/TechnologyRadioCard.js", uploadOrigin).href,
+                '"../../components/technologyPickerShared.js"': new URL("../../components/technologyPickerShared.js", uploadOrigin).href,
+                '"../../utils/uploadContinuation.js"': new URL("../../utils/uploadContinuation.js", uploadOrigin).href
+            };
+
+            let rewritten = realSrc;
+            for (const [from, to] of Object.entries(rewrites)) {
+                rewritten = rewritten.replaceAll(from, `"${to}"`);
+            }
+
+            // Never let a real navigation happen mid-test-run — a
+            // successful createDraft() genuinely does navigate the page
+            // away in production, which would tear down this whole
+            // test's running script (and every later scenario) rather
+            // than just fail one assertion. Captured instead, matching
+            // tests/loginSignupContinuation.test.html's identical
+            // reasoning for its own navigation lines.
+            window.__test_navigation = [];
+            rewritten = rewritten.replace(
+                "window.location.href = `build/edit.html?draft=${draft.id}`;",
+                "window.__test_navigation.push(`build/edit.html?draft=${draft.id}`);"
+            );
+
+            history.replaceState(null, "", location.pathname + queryString);
+            await import(blobUrl(rewritten));
+
+            return {
+                container,
+                calls,
+                toasts,
+                navigation: window.__test_navigation,
+                form: container.querySelector("#createDraftForm"),
+                submitButton: container.querySelector("#createDraftSubmit"),
+                titleInput: container.querySelector("#title"),
+                grid: container.querySelector("#technologyPickerGrid")
+            };
+        }
+
+        // Wrapped so a genuine bug or hang in any one scenario shows up as a
+        // failed, named test case with its real error, instead of silently
+        // aborting the rest of the file (leaving every later case
+        // unreported and window.__testResults never set).
+        try {
+
+        // --- Case 1: restoring a valid technology from ?technology= ----------
+        {
+            const s = await runScenario({ queryString: "?technology=arduino" });
+
+            const checkedInput = s.grid.querySelector("input[name=\"category\"]:checked");
+            const allInputs = [...s.grid.querySelectorAll("input[name=\"category\"]")];
+
+            test("a valid ?technology= pre-checks exactly one radio input", checkedInput !== null, "no input was checked");
+            test("the pre-checked input's value matches the restored technology", checkedInput?.value === "arduino", checkedInput?.value);
+            test("no other technology card is also checked", allInputs.filter(i => i.checked).length === 1, String(allInputs.filter(i => i.checked).length));
+            test(
+                "?technology= is stripped from the visible URL once consumed",
+                !location.search.includes("technology="),
+                location.search
+            );
+        }
+
+        // --- Case 2: an invalid/unknown technology id is ignored safely -------
+        {
+            const s = await runScenario({ queryString: "?technology=totally_bogus_id" });
+
+            const checkedInput = s.grid.querySelector("input[name=\"category\"]:checked");
+            test("an unrecognized ?technology= value pre-checks nothing (safe fallback, no throw)", checkedInput === null, checkedInput?.value);
+        }
+
+        // --- Case 3: no ?technology= at all --------------------------------------
+        {
+            const s = await runScenario({ queryString: "" });
+            const checkedInput = s.grid.querySelector("input[name=\"category\"]:checked");
+            test("no ?technology= present: nothing is pre-checked", checkedInput === null);
+        }
+
+        // --- Case 4: submitting while signed out builds the right continuation path ---
+        {
+            const s = await runScenario({ queryString: "", requireAuthUser: null });
+            const arduinoInput = s.grid.querySelector('input[name="category"][value="arduino"]');
+            arduinoInput.checked = true;
+
+            s.form.dispatchEvent(new Event("submit", { cancelable: true }));
+            await waitFor(() => s.calls.some(c => c[0] === "requireAuth"));
+
+            const requireAuthCall = s.calls.find(c => c[0] === "requireAuth");
+            const passedRedirect = requireAuthCall[1];
+
+            test(
+                "requireAuth() is called with a login.html continuation carrying the selected technology",
+                passedRedirect === "login.html?redirect=" + encodeURIComponent("upload.html?technology=arduino"),
+                passedRedirect
+            );
+            test("createDraft is never called when requireAuth reports no user", !s.calls.some(c => c[0] === "createDraft"));
+        }
+
+        // --- Case 5: choosing no technology never reaches requireAuth -----------
+        {
+            const s = await runScenario({ queryString: "" });
+            s.form.dispatchEvent(new Event("submit", { cancelable: true }));
+            await new Promise(r => setTimeout(r, 50));
+
+            test("submitting with no technology selected shows the existing warning toast", s.toasts.some(t => t.type === "warning"));
+            test("submitting with no technology selected never calls requireAuth", !s.calls.some(c => c[0] === "requireAuth"));
+        }
+
+        // --- Case 6: rapid double-submit creates at most one draft ---------------
+        {
+            const s = await runScenario({ queryString: "", requireAuthUser: { id: "user-1" }, requireAuthDelayMs: 60 });
+            const arduinoInput = s.grid.querySelector('input[name="category"][value="arduino"]');
+            arduinoInput.checked = true;
+            s.titleInput.value = "A real title";
+
+            // Two submits fired back-to-back, before requireAuth's own
+            // (mocked, delayed) round-trip resolves — exactly the window
+            // the synchronous isSubmitting guard exists to close.
+            s.form.dispatchEvent(new Event("submit", { cancelable: true }));
+            s.form.dispatchEvent(new Event("submit", { cancelable: true }));
+
+            await waitFor(() => s.calls.some(c => c[0] === "createDraft"));
+            await new Promise(r => setTimeout(r, 100)); // let any second (unwanted) call have a chance to land
+
+            const requireAuthCalls = s.calls.filter(c => c[0] === "requireAuth");
+            const createDraftCalls = s.calls.filter(c => c[0] === "createDraft");
+
+            test("rapid double-submit results in exactly one requireAuth call, not two", requireAuthCalls.length === 1, String(requireAuthCalls.length));
+            test("rapid double-submit results in exactly one createDraft call, not two", createDraftCalls.length === 1, String(createDraftCalls.length));
+            test("rapid double-submit navigates to the editor exactly once, not twice", s.navigation.length === 1, JSON.stringify(s.navigation));
+        }
+
+        // --- Case 7: a failed draft creation does not permanently lock the form ---
+        {
+            const s = await runScenario({
+                queryString: "",
+                requireAuthUser: { id: "user-1" },
+                createDraftBehavior: async () => { throw new Error("network blip"); }
+            });
+            const arduinoInput = s.grid.querySelector('input[name="category"][value="arduino"]');
+            arduinoInput.checked = true;
+
+            s.form.dispatchEvent(new Event("submit", { cancelable: true }));
+            await waitFor(() => s.toasts.some(t => t.type === "error"));
+            await waitFor(() => !s.submitButton.disabled);
+
+            test("a failed draft creation re-enables the submit button", s.submitButton.disabled === false);
+            test("a failed draft creation restores the button's original label", s.submitButton.textContent === "Continue to Editor", s.submitButton.textContent);
+
+            // Guard must also have reset — a second, real submit attempt
+            // right after a failure must not be silently swallowed by a
+            // guard that never cleared.
+            s.calls.length = 0;
+            s.form.dispatchEvent(new Event("submit", { cancelable: true }));
+            await waitFor(() => s.calls.some(c => c[0] === "requireAuth"));
+            test("after a recoverable failure, the in-flight guard has reset and a fresh submit reaches requireAuth again", s.calls.some(c => c[0] === "requireAuth"));
+        }
+
+        // --- Case 8: signed-out submit writes a versioned continuation record with title ---
+        {
+            const s = await runScenario({ queryString: "", requireAuthUser: null });
+            const arduinoInput = s.grid.querySelector('input[name="category"][value="arduino"]');
+            arduinoInput.checked = true;
+            s.titleInput.value = "My Arduino Weather Station";
+
+            s.form.dispatchEvent(new Event("submit", { cancelable: true }));
+            await waitFor(() => s.calls.some(c => c[0] === "requireAuth"));
+
+            const stored = JSON.parse(localStorage.getItem(CONTINUATION_KEY) || "null");
+            const requireAuthPath = s.calls.find(c => c[0] === "requireAuth")[1];
+
+            test("signed-out submit writes a continuation record to localStorage", stored !== null);
+            test("the stored record is schema-versioned", stored?.version === 1, JSON.stringify(stored));
+            test("the stored record's technology matches the selection", stored?.technology === "arduino", stored?.technology);
+            test("the stored record's title matches what was typed", stored?.title === "My Arduino Weather Station", stored?.title);
+            test("the stored record carries a numeric savedAt timestamp", typeof stored?.savedAt === "number", typeof stored?.savedAt);
+            test(
+                "the stored record contains no auth-sensitive fields",
+                stored && !("email" in stored) && !("token" in stored) && !("password" in stored) && !("inviteCode" in stored),
+                JSON.stringify(stored)
+            );
+            test(
+                "free text never appears in the requireAuth redirect path",
+                !requireAuthPath.includes("Weather"),
+                requireAuthPath
+            );
+        }
+
+        // --- Case 9: returning with a matching ?technology= restores technology + title, then clears the record ---
+        {
+            const s = await runScenario({
+                queryString: "?technology=arduino",
+                seedContinuation: { version: 1, technology: "arduino", title: "Restored Title", savedAt: Date.now() }
+            });
+
+            const checkedInput = s.grid.querySelector('input[name="category"]:checked');
+            test("a matching stored record restores the technology selection", checkedInput?.value === "arduino", checkedInput?.value);
+            test("a matching stored record restores the title text", s.titleInput.value === "Restored Title", s.titleInput.value);
+            test("a successfully restored record is cleared afterward", localStorage.getItem(CONTINUATION_KEY) === null);
+        }
+
+        // --- Case 10: a technology mismatch between the URL and the stored record is not applied ---
+        {
+            const s = await runScenario({
+                queryString: "?technology=arduino",
+                seedContinuation: { version: 1, technology: "pc_build", title: "Wrong Project", savedAt: Date.now() }
+            });
+
+            test("a mismatched stored record's title is not applied", s.titleInput.value === "", s.titleInput.value);
+            test("a mismatched stored record is left in place, not destroyed", localStorage.getItem(CONTINUATION_KEY) !== null);
+        }
+
+        // --- Case 11: an expired record is discarded, not restored ---
+        {
+            const s = await runScenario({
+                queryString: "?technology=arduino",
+                seedContinuation: { version: 1, technology: "arduino", title: "Too Old", savedAt: Date.now() - (31 * 60 * 1000) }
+            });
+
+            test("an expired stored record's title is not applied", s.titleInput.value === "", s.titleInput.value);
+            test("an expired stored record is cleared on read", localStorage.getItem(CONTINUATION_KEY) === null);
+        }
+
+        // --- Case 12: malformed JSON is discarded safely ---
+        {
+            const s = await runScenario({ queryString: "?technology=arduino", seedContinuation: "{not valid json" });
+
+            test("malformed JSON does not throw and title stays empty", s.titleInput.value === "", s.titleInput.value);
+            test("malformed JSON is cleared on read", localStorage.getItem(CONTINUATION_KEY) === null);
+        }
+
+        // --- Case 13: an oversized title is rejected and cleared ---
+        {
+            const s = await runScenario({
+                queryString: "?technology=arduino",
+                seedContinuation: { version: 1, technology: "arduino", title: "x".repeat(5000), savedAt: Date.now() }
+            });
+
+            test("an oversized stored title is not applied", s.titleInput.value === "", s.titleInput.value);
+            test("an oversized stored record is cleared on read", localStorage.getItem(CONTINUATION_KEY) === null);
+        }
+
+        // --- Case 14: a record from an unrecognized schema version is rejected and cleared ---
+        {
+            const s = await runScenario({
+                queryString: "?technology=arduino",
+                seedContinuation: { version: 2, technology: "arduino", title: "Future shape", savedAt: Date.now() }
+            });
+
+            test("an unrecognized schema version is not applied", s.titleInput.value === "", s.titleInput.value);
+            test("an unrecognized schema version is cleared on read", localStorage.getItem(CONTINUATION_KEY) === null);
+        }
+
+        // --- Case 15: a stale record cannot overwrite newer input on a plain direct visit ---
+        {
+            const s = await runScenario({
+                queryString: "", // no ?technology= -- an ordinary direct visit, not a continuation return
+                seedContinuation: { version: 1, technology: "arduino", title: "Old Draft", savedAt: Date.now() }
+            });
+
+            test("a direct visit with no ?technology= never applies a stored title", s.titleInput.value === "", s.titleInput.value);
+            test("a direct visit leaves an unrelated stored record untouched", localStorage.getItem(CONTINUATION_KEY) !== null);
+        }
+
+        // --- Case 16: an already-authenticated submit clears any leftover continuation record ---
+        {
+            const s = await runScenario({
+                queryString: "",
+                requireAuthUser: { id: "user-1" },
+                seedContinuation: { version: 1, technology: "pc_build", title: "Leftover from a previous attempt", savedAt: Date.now() }
+            });
+            const arduinoInput = s.grid.querySelector('input[name="category"][value="arduino"]');
+            arduinoInput.checked = true;
+
+            s.form.dispatchEvent(new Event("submit", { cancelable: true }));
+            await waitFor(() => s.navigation.length === 1);
+
+            test("a successful, already-authenticated submit clears any leftover continuation record", localStorage.getItem(CONTINUATION_KEY) === null);
+        }
+
+        // --- Case 17: a title at exactly the canonical maximum restores successfully ---
+        {
+            const boundaryTitle = "T".repeat(MAX_TITLE_LENGTH);
+            const s = await runScenario({
+                queryString: "?technology=arduino",
+                seedContinuation: { version: 1, technology: "arduino", title: boundaryTitle, savedAt: Date.now() }
+            });
+
+            test(
+                `a title of exactly MAX_TITLE_LENGTH (${MAX_TITLE_LENGTH}) chars restores`,
+                s.titleInput.value === boundaryTitle,
+                `got length ${s.titleInput.value.length}`
+            );
+            test("restoring an exactly-at-limit title clears the record", localStorage.getItem(CONTINUATION_KEY) === null);
+        }
+
+        // --- Case 18: one character past the canonical maximum is rejected and cleared ---
+        {
+            const overLimitTitle = "T".repeat(MAX_TITLE_LENGTH + 1);
+            const s = await runScenario({
+                queryString: "?technology=arduino",
+                seedContinuation: { version: 1, technology: "arduino", title: overLimitTitle, savedAt: Date.now() }
+            });
+
+            test(
+                `a title one character past MAX_TITLE_LENGTH (${MAX_TITLE_LENGTH + 1} chars) is not applied`,
+                s.titleInput.value === "",
+                s.titleInput.value.length
+            );
+            test("a title one character past the limit is cleared, not left in place", localStorage.getItem(CONTINUATION_KEY) === null);
+        }
+
+        // --- Case 19: an empty stored title behaves the same as the normal form treats an empty title ---
+        // The create form's <input id="title" required> blocks *submission*
+        // of an empty title (native HTML5 constraint validation intercepts
+        // the "submit" event before it ever fires) -- it doesn't treat an
+        // empty in-progress value as invalid data to reject. A stored
+        // record with an empty title is exactly that: a legitimate
+        // snapshot of a not-yet-started title, not corruption.
+        {
+            const s = await runScenario({
+                queryString: "?technology=arduino",
+                seedContinuation: { version: 1, technology: "arduino", title: "", savedAt: Date.now() }
+            });
+
+            test("an empty stored title restores as an empty field, same as an unstarted title", s.titleInput.value === "", s.titleInput.value);
+            test("restoring an empty title still clears the record (it was a valid, consumed snapshot)", localStorage.getItem(CONTINUATION_KEY) === null);
+        }
+
+        // --- Case 20: unicode length is judged the same way draftValidation.js's isValidTitle() judges it ---
+        // JS string .length counts UTF-16 code units, not grapheme
+        // clusters -- a surrogate-pair emoji is 2 "characters" by that
+        // measure. Reusing the exact same string construction against the
+        // real isValidTitle() (imported directly, not reimplemented) below
+        // proves the two rules agree at this boundary rather than just
+        // asserting a number this file made up independently.
+        {
+            const { isValidTitle } = await import("../js/services/draftValidation.js");
+
+            const emojiCount = Math.floor(MAX_TITLE_LENGTH / 2);
+            const unicodeAtLimit = "\u{1F600}".repeat(emojiCount); // e.g. 50 x 2 UTF-16 units = 100
+            const unicodeOverLimit = unicodeAtLimit + "\u{1F600}"; // one more emoji pushes .length past the limit
+
+            test(
+                "sanity: the unicode-at-limit fixture's .length matches MAX_TITLE_LENGTH (confirms the UTF-16-unit assumption)",
+                unicodeAtLimit.length === emojiCount * 2 && unicodeAtLimit.length <= MAX_TITLE_LENGTH,
+                unicodeAtLimit.length
+            );
+            test(
+                "the real isValidTitle() accepts the unicode-at-limit fixture",
+                isValidTitle(unicodeAtLimit) === true
+            );
+            test(
+                "the real isValidTitle() rejects the unicode-over-limit fixture",
+                isValidTitle(unicodeOverLimit) === false
+            );
+
+            const sAtLimit = await runScenario({
+                queryString: "?technology=arduino",
+                seedContinuation: { version: 1, technology: "arduino", title: unicodeAtLimit, savedAt: Date.now() }
+            });
+            test(
+                "uploadContinuation restores a unicode title at exactly the limit, agreeing with isValidTitle",
+                sAtLimit.titleInput.value === unicodeAtLimit,
+                sAtLimit.titleInput.value.length
+            );
+
+            const sOverLimit = await runScenario({
+                queryString: "?technology=arduino",
+                seedContinuation: { version: 1, technology: "arduino", title: unicodeOverLimit, savedAt: Date.now() }
+            });
+            test(
+                "uploadContinuation rejects a unicode title one emoji past the limit, agreeing with isValidTitle",
+                sOverLimit.titleInput.value === "",
+                sOverLimit.titleInput.value.length
+            );
+        }
+
+        // --- Case 21: MAX_TITLE_LENGTH real characters plus surrounding whitespace never
+        // restores more raw characters than the limit -- the exact bug this
+        // case guards against: validating parsed.title.trim().length but
+        // then returning/restoring the original, still-padded parsed.title
+        // would let a title that's only "at the limit" after trimming
+        // restore as a longer, un-trimmed raw string. ---
+        {
+            const coreTitle = "T".repeat(MAX_TITLE_LENGTH);
+            const paddedTitle = "   " + coreTitle + "   "; // raw length = MAX_TITLE_LENGTH + 6
+
+            const s = await runScenario({
+                queryString: "?technology=arduino",
+                seedContinuation: { version: 1, technology: "arduino", title: paddedTitle, savedAt: Date.now() }
+            });
+
+            test(
+                "a title of MAX_TITLE_LENGTH chars plus surrounding whitespace still restores",
+                s.titleInput.value === coreTitle,
+                s.titleInput.value
+            );
+            test(
+                "the restored value's raw length never exceeds MAX_TITLE_LENGTH, even though the stored raw string did",
+                s.titleInput.value.length <= MAX_TITLE_LENGTH,
+                s.titleInput.value.length
+            );
+            test("restoring a padded at-limit title clears the record", localStorage.getItem(CONTINUATION_KEY) === null);
+        }
+
+        // --- Case 22: a heavily whitespace-padded stored value cannot bypass
+        // the field's real-world maxlength -- padding the same core title
+        // out to many times MAX_TITLE_LENGTH in raw stored size must still
+        // restore only the normalized, bounded core, not the padded raw
+        // string (which .value assignment would otherwise place into the
+        // field regardless of any maxlength attribute, since maxlength
+        // only constrains user typing/pasting, not programmatic .value
+        // writes -- normalization has to be the actual guard). ---
+        {
+            const coreTitle = "T".repeat(MAX_TITLE_LENGTH);
+            const heavilyPaddedTitle = " ".repeat(2000) + coreTitle + " ".repeat(2000);
+
+            const s = await runScenario({
+                queryString: "?technology=arduino",
+                seedContinuation: { version: 1, technology: "arduino", title: heavilyPaddedTitle, savedAt: Date.now() }
+            });
+
+            test(
+                "a heavily whitespace-padded stored value restores only the normalized core",
+                s.titleInput.value === coreTitle,
+                `got length ${s.titleInput.value.length}`
+            );
+            test(
+                "a heavily whitespace-padded stored value cannot place more than MAX_TITLE_LENGTH raw characters into the field",
+                s.titleInput.value.length <= MAX_TITLE_LENGTH,
+                s.titleInput.value.length
+            );
+        }
+
+        // --- Case 23: the restored value is the same normalized value that was
+        // validated -- not a second, independently-computed copy that could
+        // drift from what was actually checked against MAX_TITLE_LENGTH. ---
+        {
+            const paddedTitle = "  Real Project Title  ";
+            const s = await runScenario({
+                queryString: "?technology=arduino",
+                seedContinuation: { version: 1, technology: "arduino", title: paddedTitle, savedAt: Date.now() }
+            });
+
+            test(
+                "the restored value equals the trimmed (validated) title, not the raw stored string",
+                s.titleInput.value === paddedTitle.trim(),
+                JSON.stringify(s.titleInput.value)
+            );
+            test(
+                "the restored value carries no leading/trailing whitespace of its own",
+                s.titleInput.value === s.titleInput.value.trim(),
+                JSON.stringify(s.titleInput.value)
+            );
+        }
+
+        // --- Case 24: a whitespace-only stored title restores as empty, the
+        // same state the create form itself ends up in for an all-whitespace
+        // title (its own submit handler does .value.trim() too). ---
+        {
+            const s = await runScenario({
+                queryString: "?technology=arduino",
+                seedContinuation: { version: 1, technology: "arduino", title: "     ", savedAt: Date.now() }
+            });
+
+            test(
+                "a whitespace-only stored title restores as empty, consistent with the create form's own trim",
+                s.titleInput.value === "",
+                JSON.stringify(s.titleInput.value)
+            );
+        }
+
+        } catch (crashError) {
+            test("no scenario threw or timed out before the file finished running", false, String(crashError?.stack || crashError));
+        }
+
+        // Don't leak a leftover record into whichever test file the runner
+        // loads next in this same browser context.
+        localStorage.removeItem(CONTINUATION_KEY);
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`uploadAuthContinuation.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

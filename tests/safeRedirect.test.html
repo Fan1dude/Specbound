@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>getSafeRedirectTarget() — ?redirect= validation</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>getSafeRedirectTarget() — ?redirect= validation</h1>
+    <p>
+        js/utils/safeRedirect.js is the one place login/app.js and
+        signup/app.js decide whether a ?redirect= value read back from
+        this app's own address bar is safe to navigate to. Every case
+        here runs with the real page location patched to
+        /pages/login.html first (history.replaceState, not a mock) so
+        resolution behaves exactly as it would on the real page — the
+        same reasoning tests/authRedirectPaths.test.html uses for
+        requireAuth()'s redirect strings.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        const { getSafeRedirectTarget } = await import("../js/utils/safeRedirect.js");
+
+        const FALLBACK = "../index.html";
+
+        function at(pathAndQuery, run) {
+            history.replaceState(null, "", pathAndQuery);
+            return run();
+        }
+
+        // --- Valid, same-origin, application-relative values ----------------
+        at("/pages/login.html", () => {
+            test(
+                "a plain sibling page resolves to its real absolute path",
+                getSafeRedirectTarget("upload.html", FALLBACK) === "/pages/upload.html"
+            );
+            test(
+                "a sibling page with a query string preserves the query string",
+                getSafeRedirectTarget("upload.html?technology=arduino", FALLBACK) === "/pages/upload.html?technology=arduino"
+            );
+            test(
+                "a root-relative path resolves as-is",
+                getSafeRedirectTarget("/pages/workshop.html", FALLBACK) === "/pages/workshop.html"
+            );
+            test(
+                "surrounding whitespace is trimmed before resolving",
+                getSafeRedirectTarget("  upload.html  ", FALLBACK) === "/pages/upload.html"
+            );
+        });
+
+        // --- Absent / empty / malformed input --------------------------------
+        test("null falls back", getSafeRedirectTarget(null, FALLBACK) === FALLBACK);
+        test("undefined falls back", getSafeRedirectTarget(undefined, FALLBACK) === FALLBACK);
+        test("empty string falls back", getSafeRedirectTarget("", FALLBACK) === FALLBACK);
+        test("whitespace-only string falls back", getSafeRedirectTarget("   ", FALLBACK) === FALLBACK);
+        test("a non-string value (number) falls back, does not throw", getSafeRedirectTarget(42, FALLBACK) === FALLBACK);
+        test("a non-string value (array) falls back, does not throw", getSafeRedirectTarget(["upload.html"], FALLBACK) === FALLBACK);
+
+        // --- External URLs ----------------------------------------------------
+        at("/pages/login.html", () => {
+            test(
+                "a full external https URL is rejected",
+                getSafeRedirectTarget("https://evil.example/steal", FALLBACK) === FALLBACK
+            );
+            test(
+                "a full external http URL is rejected",
+                getSafeRedirectTarget("http://evil.example/steal", FALLBACK) === FALLBACK
+            );
+            test(
+                "a same-origin absolute URL typed out in full is still rejected — the contract is relative, not merely same-origin",
+                getSafeRedirectTarget(location.origin + "/pages/upload.html", FALLBACK) === FALLBACK
+            );
+        });
+
+        // --- Dangerous schemes --------------------------------------------------
+        at("/pages/login.html", () => {
+            test("javascript: is rejected", getSafeRedirectTarget("javascript:alert(1)", FALLBACK) === FALLBACK);
+            test("data: is rejected", getSafeRedirectTarget("data:text/html,<script>alert(1)<\/script>", FALLBACK) === FALLBACK);
+            test("mailto: is rejected", getSafeRedirectTarget("mailto:a@b.com", FALLBACK) === FALLBACK);
+            test("vbscript: is rejected", getSafeRedirectTarget("vbscript:msgbox(1)", FALLBACK) === FALLBACK);
+            test("file: is rejected", getSafeRedirectTarget("file:///etc/passwd", FALLBACK) === FALLBACK);
+            test("an uppercase/mixed-case scheme is still caught (case-insensitive)", getSafeRedirectTarget("JavaScript:alert(1)", FALLBACK) === FALLBACK);
+        });
+
+        // --- Protocol-relative and backslash bypass attempts -------------------
+        at("/pages/login.html", () => {
+            test("a bare protocol-relative //host is rejected", getSafeRedirectTarget("//evil.example/steal", FALLBACK) === FALLBACK);
+            test("a protocol-relative //host with a path is rejected", getSafeRedirectTarget("//evil.example/pages/upload.html", FALLBACK) === FALLBACK);
+            test("a leading-backslash variant (\\\\evil.example) is rejected", getSafeRedirectTarget("\\\\evil.example", FALLBACK) === FALLBACK);
+            test("a slash-backslash variant (/\\\\evil.example) is rejected", getSafeRedirectTarget("/\\evil.example", FALLBACK) === FALLBACK);
+            test(
+                "the origin-equality check alone would also have caught the backslash variant (defense-in-depth, not the only line of defense)",
+                (() => {
+                    const resolved = new URL("/\\evil.example", location.href);
+                    return resolved.origin !== location.origin;
+                })()
+            );
+        });
+
+        // --- Encoded bypass attempts --------------------------------------------
+        at("/pages/login.html", () => {
+            test(
+                "a percent-encoded slash sequence never decodes into a live external host",
+                (() => {
+                    const result = getSafeRedirectTarget("%2F%2Fevil.example", FALLBACK);
+                    return result !== FALLBACK && new URL(result, location.origin).origin === location.origin;
+                })()
+            );
+            test(
+                "a double-encoded protocol-relative payload stays same-origin",
+                (() => {
+                    const result = getSafeRedirectTarget("%252F%252Fevil.example", FALLBACK);
+                    return new URL(result, location.origin).origin === location.origin;
+                })()
+            );
+            test(
+                "an encoded javascript: scheme is rejected (the literal string still starts with the scheme token)",
+                getSafeRedirectTarget("java%73cript:alert(1)", FALLBACK) === FALLBACK
+                    || new URL(getSafeRedirectTarget("java%73cript:alert(1)", FALLBACK), location.origin).origin === location.origin
+            );
+        });
+
+        // --- Paths outside the intended application (still same-origin) --------
+        at("/pages/login.html", () => {
+            test(
+                "excessive .. traversal still clamps to a same-origin destination, never off-origin",
+                new URL(getSafeRedirectTarget("../../../../../etc/passwd", FALLBACK), location.origin).origin === location.origin
+            );
+        });
+
+        // --- Every rejection case falls back to the caller's own fallback, not a hardcoded one ---
+        at("/pages/login.html", () => {
+            test(
+                "a custom fallback (not the real app's default) is honored exactly",
+                getSafeRedirectTarget("https://evil.example", "custom-fallback.html") === "custom-fallback.html"
+            );
+        });
+
+        // --- Render + report ------------------------------------------------
+        history.replaceState(null, "", location.pathname.replace(/\/pages\/login\.html$/, "/tests/safeRedirect.test.html"));
+
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`safeRedirect.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>
