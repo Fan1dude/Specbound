@@ -6,6 +6,16 @@ export const MIN_TITLE_LENGTH = 3;
 export const MAX_TITLE_LENGTH = 100;
 export const MIN_DESCRIPTION_LENGTH = 20;
 
+// Must match supabase/migrations/0042_build_progress_and_status.sql's
+// canonical status CHECK constraint exactly — one list, not two that can
+// drift apart. "building" is a legacy value some historical/read-side
+// code defensively treats as a synonym for "in_progress" (see
+// BlueprintCard.js's getStage()); it's deliberately not included here —
+// nothing should ever be able to *write* it again.
+export const CANONICAL_STATUSES = ["planning", "in_progress", "paused", "completed"];
+export const MIN_PROGRESS = 0;
+export const MAX_PROGRESS = 100;
+
 export function getReadinessChecks({ title, description, category, hasCoverImage }) {
     return [
         {
@@ -46,6 +56,38 @@ export function isValidTitle(title) {
 
 export function isValidDescription(description) {
     return (description || "").trim().length >= MIN_DESCRIPTION_LENGTH;
+}
+
+export function isValidStatus(status) {
+    return CANONICAL_STATUSES.includes(status);
+}
+
+// Used to reject a corrupted/tampered crash-recovery value before it's
+// ever applied to the DOM or scheduled for save — the database's own
+// CHECK constraint is the real gate, this just stops obviously-invalid
+// local data from being trusted in the meantime. Rounds rather than
+// rejecting a non-integer input (e.g. a stale fractional value from a
+// future change to the control) so a merely-imprecise but in-range
+// number still restores usefully.
+export function normalizeProgress(value) {
+    // Number(null) === 0 and Number("") === 0 in JS -- neither is a real
+    // progress value, both must be rejected rather than silently coerced
+    // to a valid-looking 0. Restricting to number/non-empty-string inputs
+    // up front avoids that whole class of coercion surprise (also catches
+    // booleans/arrays/objects, none of which are real progress values
+    // either).
+    if (typeof value !== "number" && typeof value !== "string") return null;
+    if (typeof value === "string" && value.trim() === "") return null;
+
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) return null;
+
+    const rounded = Math.round(number);
+
+    if (rounded < MIN_PROGRESS || rounded > MAX_PROGRESS) return null;
+
+    return rounded;
 }
 
 export function isDraftReady(checks) {

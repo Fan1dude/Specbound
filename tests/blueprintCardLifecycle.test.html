@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Findings 03/04 — BlueprintCard renders real progress/status</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Findings 03/04 — BlueprintCard renders real progress/status</h1>
+    <p>
+        Before this fix, every builds-list repository query returned raw
+        `builds` rows with no progress column at all — BlueprintCard's
+        clampProgress(build.progress) always fell back to 0 no matter what
+        actually happened. This confirms the denormalized builds.progress
+        column (0042) renders correctly once populated, across every
+        canonical status plus the legacy "building" read alias, and that
+        Completed/100 consistency shows up correctly on the card.
+        BlueprintCard.js's own imports (escapeHtml, formatCategory, icon,
+        specifications) are all pure/self-contained, so the real file is
+        imported directly — no mocking needed.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        const { BlueprintCard } = await import("../js/components/BlueprintCard.js");
+
+        function baseBuild(overrides = {}) {
+            return {
+                id: "build-1",
+                title: "Test Blueprint",
+                slug: "test-blueprint",
+                description: "A perfectly ordinary test project description.",
+                category: "pc_build",
+                status: "planning",
+                progress: 0,
+                image_url: null,
+                likes_count: 0,
+                views: 0,
+                updated_at: "2026-06-01T00:00:00Z",
+                created_at: "2026-01-01T00:00:00Z",
+                specifications: {},
+                ...overrides
+            };
+        }
+
+        function render(build) {
+            const html = BlueprintCard(build, "");
+            const container = document.createElement("div");
+            container.innerHTML = html;
+            document.body.appendChild(container);
+            return container;
+        }
+
+        // --- Case 1: real, varied progress values render correctly ------------
+        for (const value of [0, 1, 37, 62, 99, 100]) {
+            const container = render(baseBuild({ status: "in_progress", progress: value }));
+            const fill = container.querySelector(".progress-fill");
+            const track = container.querySelector(".progress-track");
+
+            test(`progress=${value}: data-progress carries the real value`, fill?.getAttribute("data-progress") === String(value), fill?.getAttribute("data-progress"));
+            test(`progress=${value}: aria-valuenow carries the real value`, track?.getAttribute("aria-valuenow") === String(value), track?.getAttribute("aria-valuenow"));
+            test(`progress=${value}: the visible "${value}%" text is present`, container.textContent.includes(`${value}%`), container.textContent);
+
+            container.remove();
+        }
+
+        // --- Case 2: every canonical status renders its own stage badge -------
+        const expectedBadges = {
+            planning: { label: "Blueprint", className: "is-planning" },
+            in_progress: { label: "Project", className: "is-project" },
+            paused: { label: "Paused", className: "is-paused" },
+            completed: { label: "Completed Build", className: "is-completed" }
+        };
+
+        for (const [status, expected] of Object.entries(expectedBadges)) {
+            const container = render(baseBuild({ status, progress: status === "completed" ? 100 : 40 }));
+            const badge = container.querySelector(".blueprint-card-stage");
+
+            test(`status='${status}': badge text is "${expected.label}"`, badge?.textContent.trim() === expected.label, badge?.textContent);
+            test(`status='${status}': badge carries class ${expected.className}`, badge?.classList.contains(expected.className), badge?.className);
+
+            container.remove();
+        }
+
+        // --- Case 3: the legacy 'building' alias still renders the same
+        // "Project" badge as in_progress (defensive read-side compatibility,
+        // even though nothing can write it after 0042's normalization). -------
+        {
+            const container = render(baseBuild({ status: "building", progress: 40 }));
+            const badge = container.querySelector(".blueprint-card-stage");
+
+            test("legacy 'building' status renders the same badge as in_progress", badge?.textContent.trim() === "Project" && badge?.classList.contains("is-project"), badge?.outerHTML);
+
+            container.remove();
+        }
+
+        // --- Case 4: an unrecognized/absent status falls back safely ------------
+        {
+            const container = render(baseBuild({ status: undefined, progress: 0 }));
+            const badge = container.querySelector(".blueprint-card-stage");
+
+            test("undefined status falls back to the Blueprint/planning badge, not a crash", badge?.textContent.trim() === "Blueprint" && badge?.classList.contains("is-planning"), badge?.outerHTML);
+
+            container.remove();
+        }
+
+        // --- Case 5: Completed at 100% -- the consistency rule's steady state --
+        {
+            const container = render(baseBuild({ status: "completed", progress: 100 }));
+
+            test("Completed at 100%: the badge reads Completed Build", container.querySelector(".blueprint-card-stage")?.textContent.trim() === "Completed Build");
+            test("Completed at 100%: the progress bar shows 100%", container.textContent.includes("100%"), container.textContent);
+            test(
+                "Completed at 100%: aria-valuenow is 100",
+                container.querySelector(".progress-track")?.getAttribute("aria-valuenow") === "100"
+            );
+
+            container.remove();
+        }
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`blueprintCardLifecycle.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

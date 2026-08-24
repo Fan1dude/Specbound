@@ -5,3 +5,53 @@
 .editor-form .form-group:last-child {
     margin-bottom: 0;
 }
+
+.field-description {
+    margin: 2px 0 var(--space-1);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+/* Findings 03/04 — Progress control. input[type="range"] is explicitly
+   reset out of css/components/form.css's generic input/textarea/select
+   rule (width:100%, padding, border, background) — none of that applies
+   to a range track/thumb, which browsers render via their own
+   pseudo-elements. accent-color is a solid, native theme color (no
+   glow/gradient — see docs/BRAND.md), not an inline style, so nothing
+   here conflicts with CSP the way an inline `style="--progress:…"`
+   attribute would (see js/utils/progressBar.js's own CSP note for why
+   that distinction matters in this codebase). */
+.progress-field {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.progress-field input[type="range"] {
+    flex: 1;
+    width: auto;
+    padding: 0;
+    border: none;
+    background: transparent;
+    accent-color: var(--color-primary);
+}
+
+.progress-field output {
+    flex: 0 0 auto;
+    min-width: 3.5ch;
+    text-align: right;
+
+    color: var(--color-text);
+    font-weight: var(--font-weight-semibold);
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 700px) {
+    .progress-field {
+        flex-wrap: wrap;
+    }
+
+    .progress-field input[type="range"] {
+        flex-basis: 100%;
+    }
+}

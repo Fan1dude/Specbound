@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Findings 03/04 — Explore lifecycle filters, status filter, sort</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Findings 03/04 — Explore lifecycle filters, status filter, sort</h1>
+    <p>
+        Runs the real js/pages/explore/app.js against a real DOM fixture
+        matching pages/explore.html's own element ids, with only its
+        network-touching dependencies (layout, repositories, BlueprintFeed)
+        replaced — matchesLifecycle(), the #statusFilter exact match, and
+        sortBuilds() are the real logic under test, exercised against
+        builds carrying real, varied status/progress values for the first
+        time (previously every build was always status='planning',
+        progress=0, so these branches were never meaningfully exercised).
+        config/technologies, escapeHtml, specifications, and fuzzySearch
+        have no network dependencies of their own, so they're used as-is.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        function waitFor(predicate, timeoutMs = 2000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                const check = () => {
+                    let result;
+                    try {
+                        result = predicate();
+                    } catch (error) {
+                        return reject(error);
+                    }
+                    if (result) return resolve();
+                    if (Date.now() - start > timeoutMs) return reject(new Error("timed out: " + predicate.toString()));
+                    setTimeout(check, 10);
+                };
+                check();
+            });
+        }
+
+        const realSrc = await (await fetch("../js/pages/explore/app.js")).text();
+        const exploreOrigin = new URL("../js/pages/explore/", location.href).href;
+
+        function makeBuild(overrides) {
+            return {
+                id: "b-default",
+                title: "Untitled",
+                category: "pc_build",
+                status: "planning",
+                progress: 0,
+                specifications: {},
+                created_at: "2026-01-01T00:00:00Z",
+                updated_at: "2026-01-01T00:00:00Z",
+                ...overrides
+            };
+        }
+
+        let previousContainer = null;
+
+        async function runScenario(testBuilds) {
+            if (previousContainer) previousContainer.remove();
+
+            const container = document.createElement("div");
+            container.innerHTML = `
+                <input id="exploreSearch" type="search">
+                <div id="searchSuggestions" hidden></div>
+
+                <div class="lifecycle-filters">
+                    <button class="lifecycle-filter active" type="button" data-lifecycle="all" aria-pressed="true">All</button>
+                    <button class="lifecycle-filter" type="button" data-lifecycle="planning" aria-pressed="false">Blueprints</button>
+                    <button class="lifecycle-filter" type="button" data-lifecycle="project" aria-pressed="false">Active Projects</button>
+                    <button class="lifecycle-filter" type="button" data-lifecycle="completed" aria-pressed="false">Completed Builds</button>
+                </div>
+
+                <button class="filter-pill active" type="button" data-category="all" aria-pressed="true">All</button>
+                <button class="filter-pill" type="button" data-category="pc_build" aria-pressed="false">PC Builds</button>
+
+                <select id="statusFilter">
+                    <option value="all">All Statuses</option>
+                    <option value="planning">Planning</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="paused">Paused</option>
+                    <option value="completed">Completed</option>
+                </select>
+
+                <select id="sortFilter">
+                    <option value="newest">Newest</option>
+                    <option value="oldest">Oldest</option>
+                    <option value="az">A-Z</option>
+                    <option value="completed">Completed First</option>
+                    <option value="progress">Highest Progress</option>
+                </select>
+
+                <button id="clearFilters" type="button">Clear</button>
+                <div id="technologyFilters"></div>
+                <h2 id="resultCount"></h2>
+                <div id="exploreGrid"></div>
+            `;
+            document.body.appendChild(container);
+            previousContainer = container;
+
+            const feedCalls = [];
+
+            globalThis.__mock = { testBuilds, feedCalls };
+
+            const layoutSrc = `export function loadNavbar() {} export function loadFooter() {}`;
+            const buildRepoSrc = `export async function getNewestBuilds() { return globalThis.__mock.testBuilds; }`;
+            const profileRepoSrc = `export async function attachBuildProfiles(builds) { return builds; }`;
+            const mediaRepoSrc = `export async function resolveBuildImageUrls(builds) { return builds; }`;
+            const feedSrc = `export function BlueprintFeed(args) { globalThis.__mock.feedCalls.push(args.builds); }`;
+
+            const rewrites = {
+                '"../../core/layout.js"': blobUrl(layoutSrc),
+                '"../../repositories/buildRepository.js"': blobUrl(buildRepoSrc),
+                '"../../repositories/profileRepository.js"': blobUrl(profileRepoSrc),
+                '"../../repositories/mediaRepository.js"': blobUrl(mediaRepoSrc),
+                '"../../components/BlueprintFeed.js"': blobUrl(feedSrc),
+                // Deliberately left real -- pure, self-contained, no
+                // network dependency of their own, same reasoning as
+                // tests/uploadAuthContinuation.test.html's technology
+                // config imports.
+                '"../../config/technologies/index.js"': new URL("../../config/technologies/index.js", exploreOrigin).href,
+                '"../../utils/escapeHtml.js"': new URL("../../utils/escapeHtml.js", exploreOrigin).href,
+                '"../../utils/specifications.js"': new URL("../../utils/specifications.js", exploreOrigin).href,
+                '"../../utils/fuzzySearch.js"': new URL("../../utils/fuzzySearch.js", exploreOrigin).href
+            };
+
+            let rewritten = realSrc;
+            for (const [from, to] of Object.entries(rewrites)) {
+                rewritten = rewritten.replaceAll(from, `"${to}"`);
+            }
+
+            await import(blobUrl(rewritten));
+            await waitFor(() => feedCalls.length > 0);
+
+            return {
+                container,
+                feedCalls,
+                statusFilter: container.querySelector("#statusFilter"),
+                sortFilter: container.querySelector("#sortFilter"),
+                lifecycleButtons: container.querySelectorAll(".lifecycle-filter")
+            };
+        }
+
+        function ids(builds) {
+            return builds.map(b => b.id);
+        }
+
+        try {
+
+        const varied = [
+            makeBuild({ id: "planning-1", status: "planning", progress: 0, created_at: "2026-01-01T00:00:00Z" }),
+            makeBuild({ id: "in-progress-1", status: "in_progress", progress: 40, created_at: "2026-02-01T00:00:00Z" }),
+            makeBuild({ id: "paused-1", status: "paused", progress: 65, created_at: "2026-03-01T00:00:00Z" }),
+            makeBuild({ id: "legacy-building-1", status: "building", progress: 20, created_at: "2026-04-01T00:00:00Z" }),
+            makeBuild({ id: "completed-1", status: "completed", progress: 100, created_at: "2026-05-01T00:00:00Z" }),
+            makeBuild({ id: "completed-2", status: "completed", progress: 100, created_at: "2026-06-01T00:00:00Z" })
+        ];
+
+        // --- Case 1: no filters -- every build renders, initial load works ---
+        {
+            const s = await runScenario(varied);
+            test("initial load: every build passes through with no filters active", s.feedCalls.at(-1).length === 6, s.feedCalls.at(-1).length);
+        }
+
+        // --- Case 2: lifecycle bucket "planning" -- exact status match only ---
+        {
+            const s = await runScenario(varied);
+            s.container.querySelector('.lifecycle-filter[data-lifecycle="planning"]').click();
+            await waitFor(() => ids(s.feedCalls.at(-1)).length === 1);
+
+            test("lifecycle=planning: only the planning build matches", ids(s.feedCalls.at(-1)).join(",") === "planning-1", ids(s.feedCalls.at(-1)).join(","));
+        }
+
+        // --- Case 3: lifecycle bucket "project" -- groups in_progress, paused,
+        // and the legacy 'building' alias together. ----------------------------
+        {
+            const s = await runScenario(varied);
+            s.container.querySelector('.lifecycle-filter[data-lifecycle="project"]').click();
+            await waitFor(() => ids(s.feedCalls.at(-1)).length === 3);
+
+            const result = new Set(ids(s.feedCalls.at(-1)));
+            test(
+                "lifecycle=project: in_progress + paused + legacy building all match",
+                result.has("in-progress-1") && result.has("paused-1") && result.has("legacy-building-1") && result.size === 3,
+                JSON.stringify([...result])
+            );
+        }
+
+        // --- Case 4: lifecycle bucket "completed" ------------------------------
+        {
+            const s = await runScenario(varied);
+            s.container.querySelector('.lifecycle-filter[data-lifecycle="completed"]').click();
+            await waitFor(() => ids(s.feedCalls.at(-1)).length === 2);
+
+            const result = new Set(ids(s.feedCalls.at(-1)));
+            test("lifecycle=completed: only the two completed builds match", result.has("completed-1") && result.has("completed-2") && result.size === 2, JSON.stringify([...result]));
+        }
+
+        // --- Case 5: the exact #statusFilter select -- only the 4 canonical
+        // values are offered; each does an exact (not bucketed) match. ---------
+        {
+            const s = await runScenario(varied);
+
+            const optionValues = [...s.statusFilter.options].map(o => o.value);
+            test("statusFilter offers exactly all/planning/in_progress/paused/completed", JSON.stringify(optionValues) === JSON.stringify(["all", "planning", "in_progress", "paused", "completed"]), JSON.stringify(optionValues));
+            test("statusFilter no longer offers 'building' as a selectable option", !optionValues.includes("building"), JSON.stringify(optionValues));
+
+            s.statusFilter.value = "paused";
+            s.statusFilter.dispatchEvent(new Event("input", { bubbles: true }));
+            await waitFor(() => ids(s.feedCalls.at(-1)).length === 1);
+
+            test("statusFilter=paused: only the exact paused build matches (legacy building excluded)", ids(s.feedCalls.at(-1)).join(",") === "paused-1", ids(s.feedCalls.at(-1)).join(","));
+        }
+
+        // --- Case 6: sort "Completed First" -- now meaningful with real,
+        // varied statuses (previously every build was 'planning', so this
+        // sort was never observably different from "no sort"). ------------------
+        {
+            const s = await runScenario(varied);
+            s.sortFilter.value = "completed";
+            s.sortFilter.dispatchEvent(new Event("input", { bubbles: true }));
+            await waitFor(() => s.feedCalls.length > 1);
+
+            const sorted = s.feedCalls.at(-1);
+            const completedIndices = sorted.map((b, i) => b.status === "completed" ? i : -1).filter(i => i >= 0);
+            const nonCompletedIndices = sorted.map((b, i) => b.status !== "completed" ? i : -1).filter(i => i >= 0);
+
+            test(
+                "sort=completed: every completed build sorts before every non-completed build",
+                completedIndices.length === 2 && Math.max(...completedIndices) < Math.min(...nonCompletedIndices),
+                JSON.stringify(sorted.map(b => `${b.id}:${b.status}`))
+            );
+        }
+
+        // --- Case 7: sort "Highest Progress" -- descending by real progress ----
+        {
+            const s = await runScenario(varied);
+            s.sortFilter.value = "progress";
+            s.sortFilter.dispatchEvent(new Event("input", { bubbles: true }));
+            await waitFor(() => s.feedCalls.length > 1);
+
+            const sorted = s.feedCalls.at(-1);
+            const progresses = sorted.map(b => Number(b.progress || 0));
+            const isDescending = progresses.every((value, i) => i === 0 || progresses[i - 1] >= value);
+
+            test("sort=progress: builds are sorted by descending real progress", isDescending, JSON.stringify(progresses));
+            test("sort=progress: the highest-progress build sorts first", sorted[0].progress === 100, sorted[0].progress);
+        }
+
+        // --- Case 8: clearFilters resets the exact statusFilter selection too --
+        {
+            const s = await runScenario(varied);
+            s.statusFilter.value = "completed";
+            s.statusFilter.dispatchEvent(new Event("input", { bubbles: true }));
+            await waitFor(() => ids(s.feedCalls.at(-1)).length === 2);
+
+            s.container.querySelector("#clearFilters").click();
+            await waitFor(() => ids(s.feedCalls.at(-1)).length === 6);
+
+            test("Clear resets the statusFilter select back to 'all'", s.statusFilter.value === "all", s.statusFilter.value);
+            test("Clear restores every build to the results", ids(s.feedCalls.at(-1)).length === 6, ids(s.feedCalls.at(-1)).length);
+        }
+
+        } catch (crashError) {
+            test("no scenario threw or timed out before the file finished running", false, String(crashError?.stack || crashError));
+        }
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`exploreLifecycleAndSort.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

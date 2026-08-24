@@ -1549,3 +1549,70 @@ recorded as applied, not the original application date or actor.
   of what was scoped and delivered. The account-deletion procedure itself remains
   unimplemented; this migration exists to unblock its audit logging
   whenever that work happens.
+
+## 0042_build_progress_and_status
+
+- **Status**: Proposed — not yet applied to production. Written and
+  reviewed against a local checkout only (no DB/CLI access from this
+  implementation environment); rehearsal against the local disposable
+  Supabase/Docker stack, and the actual production apply, are both
+  required — and required to happen **before** this PR's UI commit
+  deploys — as separate, explicit, human-run steps (see this PR's own
+  pre-merge checklist).
+- **Purpose**: Launch Readiness Audit Findings 03 (progress tracking
+  disconnected) and 04 (build status disconnected). `builds.status` has
+  been set once at first publish and never updated again by any code
+  path since 0002 (a republish's own UPDATE never touched it);
+  `build_revisions.progress` has been hardcoded to `0` by every version
+  of `publish_draft()` since 0002. Neither field has ever existed on
+  `project_drafts`. This migration makes both real and editable.
+- **Schema change**: adds `project_drafts.progress`/`project_drafts.
+  status`, `builds.progress`, and `build_revisions.status` (all new);
+  adds the first-ever CHECK constraint to the pre-existing `builds.
+  status` and `build_revisions.progress` columns. Canonical status
+  vocabulary: `'planning'`, `'in_progress'`, `'paused'`, `'completed'`
+  — `'building'` (a dead literal the read-side UI has always defensively
+  treated as a synonym for `'in_progress'`, never actually written by
+  any live code path) is normalized to `'in_progress'` on any exact
+  match before the constraint is added; any other unexpected
+  `builds.status` value aborts the migration with a clear error rather
+  than being silently rewritten. A one-directional consistency
+  constraint (`status <> 'completed' or progress = 100`) is added to all
+  three tables. `publish_draft(uuid, text, text)` and
+  `restore_revision_to_draft(uuid, timestamptz)` are replaced in place
+  with unchanged signatures — copying progress/status through
+  project_drafts → builds → build_revisions on every publish, and
+  restoring them from build_revisions → project_drafts on revision
+  restore, following the exact precedent `0035` set for
+  `setup_inventory`.
+- **Rollback**: `0042_build_progress_and_status_rollback.sql` in
+  `supabase/rollbacks/` — restores both functions to their exact pre-0042
+  (`0035`) bodies and drops every constraint/column this migration added.
+  A real, intentional data-loss rollback for the two new
+  progress/status columns specifically (any values builders set through
+  the editor after 0042 applied are discarded); explicitly cannot
+  restore a `'building'` literal that was normalized away by the forward
+  migration (documented in the rollback file's own header).
+- **Testing**: `supabase/tests/migration_0042_build_progress_and_status.test.sql`
+  (columns, CHECK constraints — range/canonical-vocabulary/Completed-100
+  consistency — publish_draft() first-publish/republish/immutability,
+  restore_revision_to_draft(), ownership/RLS, signature+ACL confirmation,
+  rollback) and `supabase/tests/migration_0042_legacy_upgrade.test.sql`
+  with its companion `supabase/tests/fixtures/legacy_build_status_fixture.sql`
+  (the `'building'` → `'in_progress'` normalization against
+  production-shaped pre-0042 data, and the documented separate
+  expected-to-fail scenario for a truly unexpected status value). None of
+  these have been run in this implementation environment (no DB/CLI
+  access) — written and reviewed, not yet executed; running them against
+  the local disposable Supabase/Docker stack is part of this PR's own
+  pre-merge checklist, same posture as the Status line above.
+- **Context**: not part of the 27A (engineering) or 27B (legal/policy)
+  tracks — a separate, product-facing restoration driven by the Launch
+  Readiness Audit's Findings 03/04. See this PR's own description for
+  the full architecture rationale (denormalized `builds.progress` as the
+  read-path fix; Completed/100 consistency is Hard Model C — the
+  database's own CHECK constraint above unconditionally rejects
+  status='completed' with progress<>100, and the editor keeps values
+  valid rather than merely warning: selecting Completed forces progress
+  to 100, and lowering progress below 100 while Completed forces status
+  back to in_progress).

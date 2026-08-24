@@ -15,9 +15,16 @@ export async function renderBuild(build, latestRevision = null, { editDraftId = 
         ? new Date(latestDate).toLocaleDateString()
         : "Recently";
 
-    const progress = clampProgress(
-        latestRevision?.progress
-    );
+    // Current/header progress reads the denormalized builds.progress
+    // column (Findings 03/04, migration 0042) -- the live, "current"
+    // value, kept in sync with builds.status by the same
+    // Completed/100 consistency rule the editor enforces. This can
+    // genuinely differ from the latest revision's own historical
+    // progress (e.g. a build marked Completed reconciles to 100% even
+    // if its last published revision recorded a lower number) -- that's
+    // intentional, not a bug: the revision timeline below still shows
+    // the real historical value for that revision, unchanged.
+    const progress = clampProgress(build.progress);
 
     const version = normalizeVersion(
         latestRevision?.version
@@ -26,7 +33,7 @@ export async function renderBuild(build, latestRevision = null, { editDraftId = 
     renderHero(build, username, updatedDate);
     renderCreator(build, username);
     await renderCoverImage(build);
-    renderOverview(build, version, progress, updatedDate);
+    renderOverview(build, formatStatus(build.status), version, progress, updatedDate);
     renderActions(editDraftId);
 }
 
@@ -58,7 +65,15 @@ export async function renderRevisionView(build, revision, revisionMedia, { canRe
             ? (revision.snapshot_description || "No description was recorded for this revision.")
             : "This revision was published before per-revision snapshots were captured — the project's content at that point wasn't recorded."
     );
-    setText("buildStatus", formatStatus(build.status));
+    // The revision's OWN historical status, not the current build's --
+    // these can legitimately differ (a build reopened to In Progress
+    // after this revision was published, for instance). A revision
+    // published before migration 0042 added build_revisions.status has
+    // no recorded value (null, not fabricated as "planning") -- shown
+    // as "Not recorded" rather than silently defaulting to a status
+    // that was never actually true at that point in the project's
+    // history.
+    setText("buildStatus", formatRevisionStatus(revision.status));
     setText("buildUpdated", `Published ${new Date(revision.created_at).toLocaleDateString()}`);
 
     const builderLink = document.getElementById("buildBuilder");
@@ -75,6 +90,7 @@ export async function renderRevisionView(build, revision, revisionMedia, { canRe
 
     renderOverview(
         build,
+        formatRevisionStatus(revision.status),
         normalizeVersion(revision.version),
         clampProgress(revision.progress),
         new Date(revision.created_at).toLocaleDateString()
@@ -258,15 +274,22 @@ async function renderCoverImage(build) {
     image.style.display = "block";
 }
 
+// status is passed in explicitly (already formatted) rather than derived
+// from build.status internally, since the two callers need different
+// sources: the current/live view uses the build's own current status,
+// the historical revision view uses that one revision's own recorded
+// status (or "Not recorded" for a pre-0042 revision) -- see
+// formatRevisionStatus() and each call site above.
 function renderOverview(
     build,
+    status,
     version,
     progress,
     updatedDate
 ) {
     setText(
         "overviewStatus",
-        formatStatus(build.status)
+        status
     );
 
     setText(
@@ -390,4 +413,17 @@ function formatStatus(status) {
         default:
             return "Blueprint";
     }
+}
+
+// A historical revision's status is null when it was published before
+// migration 0042 added build_revisions.status -- "not recorded," not
+// "planning." formatStatus()'s own default case falls back to
+// "Blueprint" (a display label for a real, current, unknown status),
+// which would misrepresent a genuinely-missing historical value as a
+// specific one, so this is a distinct null-check rather than reusing
+// that default.
+function formatRevisionStatus(status) {
+    if (status === null || status === undefined) return "Not recorded";
+
+    return formatStatus(status);
 }

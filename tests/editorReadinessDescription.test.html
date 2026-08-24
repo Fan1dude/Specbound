@@ -30,6 +30,15 @@
         <option value="">Choose...</option>
         <option value="pc_build">PC Builds</option>
     </select>
+    <select id="fieldStatus">
+        <option value="planning">Planning</option>
+        <option value="in_progress">In Progress</option>
+        <option value="paused">Paused</option>
+        <option value="completed">Completed</option>
+    </select>
+    <input id="fieldProgress" type="range" min="0" max="100" step="1">
+    <output for="fieldProgress" id="fieldProgressValue">0%</output>
+    <span id="lifecycleAnnouncement" role="status" aria-live="polite"></span>
     <div id="editorReadiness"></div>
 
     <script type="module">
