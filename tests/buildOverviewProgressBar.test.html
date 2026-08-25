@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Individual build page — Overview progress bar</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Individual build page — Overview progress bar</h1>
+    <p>
+        Real js/pages/build/renderBuild.js against a DOM fixture using
+        pages/build/build.html's own Overview-card markup verbatim (the
+        overviewProgress text plus the overviewProgressBar/overviewProgressFill
+        pair renderOverview() now actually targets). Covers the finding that
+        the old code referenced [data-overview-progress], an attribute no
+        element in build.html ever carried, so the bar silently never
+        rendered.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        // Mirrors the real Overview overview-card article for Status,
+        // Version, Progress (text + bar), Updated, and Views -- copied from
+        // pages/build/build.html, not simplified. Every other element
+        // renderBuild()/renderRevisionView() look up (buildTitle, buildImage,
+        // creatorName, etc.) is optional-chained/null-checked in the real
+        // module (see setText()/the individual `if (element)` guards), so a
+        // fixture scoped to just the Overview card is a faithful subset, not
+        // a different shape.
+        let previousContainer = null;
+
+        function buildFixture() {
+            if (previousContainer) previousContainer.remove();
+
+            const container = document.createElement("div");
+            container.innerHTML = `
+                <article class="overview-card card">
+                    <p class="overview-label">Status</p>
+                    <p id="overviewStatus" class="overview-value">Loading...</p>
+                </article>
+                <article class="overview-card card">
+                    <p class="overview-label">Current Version</p>
+                    <p id="overviewVersion" class="overview-value">v1.0</p>
+                </article>
+                <article class="overview-card card">
+                    <p class="overview-label">Progress</p>
+                    <p id="overviewProgress" class="overview-value">0%</p>
+                    <div
+                        id="overviewProgressBar"
+                        class="progress-track"
+                        role="progressbar"
+                        aria-label="Project progress"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        aria-valuenow="0"
+                    >
+                        <div id="overviewProgressFill" class="progress-fill" data-progress="0"></div>
+                    </div>
+                </article>
+                <article class="overview-card card">
+                    <p class="overview-label">Last Updated</p>
+                    <p id="overviewUpdated" class="overview-value">Recently</p>
+                </article>
+                <article class="overview-card card">
+                    <p class="overview-label">Views</p>
+                    <p id="overviewViews" class="overview-value">0</p>
+                </article>
+            `;
+            document.body.appendChild(container);
+            previousContainer = container;
+            return container;
+        }
+
+        const { renderBuild, renderRevisionView } = await import("../js/pages/build/renderBuild.js");
+
+        function baseBuild(overrides = {}) {
+            return {
+                id: "b1",
+                title: "Repro Build",
+                status: "planning",
+                progress: 0,
+                image_url: null,
+                views: 0,
+                user_id: "u1",
+                created_at: "2026-01-01T00:00:00Z",
+                updated_at: "2026-01-02T00:00:00Z",
+                profiles: { username: "tester" },
+                ...overrides
+            };
+        }
+
+        function readBar(container) {
+            const track = container.querySelector("#overviewProgressBar");
+            const fill = container.querySelector("#overviewProgressFill");
+            const text = container.querySelector("#overviewProgress");
+
+            return {
+                text: text?.textContent,
+                ariaNow: track?.getAttribute("aria-valuenow"),
+                dataProgress: fill?.dataset.progress,
+                cssVar: fill?.style.getPropertyValue("--progress")
+            };
+        }
+
+        try {
+
+        // --- Case 1: current build view uses builds.progress for both text
+        // and the visual bar, and they stay in sync. -------------------------
+        {
+            const container = buildFixture();
+            await renderBuild(baseBuild({ status: "in_progress", progress: 51 }), null, {});
+
+            const bar = readBar(container);
+
+            test("current view: text reads the build's progress", bar.text === "51%", bar.text);
+            test("current view: bar aria-valuenow matches the build's progress", bar.ariaNow === "51", bar.ariaNow);
+            test("current view: bar data-progress matches the build's progress", bar.dataProgress === "51", bar.dataProgress);
+            test("current view: bar --progress custom property is hydrated (CSP-safe path, not an inline style attribute)", bar.cssVar === "51%", bar.cssVar);
+        }
+
+        // --- Case 2: exactly one progress bar renders in the Progress card --
+        // no duplicated/cluttered display. -------------------------------------
+        {
+            const container = buildFixture();
+            await renderBuild(baseBuild({ progress: 20 }), null, {});
+
+            const bars = container.querySelectorAll('[role="progressbar"]');
+            test("exactly one visual progress bar renders on the Overview card", bars.length === 1, String(bars.length));
+        }
+
+        // --- Case 3: a completed build shows current progress 100 even when
+        // its own latest revision recorded a lower historical value -- the
+        // exact Findings 03/04 scenario (builds.progress = 100, that build's
+        // real production revision stayed at 99). ------------------------------
+        {
+            const container = buildFixture();
+            await renderBuild(
+                baseBuild({ status: "completed", progress: 100 }),
+                { progress: 99, version: "v1.0", created_at: "2026-01-01T00:00:00Z" },
+                {}
+            );
+
+            const bar = readBar(container);
+            const statusText = container.querySelector("#overviewStatus")?.textContent;
+
+            test("completed build: current status reads Completed Build", statusText === "Completed Build", statusText);
+            test("completed build: current text shows 100%, not the stale revision's 99%", bar.text === "100%", bar.text);
+            test("completed build: current bar shows 100", bar.ariaNow === "100" && bar.dataProgress === "100", JSON.stringify(bar));
+        }
+
+        // --- Case 4: the historical revision view uses that revision's OWN
+        // progress, not the current build's -- distinctly, on the same build
+        // that just showed 100% in Case 3. --------------------------------------
+        {
+            const container = buildFixture();
+            const revision = {
+                progress: 99,
+                version: "v1.0",
+                status: "completed",
+                created_at: "2026-01-01T00:00:00Z",
+                snapshot_title: "",
+                snapshot_description: "",
+                category: "pc_build"
+            };
+
+            await renderRevisionView(
+                baseBuild({ status: "completed", progress: 100 }),
+                revision,
+                [],
+                { canRestore: false }
+            );
+
+            const bar = readBar(container);
+
+            test("revision view: text shows the revision's own historical 99%, not the build's current 100%", bar.text === "99%", bar.text);
+            test("revision view: bar reflects the revision's own historical progress", bar.ariaNow === "99" && bar.dataProgress === "99", JSON.stringify(bar));
+        }
+
+        // --- Case 5: an ordinary planning build with no completed/historical
+        // divergence -- text and bar simply match the build's own progress. ----
+        {
+            const container = buildFixture();
+            await renderBuild(baseBuild({ status: "planning", progress: 0 }), null, {});
+
+            const bar = readBar(container);
+            test("planning build with 0 progress: text and bar both read 0, not left stale from a prior test", bar.text === "0%" && bar.ariaNow === "0" && bar.dataProgress === "0", JSON.stringify(bar));
+        }
+
+        } catch (crashError) {
+            test("no scenario threw or timed out before the file finished running", false, String(crashError?.stack || crashError));
+        }
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`buildOverviewProgressBar.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

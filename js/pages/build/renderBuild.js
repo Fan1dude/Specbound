@@ -1,6 +1,7 @@
 import { resolveImageUrl } from "../../repositories/mediaRepository.js";
 import { formatCategory } from "../../utils/formatCategory.js";
 import { avatarInitial } from "../../utils/avatarInitial.js";
+import { hydrateProgressBars } from "../../utils/progressBar.js";
 
 export async function renderBuild(build, latestRevision = null, { editDraftId = null } = {}) {
     const username =
@@ -312,21 +313,24 @@ function renderOverview(
         formatViews(build.views)
     );
 
-    const progressBar =
-        document.querySelector(
-            "[data-overview-progress]"
-        );
+    // Findings 03/04 follow-up: renderOverview() previously targeted
+    // [data-overview-progress], an attribute no element in build.html
+    // actually carries -- this block silently did nothing on every page
+    // load. The real bar (added alongside overviewProgress's text) uses
+    // the same CSP-safe data-progress/hydrateProgressBars pattern already
+    // used by BlueprintCard and every other progress bar in the app (see
+    // js/utils/progressBar.js), not an inline style attribute.
+    const progressTrack = document.getElementById("overviewProgressBar");
+    const progressFill = document.getElementById("overviewProgressFill");
 
-    if (progressBar) {
-        progressBar.style.setProperty(
-            "--progress",
-            `${progress}%`
-        );
-
-        progressBar.setAttribute(
+    if (progressTrack && progressFill) {
+        progressTrack.setAttribute(
             "aria-valuenow",
             String(progress)
         );
+
+        progressFill.dataset.progress = String(progress);
+        hydrateProgressBars(progressTrack);
     }
 }
 
