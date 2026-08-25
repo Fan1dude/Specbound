@@ -22,7 +22,10 @@
             getReadinessChecks,
             isValidTitle,
             isValidDescription,
-            isDraftReady
+            isDraftReady,
+            CANONICAL_STATUSES,
+            isValidStatus,
+            normalizeProgress
         } from "../js/services/draftValidation.js";
 
         const results = [];
@@ -103,6 +106,40 @@
         const halfComplete = getReadinessChecks({ title: validTitle, description: validDescription, category: "", hasCoverImage: false });
         test("title+description present, category+cover missing -> 2 of 4 passed", passedCount(halfComplete), 2);
         test("half complete -> isDraftReady false", isDraftReady(halfComplete), false);
+
+        // --- CANONICAL_STATUSES / isValidStatus (Findings 03/04) ----------
+        test(
+            "CANONICAL_STATUSES: exactly the four canonical values, in order",
+            CANONICAL_STATUSES,
+            ["planning", "in_progress", "paused", "completed"]
+        );
+        test("CANONICAL_STATUSES does not include the legacy 'building' alias", CANONICAL_STATUSES.includes("building"), false);
+
+        test("isValidStatus: 'planning' -> true", isValidStatus("planning"), true);
+        test("isValidStatus: 'in_progress' -> true", isValidStatus("in_progress"), true);
+        test("isValidStatus: 'paused' -> true", isValidStatus("paused"), true);
+        test("isValidStatus: 'completed' -> true", isValidStatus("completed"), true);
+        test("isValidStatus: legacy 'building' -> false (not writable, read-alias only)", isValidStatus("building"), false);
+        test("isValidStatus: unknown string -> false", isValidStatus("bogus"), false);
+        test("isValidStatus: empty string -> false", isValidStatus(""), false);
+        test("isValidStatus: undefined -> false", isValidStatus(undefined), false);
+        test("isValidStatus: null -> false", isValidStatus(null), false);
+        test("isValidStatus: case-sensitive — 'Planning' -> false", isValidStatus("Planning"), false);
+
+        // --- normalizeProgress (Findings 03/04) ---------------------------
+        test("normalizeProgress: 0 -> 0", normalizeProgress(0), 0);
+        test("normalizeProgress: 100 -> 100", normalizeProgress(100), 100);
+        test("normalizeProgress: 50 -> 50", normalizeProgress(50), 50);
+        test("normalizeProgress: -1 -> null (below range)", normalizeProgress(-1), null);
+        test("normalizeProgress: 101 -> null (above range)", normalizeProgress(101), null);
+        test("normalizeProgress: '62' (string) -> 62", normalizeProgress("62"), 62);
+        test("normalizeProgress: 62.4 rounds to 62", normalizeProgress(62.4), 62);
+        test("normalizeProgress: 62.5 rounds to 63", normalizeProgress(62.5), 63);
+        test("normalizeProgress: NaN -> null", normalizeProgress(NaN), null);
+        test("normalizeProgress: non-numeric string -> null", normalizeProgress("not a number"), null);
+        test("normalizeProgress: undefined -> null", normalizeProgress(undefined), null);
+        test("normalizeProgress: null -> null", normalizeProgress(null), null);
+        test("normalizeProgress: Infinity -> null", normalizeProgress(Infinity), null);
 
         // --- Render + report ----------------------------------------------
         const resultsEl = document.getElementById("results");

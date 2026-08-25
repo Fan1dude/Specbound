@@ -83,7 +83,7 @@
             return import(blobUrl(rewritten));
         }
 
-        const { renderRevisionView } = await loadRewritten("../js/pages/build/renderBuild.js");
+        const { renderRevisionView, renderBuild } = await loadRewritten("../js/pages/build/renderBuild.js");
         const { renderSpecifications } = await import("../js/pages/build/renderSpecifications.js");
         const { renderResources } = await import("../js/pages/build/renderResources.js");
         const { renderTimeline } = await loadRewritten("../js/pages/build/renderTimeline.js");
@@ -165,6 +165,76 @@
         test("pre-5C revision: renderSpecifications(null) shows the gap notice, not \"no specifications added\"", document.getElementById("buildSpecifications").textContent.includes("not recorded"));
         test("pre-5C revision: renderResources(null) shows the gap notice, not \"no resources added\"", document.getElementById("buildResources").textContent.includes("not recorded"));
         test("pre-5C revision: no cover media falls back to the placeholder", document.getElementById("buildImage").src.includes("default-cover.svg"));
+
+        // --- Findings 03/04 amendment: current view reads builds.progress/
+        // status, not the latest revision's historical values — these can
+        // genuinely diverge (a Completed build reconciles to 100% even if
+        // its last published revision recorded less). -----------------------
+        {
+            const currentBuild = { id: "b2", slug: "current-project", title: "Current Project", status: "completed", progress: 100, user_id: "u1" };
+            const staleLatestRevision = { id: "rev-9", version: "1.2", created_at: "2026-02-01T00:00:00Z", progress: 99 };
+
+            await renderBuild(currentBuild, staleLatestRevision, {});
+
+            test(
+                "current view: overview progress reads builds.progress (100), not the latest revision's historical 99",
+                document.getElementById("overviewProgress").textContent === "100%",
+                document.getElementById("overviewProgress").textContent
+            );
+            test(
+                "current view: status badge reads builds.status",
+                document.getElementById("buildStatus").textContent === "Completed Build",
+                document.getElementById("buildStatus").textContent
+            );
+            test(
+                "current view: overview status also reads builds.status",
+                document.getElementById("overviewStatus").textContent === "Completed Build",
+                document.getElementById("overviewStatus").textContent
+            );
+        }
+
+        // --- Revision detail view uses the REVISION's own historical status,
+        // not the current build's -- these can legitimately differ. -----------
+        {
+            const buildNowInProgress = { id: "b1", slug: "my-project", title: "Current Title", status: "in_progress", user_id: "u1" };
+            const completedHistoricalRevision = {
+                ...fullRevision,
+                status: "completed"
+            };
+
+            await renderRevisionView(buildNowInProgress, completedHistoricalRevision, revisionMedia, { canRestore: false });
+
+            test(
+                "revision view: status badge reads the revision's own historical status, not the current build's",
+                document.getElementById("buildStatus").textContent === "Completed Build",
+                document.getElementById("buildStatus").textContent
+            );
+            test(
+                "revision view: overview status also reads the revision's own historical status",
+                document.getElementById("overviewStatus").textContent === "Completed Build",
+                document.getElementById("overviewStatus").textContent
+            );
+        }
+
+        // --- A legacy revision with no recorded status (published before
+        // migration 0042 added build_revisions.status) shows "Not recorded",
+        // never a fabricated "Blueprint"/Planning label. -----------------------
+        {
+            const legacyStatusRevision = { ...fullRevision, status: null };
+
+            await renderRevisionView(build, legacyStatusRevision, revisionMedia, { canRestore: false });
+
+            test(
+                "revision view: a null historical status renders as \"Not recorded\", not a fabricated default",
+                document.getElementById("buildStatus").textContent === "Not recorded",
+                document.getElementById("buildStatus").textContent
+            );
+            test(
+                "revision view: overview status also shows \"Not recorded\" for a null historical status",
+                document.getElementById("overviewStatus").textContent === "Not recorded",
+                document.getElementById("overviewStatus").textContent
+            );
+        }
 
         // --- Timeline links each entry to ?revision={id} -----------------
         await renderTimeline(

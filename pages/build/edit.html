@@ -199,6 +199,37 @@
                     </select>
                 </div>
 
+                <div class="form-group">
+                    <label for="fieldStatus">Status</label>
+                    <select id="fieldStatus" autocomplete="off">
+                        <option value="planning">Planning</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="paused">Paused</option>
+                        <option value="completed">Completed</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="fieldProgress">Progress</label>
+                    <p class="field-description" id="fieldProgressDescription">
+                        Drag to update how complete this project is. Selecting
+                        Completed above sets this to 100% automatically.
+                    </p>
+                    <div class="progress-field">
+                        <input
+                            id="fieldProgress"
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="1"
+                            aria-describedby="fieldProgressDescription"
+                        >
+                        <output for="fieldProgress" id="fieldProgressValue">0%</output>
+                    </div>
+                </div>
+
+                <span id="lifecycleAnnouncement" class="sr-only" role="status" aria-live="polite"></span>
+
             </div>
         </section>
 

@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Findings 03/04 — editor Overview status/progress controls</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Findings 03/04 — editor Overview status/progress controls</h1>
+    <p>
+        Real js/pages/editor/renderOverviewSection.js against a real DOM
+        fixture matching pages/build/edit.html's own element ids.
+        draftValidation.js (CANONICAL_STATUSES/isValidStatus/
+        normalizeProgress) has no imports of its own, so it's used as-is —
+        the real validation logic under test, not a reimplementation.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        // One fresh fixture per scenario — renderOverviewSection() looks
+        // its elements up via plain global document.getElementById, so a
+        // shared fixture across scenarios would leak stale elements.
+        let previousContainer = null;
+
+        function buildFixture() {
+            if (previousContainer) previousContainer.remove();
+
+            const container = document.createElement("div");
+            container.innerHTML = `
+                <h1 id="editorTitle"></h1>
+                <input id="fieldTitle" type="text">
+                <textarea id="fieldDescription"></textarea>
+                <select id="fieldCategory">
+                    <option value="pc_build">PC Builds</option>
+                    <option value="setup">Desk Setups</option>
+                </select>
+                <select id="fieldStatus">
+                    <option value="planning">Planning</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="paused">Paused</option>
+                    <option value="completed">Completed</option>
+                </select>
+                <div class="progress-field">
+                    <input id="fieldProgress" type="range" min="0" max="100" step="1">
+                    <output for="fieldProgress" id="fieldProgressValue">0%</output>
+                </div>
+                <span id="lifecycleAnnouncement" role="status" aria-live="polite"></span>
+            `;
+            document.body.appendChild(container);
+            previousContainer = container;
+            return container;
+        }
+
+        const { renderOverviewSection } = await import("../js/pages/editor/renderOverviewSection.js");
+
+        function mockAutosave() {
+            const calls = [];
+            return {
+                calls,
+                scheduleSave(fields) {
+                    calls.push(fields);
+                }
+            };
+        }
+
+        function baseDraft(overrides = {}) {
+            return {
+                title: "A Real Project",
+                description: "A properly detailed description of this project.",
+                category: "pc_build",
+                status: "planning",
+                progress: 0,
+                ...overrides
+            };
+        }
+
+        function fireEvent(el, type) {
+            el.dispatchEvent(new Event(type, { bubbles: true }));
+        }
+
+        // Wrapped so a genuine bug in any one scenario shows up as a failed,
+        // named test case with its real error, instead of silently
+        // aborting the rest of the file.
+        try {
+
+        // --- Case 1: initial bootstrap populates fields, never autosaves ---
+        {
+            const container = buildFixture();
+            const autosave = mockAutosave();
+            renderOverviewSection(baseDraft({ status: "completed", progress: 100 }), autosave);
+
+            const statusField = container.querySelector("#fieldStatus");
+            const progressField = container.querySelector("#fieldProgress");
+            const progressValue = container.querySelector("#fieldProgressValue");
+
+            test("bootstrap: status field reflects the draft's real status", statusField.value === "completed", statusField.value);
+            test("bootstrap: progress field reflects the draft's real progress", progressField.value === "100", progressField.value);
+            test("bootstrap: the visible readout reflects the draft's real progress", progressValue.textContent === "100%", progressValue.textContent);
+            test("bootstrap alone never calls scheduleSave (no phantom autosave)", autosave.calls.length === 0, JSON.stringify(autosave.calls));
+        }
+
+        // --- Case 2: bootstrap with missing progress/status defaults safely ---
+        {
+            const container = buildFixture();
+            const autosave = mockAutosave();
+            renderOverviewSection(baseDraft({ status: undefined, progress: undefined }), autosave);
+
+            const statusField = container.querySelector("#fieldStatus");
+            const progressField = container.querySelector("#fieldProgress");
+
+            test("bootstrap: missing status defaults to planning", statusField.value === "planning", statusField.value);
+            test("bootstrap: missing progress defaults to 0", progressField.value === "0", progressField.value);
+            test("bootstrap with missing fields still never autosaves", autosave.calls.length === 0);
+        }
+
+        // --- Case 3: an unrelated status change never touches progress -----
+        {
+            const container = buildFixture();
+            const autosave = mockAutosave();
+            renderOverviewSection(baseDraft({ status: "planning", progress: 40 }), autosave);
+
+            const statusField = container.querySelector("#fieldStatus");
+            statusField.value = "in_progress";
+            fireEvent(statusField, "change");
+
+            test(
+                "planning -> in_progress schedules only {status}, progress untouched",
+                autosave.calls.length === 1 && JSON.stringify(autosave.calls[0]) === JSON.stringify({ status: "in_progress" }),
+                JSON.stringify(autosave.calls)
+            );
+        }
+
+        // --- Case 4: selecting Completed forces progress to 100, one payload ---
+        {
+            const container = buildFixture();
+            const autosave = mockAutosave();
+            renderOverviewSection(baseDraft({ status: "in_progress", progress: 62 }), autosave);
+
+            const statusField = container.querySelector("#fieldStatus");
+            const progressField = container.querySelector("#fieldProgress");
+            const progressValue = container.querySelector("#fieldProgressValue");
+            const announcement = container.querySelector("#lifecycleAnnouncement");
+
+            statusField.value = "completed";
+            fireEvent(statusField, "change");
+
+            test(
+                "selecting Completed schedules status+progress in ONE payload",
+                autosave.calls.length === 1 && JSON.stringify(autosave.calls[0]) === JSON.stringify({ status: "completed", progress: 100 }),
+                JSON.stringify(autosave.calls)
+            );
+            test("selecting Completed visually moves the range control to 100", progressField.value === "100", progressField.value);
+            test("selecting Completed updates the visible readout to 100%", progressValue.textContent === "100%", progressValue.textContent);
+            test("selecting Completed announces the automatic adjustment", announcement.textContent.toLowerCase().includes("100%"), announcement.textContent);
+        }
+
+        // --- Case 5: selecting Completed when progress is already 100 doesn't
+        // redundantly re-send progress. --------------------------------------
+        {
+            const container = buildFixture();
+            const autosave = mockAutosave();
+            renderOverviewSection(baseDraft({ status: "in_progress", progress: 100 }), autosave);
+
+            const statusField = container.querySelector("#fieldStatus");
+            statusField.value = "completed";
+            fireEvent(statusField, "change");
+
+            test(
+                "Completed at already-100% schedules only {status}",
+                autosave.calls.length === 1 && JSON.stringify(autosave.calls[0]) === JSON.stringify({ status: "completed" }),
+                JSON.stringify(autosave.calls)
+            );
+        }
+
+        // --- Case 6: lowering progress below 100 while Completed flips status --
+        {
+            const container = buildFixture();
+            const autosave = mockAutosave();
+            renderOverviewSection(baseDraft({ status: "completed", progress: 100 }), autosave);
+
+            const statusField = container.querySelector("#fieldStatus");
+            const progressField = container.querySelector("#fieldProgress");
+            const announcement = container.querySelector("#lifecycleAnnouncement");
+
+            progressField.value = "80";
+            fireEvent(progressField, "input");
+
+            test(
+                "lowering progress below 100 while Completed schedules progress+status in ONE payload",
+                autosave.calls.length === 1 && JSON.stringify(autosave.calls[0]) === JSON.stringify({ progress: 80, status: "in_progress" }),
+                JSON.stringify(autosave.calls)
+            );
+            test("lowering progress below 100 while Completed visually flips the status select", statusField.value === "in_progress", statusField.value);
+            test("lowering progress below 100 while Completed announces the automatic adjustment", announcement.textContent.toLowerCase().includes("in progress"), announcement.textContent);
+        }
+
+        // --- Case 7: reopening a Completed build via the status select does
+        // NOT lower progress -- only the progress control itself can do that. --
+        {
+            const container = buildFixture();
+            const autosave = mockAutosave();
+            renderOverviewSection(baseDraft({ status: "completed", progress: 100 }), autosave);
+
+            const statusField = container.querySelector("#fieldStatus");
+            const progressField = container.querySelector("#fieldProgress");
+
+            statusField.value = "in_progress";
+            fireEvent(statusField, "change");
+
+            test(
+                "reopening via status select schedules only {status}, no progress key",
+                autosave.calls.length === 1 && JSON.stringify(autosave.calls[0]) === JSON.stringify({ status: "in_progress" }),
+                JSON.stringify(autosave.calls)
+            );
+            test("reopening via status select leaves progress visually at 100", progressField.value === "100", progressField.value);
+
+            // Also true for Paused, the other explicitly-listed reopening path.
+            const autosave2 = mockAutosave();
+            const container2 = buildFixture();
+            renderOverviewSection(baseDraft({ status: "completed", progress: 100 }), autosave2);
+            const statusField2 = container2.querySelector("#fieldStatus");
+            statusField2.value = "paused";
+            fireEvent(statusField2, "change");
+
+            test(
+                "reopening to Paused via status select also schedules only {status}",
+                autosave2.calls.length === 1 && JSON.stringify(autosave2.calls[0]) === JSON.stringify({ status: "paused" }),
+                JSON.stringify(autosave2.calls)
+            );
+        }
+
+        // --- Case 8: an ordinary progress change (not near 100/Completed)
+        // schedules only {progress}, and the readout updates live. -----------
+        {
+            const container = buildFixture();
+            const autosave = mockAutosave();
+            renderOverviewSection(baseDraft({ status: "in_progress", progress: 10 }), autosave);
+
+            const progressField = container.querySelector("#fieldProgress");
+            const progressValue = container.querySelector("#fieldProgressValue");
+
+            progressField.value = "45";
+            fireEvent(progressField, "input");
+
+            test(
+                "an ordinary progress change schedules only {progress}",
+                autosave.calls.length === 1 && JSON.stringify(autosave.calls[0]) === JSON.stringify({ progress: 45 }),
+                JSON.stringify(autosave.calls)
+            );
+            test("the visible readout updates live on the same input event", progressValue.textContent === "45%", progressValue.textContent);
+        }
+
+        // --- Case 9: Planning at nonzero progress, In Progress at 0/100,
+        // Paused at any progress are all accepted without any forced change. --
+        {
+            const scenarios = [
+                { status: "planning", progress: 50, expectStatus: "planning", expectProgress: 50 },
+                { status: "in_progress", progress: 0, expectStatus: "in_progress", expectProgress: 0 },
+                { status: "in_progress", progress: 100, expectStatus: "in_progress", expectProgress: 100 },
+                { status: "paused", progress: 37, expectStatus: "paused", expectProgress: 37 }
+            ];
+
+            for (const scenario of scenarios) {
+                const container = buildFixture();
+                const autosave = mockAutosave();
+                renderOverviewSection(baseDraft({ status: scenario.status, progress: scenario.progress }), autosave);
+
+                const statusField = container.querySelector("#fieldStatus");
+                const progressField = container.querySelector("#fieldProgress");
+
+                test(
+                    `edge case: ${scenario.status} at ${scenario.progress}% bootstraps with no forced adjustment`,
+                    statusField.value === scenario.expectStatus && Number(progressField.value) === scenario.expectProgress,
+                    `status=${statusField.value} progress=${progressField.value}`
+                );
+                test(`edge case: ${scenario.status} at ${scenario.progress}% never autosaves on bootstrap alone`, autosave.calls.length === 0);
+            }
+        }
+
+        // --- Case 10: dedup — setting the exact same value again schedules
+        // nothing new, matching the existing Overview-section pattern. -------
+        {
+            const container = buildFixture();
+            const autosave = mockAutosave();
+            renderOverviewSection(baseDraft({ status: "in_progress", progress: 30 }), autosave);
+
+            const statusField = container.querySelector("#fieldStatus");
+            const progressField = container.querySelector("#fieldProgress");
+
+            statusField.value = "in_progress";
+            fireEvent(statusField, "change");
+            progressField.value = "30";
+            fireEvent(progressField, "input");
+
+            test("re-selecting the same status schedules nothing", autosave.calls.length === 0, JSON.stringify(autosave.calls));
+        }
+
+        // --- Case 11: applyFields (crash-recovery / bootstrap helper) restores
+        // both fields and never autosaves on its own. -------------------------
+        {
+            const container = buildFixture();
+            const autosave = mockAutosave();
+            const overview = renderOverviewSection(baseDraft({ status: "planning", progress: 0 }), autosave);
+
+            overview.applyFields({ status: "paused", progress: 75 });
+
+            const statusField = container.querySelector("#fieldStatus");
+            const progressField = container.querySelector("#fieldProgress");
+
+            test("applyFields restores status", statusField.value === "paused", statusField.value);
+            test("applyFields restores progress", progressField.value === "75", progressField.value);
+            test("applyFields alone never calls scheduleSave", autosave.calls.length === 0, JSON.stringify(autosave.calls));
+        }
+
+        // --- Case 12: applyFields rejects invalid recovered values ------------
+        {
+            const container = buildFixture();
+            const autosave = mockAutosave();
+            const overview = renderOverviewSection(baseDraft({ status: "planning", progress: 20 }), autosave);
+
+            const statusField = container.querySelector("#fieldStatus");
+            const progressField = container.querySelector("#fieldProgress");
+
+            overview.applyFields({ status: "bogus", progress: 999 });
+            test("an invalid recovered status is not applied", statusField.value === "planning", statusField.value);
+            test("an invalid recovered progress is not applied", progressField.value === "20", progressField.value);
+
+            overview.applyFields({ status: "building", progress: -5 });
+            test("the legacy 'building' alias is not accepted as a recovered status", statusField.value === "planning", statusField.value);
+            test("a negative recovered progress is not applied", progressField.value === "20", progressField.value);
+
+            overview.applyFields({ progress: "not a number" });
+            test("a non-numeric recovered progress is not applied", progressField.value === "20", progressField.value);
+        }
+
+        // --- Case 13: applyFields with only one of the two fields present
+        // leaves the other exactly as it was. -----------------------------------
+        {
+            const container = buildFixture();
+            const autosave = mockAutosave();
+            const overview = renderOverviewSection(baseDraft({ status: "paused", progress: 55 }), autosave);
+
+            overview.applyFields({ progress: 90 });
+
+            const statusField = container.querySelector("#fieldStatus");
+            const progressField = container.querySelector("#fieldProgress");
+
+            test("applyFields with only progress present updates progress", progressField.value === "90", progressField.value);
+            test("applyFields with only progress present leaves status untouched", statusField.value === "paused", statusField.value);
+        }
+
+        } catch (crashError) {
+            test("no scenario threw or timed out before the file finished running", false, String(crashError?.stack || crashError));
+        }
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`renderOverviewSection.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

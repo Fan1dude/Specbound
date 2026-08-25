@@ -20,6 +20,7 @@
     <h1 id="workshopGreeting"></h1>
     <div id="workshopContinue"></div>
     <div id="workshopDraftsSection" hidden><div id="workshopDrafts"></div></div>
+    <div id="workshopStats"></div>
     <div id="workshopProjectCount"></div>
     <div id="workshopProjects"></div>
     <div id="workshopSavedCount"></div>
@@ -201,6 +202,41 @@
 
         test("failed load (null): a visible error message is shown", document.getElementById("workshopSaved").textContent.toLowerCase().includes("could not load"));
         test("failed load (null): this is NOT the same message as a genuine empty state", !document.getElementById("workshopSaved").textContent.includes("haven't saved"));
+
+        // --- Case 7: Findings 03/04 — the "Completed" stat counts real,
+        // varied statuses correctly, not just a single hardcoded value. -------
+        {
+            const myBuilds = [
+                { id: "m1", status: "planning" },
+                { id: "m2", status: "in_progress" },
+                { id: "m3", status: "paused" },
+                { id: "m4", status: "completed" },
+                { id: "m5", status: "completed" }
+            ];
+
+            renderWorkshop({ ...baseArgs, builds: myBuilds, revisionCount: 7, savedBuilds: [] });
+
+            const statsText = document.getElementById("workshopStats").textContent;
+
+            test("the Builds stat reflects the full build count", statsText.includes("5"));
+            test("the Build Logs stat reflects the revision count", statsText.includes("7"));
+            test("the Completed stat counts exactly the status='completed' builds (2), not all builds or zero", document.querySelectorAll("#workshopStats .workshop-stat")[2]?.textContent.trim().startsWith("2"), statsText);
+        }
+
+        {
+            const myBuilds = [
+                { id: "m1", status: "planning" },
+                { id: "m2", status: "in_progress" },
+                { id: "m3", status: "paused" }
+            ];
+
+            renderWorkshop({ ...baseArgs, builds: myBuilds, revisionCount: 3, savedBuilds: [] });
+
+            test(
+                "no completed builds: the Completed stat reads 0, not a stale prior count",
+                document.querySelectorAll("#workshopStats .workshop-stat")[2]?.textContent.trim().startsWith("0")
+            );
+        }
 
         // --- Render + report ------------------------------------------------
         const resultsEl = document.getElementById("results");

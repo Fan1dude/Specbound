@@ -245,6 +245,15 @@ function matchesTechnologyFilters(build) {
         });
 }
 
+// The four canonical values (see supabase/migrations/0042_build_progress_
+// and_status.sql and js/services/draftValidation.js's CANONICAL_STATUSES)
+// are planning/in_progress/paused/completed — "building" is not one of
+// them, and 0042's own forward migration normalizes any existing
+// builds.status = 'building' row to 'in_progress' before the canonical
+// CHECK constraint is added, so nothing should ever write it again. It's
+// kept here as a defensive legacy read alias only (grouped with
+// in_progress/paused under "project"), in case any not-yet-migrated
+// fixture or historical revision snapshot still carries it.
 function matchesLifecycle(status, lifecycle) {
     if (lifecycle === "planning") {
         return status === "planning";
