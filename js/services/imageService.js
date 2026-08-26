@@ -145,6 +145,31 @@ export async function deleteGalleryImage(draftId, mediaId) {
     if (error) throw error;
 }
 
+// Second half of a build deletion (see publishRepository.deleteBuild() /
+// supabase/migrations/0043_delete_build.sql) — removes the Storage paths
+// the RPC already determined are safe (its own database transaction
+// already excluded any path still referenced by a live draft's gallery).
+// Deliberately NOT atomic with that RPC: the database delete has already
+// committed by the time this runs, using the caller's own authenticated
+// session, subject to the same storage.objects RLS as every other write
+// here. If this fails partway, the result is orphaned Storage objects —
+// never orphaned rows, since the rows are already gone. Callers must
+// treat a failure here as non-fatal to the overall deletion (see
+// renderDangerZoneSection.js), not surface it as "deletion failed".
+// No-op for an empty array — a build with no revision_media (or none
+// this owner didn't already keep in a live draft) legitimately has
+// nothing to remove.
+export async function deleteBuildStorageFiles(paths) {
+    if (!paths?.length) return;
+
+    const { error } = await supabase
+        .storage
+        .from(PROJECT_IMAGES_BUCKET)
+        .remove(paths);
+
+    if (error) throw error;
+}
+
 async function buildGalleryImage(file) {
     if (!ALLOWED_MIME_TYPES.includes(file.type)) {
         throw new Error("Images must be JPEG, PNG, or WebP.");

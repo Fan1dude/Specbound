@@ -154,6 +154,14 @@
             '"../../components/FirstPublishDialog.js"': blobUrl(firstPublishDialogSrc),
             '"../../components/GuidelinesGate.js"': blobUrl(`
                 export async function requireGuidelinesAcceptance() { return true; }
+            `),
+            // Launch Readiness Audit Finding 02 addition to app.js — mocked
+            // the same way as the other sections above: this test doesn't
+            // exercise build deletion at all, it just needs app.js's module
+            // graph to resolve and dangerZone.refresh() to be callable from
+            // showPublished()'s own flow.
+            '"./renderDangerZoneSection.js"': blobUrl(`
+                export function renderDangerZoneSection() { return { refresh() {} }; }
             `)
             // "./renderReadinessChecklist.js" deliberately left real — the
             // readiness-gating logic (isReady) is exactly what this test

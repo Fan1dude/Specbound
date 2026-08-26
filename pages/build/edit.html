@@ -231,6 +231,40 @@
                 <span id="lifecycleAnnouncement" class="sr-only" role="status" aria-live="polite"></span>
 
             </div>
+
+            <!-- Launch Readiness Audit Finding 02 — published-build deletion
+                 only. Hidden by default; js/pages/editor/renderDangerZoneSection.js
+                 reveals it only when this draft's published_build_id is set,
+                 and hides it again the moment that build is deleted. -->
+            <div
+                id="editorDangerZone"
+                class="card card-padding editor-danger-zone"
+                hidden
+            >
+                <div class="section-heading">
+                    <h2>Danger Zone</h2>
+                    <p>An irreversible action for this project's published build.</p>
+                </div>
+
+                <div class="editor-danger-zone-action">
+                    <div>
+                        <h3>Delete Published Build</h3>
+                        <p class="text-secondary">
+                            Permanently removes the public build, its revisions,
+                            comments, likes, and saves. Your editable draft and
+                            its images will remain.
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        id="deletePublishedBuildBtn"
+                        class="btn btn-danger"
+                    >
+                        Delete Published Build
+                    </button>
+                </div>
+            </div>
         </section>
 
         <section

@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Launch Readiness Audit Finding 02 — editor Danger Zone</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Launch Readiness Audit Finding 02 — editor Danger Zone</h1>
+    <p>
+        Real js/pages/editor/renderDangerZoneSection.js and the real,
+        unmocked js/utils/modal.js confirmDialog against a DOM fixture
+        matching pages/build/edit.html's own element ids — only
+        publishRepository.js, imageService.js, and core/toast.js are
+        mocked (network/Storage boundaries).
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <!-- Minimal DOM matching pages/build/edit.html's own element ids. -->
+    <div id="editorDangerZone" class="card" hidden>
+        <button type="button" id="deletePublishedBuildBtn" class="btn btn-danger">
+            Delete Published Build
+        </button>
+    </div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        // --- Mock state -----------------------------------------------------
+        const calls = [];
+        const toastMessages = [];
+        let deleteShouldFail = false;
+        let storageShouldFail = false;
+        let deleteBuildResolvedPaths = ["projects/draft-1/only-in-history.jpg"];
+
+        globalThis.__mock = {
+            calls, toastMessages,
+            get deleteShouldFail() { return deleteShouldFail; },
+            get storageShouldFail() { return storageShouldFail; },
+            get deleteBuildResolvedPaths() { return deleteBuildResolvedPaths; }
+        };
+
+        const publishRepoSrc = `
+            export async function deleteBuild(buildId) {
+                globalThis.__mock.calls.push(["deleteBuild", buildId]);
+                if (globalThis.__mock.deleteShouldFail) throw new Error("permission denied for table builds");
+                return globalThis.__mock.deleteBuildResolvedPaths;
+            }
+        `;
+        const imageServiceSrc = `
+            export async function deleteBuildStorageFiles(paths) {
+                globalThis.__mock.calls.push(["deleteBuildStorageFiles", paths]);
+                if (globalThis.__mock.storageShouldFail) throw new Error("storage network error");
+            }
+        `;
+        const toastSrc = `
+            export function showToast(message, type) {
+                globalThis.__mock.toastMessages.push({ message, type });
+            }
+        `;
+
+        const publishRepoUrl = blobUrl(publishRepoSrc);
+        const imageServiceUrl = blobUrl(imageServiceSrc);
+        const toastUrl = blobUrl(toastSrc);
+
+        // utils/modal.js is used REAL, unmocked (only imports escapeHtml.js,
+        // itself import-free) — this test drives the actual <dialog>, not a
+        // stand-in, so the real confirmation copy is what gets asserted.
+        const modalUrl = new URL("../js/utils/modal.js", location.href).href;
+
+        async function loadRewritten(path) {
+            const src = await (await fetch(path)).text();
+            const rewritten = src
+                .replaceAll('"../../repositories/publishRepository.js"', `"${publishRepoUrl}"`)
+                .replaceAll('"../../services/imageService.js"', `"${imageServiceUrl}"`)
+                .replaceAll('"../../core/toast.js"', `"${toastUrl}"`)
+                .replaceAll('"../../utils/modal.js"', `"${modalUrl}"`);
+            return import(blobUrl(rewritten));
+        }
+
+        const { renderDangerZoneSection } = await loadRewritten("../js/pages/editor/renderDangerZoneSection.js");
+
+        function resetDom() {
+            const section = document.getElementById("editorDangerZone");
+            section.hidden = true;
+
+            const oldBtn = document.getElementById("deletePublishedBuildBtn");
+            const newBtn = oldBtn.cloneNode(true);
+            oldBtn.replaceWith(newBtn);
+            newBtn.disabled = false;
+            newBtn.textContent = "Delete Published Build";
+
+            return { section, button: newBtn };
+        }
+
+        function click(el) {
+            el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        }
+
+        // The last <dialog class="modal"> in document order, not the
+        // first — a dialog resolved by a prior case can still be present
+        // (its own removal is a real setTimeout, which a background/
+        // inactive test tab can throttle well past its nominal 150ms), and
+        // a newly opened dialog is always appended after it. Grabbing the
+        // first match would silently click an already-resolved, inert
+        // dialog left over from an earlier case instead of the current
+        // one — a test-harness hazard, not anything a real one-dialog-at-
+        // a-time user flow could hit.
+        function findOpenDialog() {
+            const dialogs = document.querySelectorAll("dialog.modal");
+            return dialogs[dialogs.length - 1] || null;
+        }
+
+        async function nextTick(n = 1) {
+            for (let i = 0; i < n; i++) await new Promise(r => setTimeout(r, 0));
+        }
+
+        // confirmDialog's own finish() resolves the click handler's promise
+        // immediately, but removes the <dialog> element itself only after a
+        // real 150ms setTimeout (matches --duration-fast — see
+        // js/utils/modal.js). A 0ms-tick wait isn't enough to guarantee that
+        // removal has actually happened before the next case's
+        // findOpenDialog() runs — without this, a still-present (already
+        // resolved) dialog from a PRIOR case can be the one a later case's
+        // querySelector finds, and clicking its buttons is then a no-op.
+        function wait(ms) {
+            return new Promise(r => setTimeout(r, ms));
+        }
+
+        try {
+
+        // --- Case 1: never-published draft -- section hidden, button
+        // disabled, from the very first refresh() call. -----------------------
+        {
+            resetDom();
+            const draft = { id: "draft-1", published_build_id: null };
+            let onDeletedCalled = false;
+            const zone = renderDangerZoneSection(draft, { onDeleted: () => { onDeletedCalled = true; } });
+
+            const section = document.getElementById("editorDangerZone");
+            const button = document.getElementById("deletePublishedBuildBtn");
+
+            test("never-published: Danger Zone section is hidden", section.hidden === true);
+            test("never-published: delete button is disabled", button.disabled === true);
+
+            click(button);
+            await nextTick(3);
+            test("never-published: clicking the disabled/guarded button never calls deleteBuild", calls.length === 0, JSON.stringify(calls));
+            test("never-published: onDeleted is never called", onDeletedCalled === false);
+        }
+
+        // --- Case 2: published draft -- section visible, button enabled. ------
+        {
+            resetDom();
+            const draft = { id: "draft-2", published_build_id: "build-2" };
+            renderDangerZoneSection(draft, {});
+
+            const section = document.getElementById("editorDangerZone");
+            const button = document.getElementById("deletePublishedBuildBtn");
+
+            test("published: Danger Zone section is visible", section.hidden === false);
+            test("published: delete button is enabled", button.disabled === false);
+        }
+
+        // --- Case 3: clicking opens a confirmation dialog whose copy makes
+        // both the operation and the retained draft explicit, and cancelling
+        // it never calls deleteBuild. ------------------------------------------
+        {
+            resetDom();
+            calls.length = 0;
+            const draft = { id: "draft-3", published_build_id: "build-3" };
+            renderDangerZoneSection(draft, {});
+
+            const button = document.getElementById("deletePublishedBuildBtn");
+            click(button);
+            await nextTick(2);
+
+            const dialog = findOpenDialog();
+            test("confirm dialog: opens on click", Boolean(dialog));
+
+            const dialogText = dialog?.textContent || "";
+            test("confirm dialog: copy names the specific action (not a generic 'Delete Project')", dialogText.includes("Delete Published Build"), dialogText);
+            test("confirm dialog: copy states it's permanent/irreversible", /permanently|cannot be undone/i.test(dialogText), dialogText);
+            test("confirm dialog: copy explicitly says the draft is retained", /draft.*remain|remain.*draft/i.test(dialogText), dialogText);
+
+            dialog.querySelector('[data-action="cancel"]').click();
+            await wait(200);
+
+            test("confirm dialog: cancelling never calls deleteBuild", calls.length === 0, JSON.stringify(calls));
+            test("confirm dialog: cancelling leaves the button enabled and unchanged", button.disabled === false && button.textContent.trim() === "Delete Published Build");
+        }
+
+        // --- Case 4: confirming calls deleteBuild with the right id, then
+        // deleteBuildStorageFiles with the RPC's own returned paths, then
+        // reports success and calls onDeleted -- and shows a double-submit
+        // guard (disabled + "Deleting...") while the request is in flight. ----
+        {
+            resetDom();
+            calls.length = 0;
+            toastMessages.length = 0;
+            deleteShouldFail = false;
+            storageShouldFail = false;
+            deleteBuildResolvedPaths = ["projects/draft-4/only-in-history.jpg"];
+
+            const draft = { id: "draft-4", published_build_id: "build-4" };
+            let onDeletedCalled = false;
+            renderDangerZoneSection(draft, { onDeleted: () => { onDeletedCalled = true; } });
+
+            const button = document.getElementById("deletePublishedBuildBtn");
+            click(button);
+            await nextTick(2);
+
+            const dialog = findOpenDialog();
+            dialog.querySelector('[data-action="confirm"]').click();
+
+            // Immediately after confirming (before the mocked async calls
+            // resolve) -- the double-submit guard should already be visible.
+            await nextTick(1);
+            test("double-submit guard: button is disabled while the delete is in flight", button.disabled === true);
+            test("double-submit guard: button label reflects in-flight state", button.textContent.trim() === "Deleting...", button.textContent);
+
+            // A second click while in flight must not queue a second delete.
+            click(button);
+            await wait(200);
+
+            test("deleteBuild called exactly once with the published build id", calls.filter(c => c[0] === "deleteBuild").length === 1 && calls[0][1] === "build-4", JSON.stringify(calls));
+            test("deleteBuildStorageFiles called with the RPC's own returned paths", JSON.stringify(calls.find(c => c[0] === "deleteBuildStorageFiles")) === JSON.stringify(["deleteBuildStorageFiles", ["projects/draft-4/only-in-history.jpg"]]), JSON.stringify(calls));
+            test("a success toast is shown", toastMessages.some(t => t.type === "success"), JSON.stringify(toastMessages));
+            test("onDeleted is called on success", onDeletedCalled === true);
+        }
+
+        // --- Case 5: RPC failure -- the build is retained (onDeleted never
+        // called), a generic error is shown (never the raw error message),
+        // and focus/control state is restored. -----------------------------
+        {
+            resetDom();
+            calls.length = 0;
+            toastMessages.length = 0;
+            deleteShouldFail = true;
+            storageShouldFail = false;
+
+            const draft = { id: "draft-5", published_build_id: "build-5" };
+            let onDeletedCalled = false;
+            renderDangerZoneSection(draft, { onDeleted: () => { onDeletedCalled = true; } });
+
+            const button = document.getElementById("deletePublishedBuildBtn");
+
+            // document.activeElement isn't a reliable signal in this
+            // headless/background-tab test environment (document.hasFocus()
+            // is false here, so the DOM's own focus tracking doesn't behave
+            // like a real, OS-focused window) -- spying on the real
+            // HTMLElement.focus() call is the environment-independent way
+            // to prove the app code actually calls it on the right element.
+            let focusCallCount = 0;
+            const originalFocus = button.focus.bind(button);
+            button.focus = (...args) => {
+                focusCallCount++;
+                return originalFocus(...args);
+            };
+
+            click(button);
+            await nextTick(2);
+
+            const dialog = findOpenDialog();
+            dialog.querySelector('[data-action="confirm"]').click();
+            await wait(200);
+
+            test("RPC failure: onDeleted is never called (build retained)", onDeletedCalled === false);
+            test("RPC failure: deleteBuildStorageFiles is never called", !calls.some(c => c[0] === "deleteBuildStorageFiles"), JSON.stringify(calls));
+            test("RPC failure: an error toast is shown", toastMessages.some(t => t.type === "error"));
+            test(
+                "RPC failure: the raw internal error message is never exposed to the user",
+                !toastMessages.some(t => t.message.includes("permission denied for table builds")),
+                JSON.stringify(toastMessages)
+            );
+            test("RPC failure: the button is re-enabled with its original label", button.disabled === false && button.textContent.trim() === "Delete Published Build");
+            test("RPC failure: the control's own .focus() is called to restore focus management", focusCallCount === 1, String(focusCallCount));
+        }
+
+        // --- Case 6: a Storage-cleanup failure AFTER a successful database
+        // deletion must still report success, not failure -- the database
+        // is already correct and durable at that point. -----------------------
+        {
+            resetDom();
+            calls.length = 0;
+            toastMessages.length = 0;
+            deleteShouldFail = false;
+            storageShouldFail = true;
+            deleteBuildResolvedPaths = ["projects/draft-6/only-in-history.jpg"];
+
+            const draft = { id: "draft-6", published_build_id: "build-6" };
+            let onDeletedCalled = false;
+            renderDangerZoneSection(draft, { onDeleted: () => { onDeletedCalled = true; } });
+
+            const button = document.getElementById("deletePublishedBuildBtn");
+            click(button);
+            await nextTick(2);
+
+            const dialog = findOpenDialog();
+            dialog.querySelector('[data-action="confirm"]').click();
+            await wait(200);
+
+            test("Storage failure after DB success: onDeleted is still called", onDeletedCalled === true);
+            test("Storage failure after DB success: a SUCCESS toast is still shown, not an error", toastMessages.some(t => t.type === "success") && !toastMessages.some(t => t.type === "error"), JSON.stringify(toastMessages));
+        }
+
+        } catch (crashError) {
+            test("no scenario threw or timed out before the file finished running", false, String(crashError?.stack || crashError));
+        }
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`renderDangerZoneSection.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

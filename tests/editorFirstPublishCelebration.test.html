@@ -164,6 +164,12 @@
             // guidelines gate.
             '"../../components/GuidelinesGate.js"': blobUrl(`
                 export async function requireGuidelinesAcceptance() { return true; }
+            `),
+            // Launch Readiness Audit Finding 02 addition to app.js — mocked
+            // the same way as the other sections above; this file's cases
+            // are about first-publish celebration, not build deletion.
+            '"./renderDangerZoneSection.js"': blobUrl(`
+                export function renderDangerZoneSection() { return { refresh() {} }; }
             `)
         };
 

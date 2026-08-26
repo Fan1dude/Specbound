@@ -253,3 +253,47 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* Launch Readiness Audit Finding 02 — published-build deletion. A
+   distinct, deliberately separate card (not folded into the main
+   editor-form card above it) so an irreversible action reads as visually
+   set apart from routine field editing, not just another form row. */
+.editor-danger-zone {
+    margin-top: var(--space-4);
+}
+
+/* .editor-page .card (above) sets border-color at (0,2,0) specificity —
+   matching that here, not just .editor-danger-zone alone, so this
+   override actually wins instead of silently losing to it. */
+.editor-page .editor-danger-zone {
+    border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+/* Same [hidden]-vs-class-display specificity trap as
+   .editor-view-live-link[hidden]/.editor-recovery-banner[hidden] above —
+   .card already sets display via other rules, so [hidden] alone loses
+   without this. */
+.editor-danger-zone[hidden] {
+    display: none;
+}
+
+.editor-danger-zone .section-heading h2 {
+    color: var(--danger);
+}
+
+.editor-danger-zone-action {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+}
+
+.editor-danger-zone-action h3 {
+    font-size: var(--font-size-md);
+    margin-bottom: 4px;
+}
+
+.editor-danger-zone-action p {
+    max-width: 46ch;
+}

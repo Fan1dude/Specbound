@@ -116,6 +116,13 @@
             '"../../components/FirstPublishDialog.js"': blobUrl(firstPublishDialogSrc),
             '"../../components/GuidelinesGate.js"': blobUrl(`
                 export async function requireGuidelinesAcceptance() { return true; }
+            `),
+            // Launch Readiness Audit Finding 02 addition to app.js — mocked
+            // the same way as the other sections above; this file's case is
+            // about a published build no longer being readable, not build
+            // deletion.
+            '"./renderDangerZoneSection.js"': blobUrl(`
+                export function renderDangerZoneSection() { return { refresh() {} }; }
             `)
         };
 
