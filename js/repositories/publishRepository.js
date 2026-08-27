@@ -51,3 +51,23 @@ export async function setBuildVisibility(buildId, visibility) {
 
     return data;
 }
+
+// Calls the SECURITY DEFINER delete_build() function (see
+// supabase/migrations/0043_delete_build.sql) — Launch Readiness Audit
+// Finding 02, published builds only. Ownership is re-validated
+// server-side. Permanently deletes the build and everything that exists
+// only because it does (revisions, comments, likes, saves, view
+// cooldowns, notifications); the linked draft survives, unpublished.
+// Returns the array of Storage paths the caller must now remove — the
+// database delete and that removal are two separate steps, not one
+// atomic operation; see deleteBuildStorageFiles() in imageService.js
+// for the second half.
+export async function deleteBuild(buildId) {
+    const { data, error } = await supabase.rpc("delete_build", {
+        p_build_id: buildId
+    });
+
+    if (error) throw error;
+
+    return data || [];
+}

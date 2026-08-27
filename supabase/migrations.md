@@ -1616,3 +1616,44 @@ recorded as applied, not the original application date or actor.
   valid rather than merely warning: selecting Completed forces progress
   to 100, and lowering progress below 100 while Completed forces status
   back to in_progress).
+
+## 0043_delete_build
+
+- **Status**: Proposed — not yet applied to production. Executed
+  repeatedly against the local disposable Supabase/Docker stack (fresh
+  install through 0043, full test suite, rollback, reapply, full test
+  suite again — all clean) as part of this PR's own pre-merge checklist.
+- **File**: `migrations/0043_delete_build.sql`
+- **Rollback**: `rollbacks/0043_delete_build_rollback.sql` — drops
+  `delete_build(uuid)` and the `notifications_build_id_idx` index this
+  migration adds. Cannot restore any build the function was actually
+  used to delete — permanent, real data loss by design, the entire
+  point of the migration.
+- **Adds**: `delete_build(p_build_id uuid) returns text[]` (owner-only,
+  `SECURITY DEFINER`, `search_path = public, pg_temp`, `EXECUTE` revoked
+  from `public`/`anon`, granted only to `authenticated`) and the
+  `notifications_build_id_idx` index.
+- **Scope, per explicit product decision**: published-build deletion
+  only. A never-published draft has no `builds` row for this function to
+  operate on — deleting one of those is a deliberately separate,
+  out-of-scope follow-up (see the migration's own header).
+- **Testing**: `supabase/tests/migration_0043_delete_build.test.sql` (26
+  assertions — anonymous/non-owner/missing-id rejection, every CASCADE
+  relationship, both SET NULL relationships, `content_reports`/
+  `moderation_actions` survival, the returned Storage-path array
+  excluding paths still referenced by `project_media`, function
+  identity/`SECURITY DEFINER`/`search_path`/ACL, no-DELETE-policy-on-
+  `builds`, the new index, rollback, and reapplication) plus
+  `tests/renderDangerZoneSection.test.html` (26 assertions — visibility
+  for never-published vs. published drafts, confirmation-dialog copy,
+  cancel, confirm, double-submit guard, RPC failure with no raw error
+  exposed and focus restored, and a Storage-cleanup failure after a
+  successful database deletion still reporting success). Both suites
+  executed against the local disposable Supabase/Docker stack and a
+  local static server respectively — all passing. Full existing browser
+  suite and all static checks re-run clean alongside these.
+- **Context**: Launch Readiness Audit Finding 02 (permanent build
+  deletion). Does not modify `0042` or any other existing migration,
+  function, or policy. No `DELETE` policy is added to `public.builds` —
+  `delete_build()` remains the only path, matching every other protected
+  write in this schema.

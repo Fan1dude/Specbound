@@ -12,6 +12,7 @@ import { renderSetupInventorySection } from "./renderSetupInventorySection.js";
 import { renderResourcesSection } from "./renderResourcesSection.js";
 import { renderGallerySection } from "./renderGallerySection.js";
 import { renderReadinessChecklist } from "./renderReadinessChecklist.js";
+import { renderDangerZoneSection } from "./renderDangerZoneSection.js";
 import { renderContextualHints } from "./renderContextualHints.js";
 import { setupEditorTabs } from "./editorTabs.js";
 import { setEditorStatus } from "./editorStatus.js";
@@ -81,6 +82,13 @@ async function initEditor(id) {
     const publishBadge = document.getElementById("editorPublishBadge");
     const viewLiveLink = document.getElementById("editorViewLiveLink");
 
+    // Assigned once renderDangerZoneSection() runs, below — declared here
+    // so showPublished() (called both from the initial published-build
+    // load and from a first-time publish during this same session) can
+    // reveal the Danger Zone the moment a build actually exists, not only
+    // on page load.
+    let dangerZone;
+
     const readiness = renderReadinessChecklist(() => mediaCount, ready => {
         isReady = ready;
         updatePublishBtn();
@@ -149,6 +157,7 @@ async function initEditor(id) {
         }
 
         updatePublishBtn();
+        dangerZone?.refresh();
     }
 
     if (draft.published_build_id) {
@@ -315,6 +324,33 @@ async function initEditor(id) {
     const specifications = renderSpecificationsSection(draft, autosave);
     const resources = renderResourcesSection(draft, autosave);
     const setupInventory = renderSetupInventorySection(draft, autosave);
+
+    // Launch Readiness Audit Finding 02 — published-build deletion only;
+    // hidden/disabled by renderDangerZoneSection() itself for a draft
+    // that's never been published (see that module's own comment).
+    // onDeleted() mirrors showPublished()'s own mutation style (draft is
+    // already a plain object other flows update in place) to bring this
+    // draft back to its unpublished state without a page reload: publish
+    // becomes available again immediately, and the Danger Zone hides
+    // itself now that there's no published build left to delete.
+    dangerZone = renderDangerZoneSection(draft, {
+        onDeleted: () => {
+            draft.published_build_id = null;
+            visibility = "public";
+
+            if (publishBadge) {
+                publishBadge.textContent = "Draft";
+                publishBadge.classList.remove("badge-success", "badge-unpublished");
+            }
+
+            if (viewLiveLink) {
+                viewLiveLink.hidden = true;
+            }
+
+            updatePublishBtn();
+            dangerZone.refresh();
+        }
+    });
 
     // renderReadinessChecklist() ran its own one-time initial update()
     // before any of the three lines above — at that point fieldTitle/
