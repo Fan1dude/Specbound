@@ -3,6 +3,8 @@ import { getProfilesByIds } from "../repositories/profileRepository.js";
 import { resolveBuildImageUrls } from "../repositories/mediaRepository.js";
 import { escapeAttribute } from "../utils/escapeHtml.js";
 import { formatCategory } from "../utils/formatCategory.js";
+import { getBuildStage } from "../utils/buildStage.js";
+import { hydrateProgressBars } from "../utils/progressBar.js";
 
 let featuredBuilds = [];
 // Every builder name this carousel will ever need is already known once
@@ -60,6 +62,58 @@ function showBuild(index) {
     document.getElementById("featuredImage").innerHTML = build.image_url
         ? `<img src="${escapeAttribute(build.image_url)}" alt="${escapeAttribute(build.title)}" loading="lazy" decoding="async">`
         : `<div class="featured-placeholder">No Image Uploaded</div>`;
+
+    // Lifecycle badge -- same shared helper BlueprintCard.js uses, so this
+    // carousel's label/color never drifts from what every card surface
+    // already shows for the same build.status value.
+    const stage = getBuildStage(build.status);
+    const stageEl = document.getElementById("featuredStage");
+
+    if (stageEl) {
+        stageEl.textContent = stage.label;
+        stageEl.className = `featured-label ${stage.className}`;
+    }
+
+    // Progress -- standard CSP-safe data-progress/hydrateProgressBars
+    // pattern (js/utils/progressBar.js), not an inline style mutation.
+    // Clamped the same way BlueprintCard.js's own clampProgress() does.
+    const progress = clampProgress(build.progress);
+
+    document.getElementById("featuredProgress").textContent = `${progress}%`;
+
+    const progressTrack = document.getElementById("featuredProgressBar");
+    const progressFill = document.getElementById("featuredProgressFill");
+
+    if (progressTrack && progressFill) {
+        progressTrack.setAttribute("aria-valuenow", String(progress));
+        progressFill.dataset.progress = String(progress);
+        hydrateProgressBars(progressTrack);
+    }
+
+    document.getElementById("featuredVersion").textContent =
+        `Current Version ${normalizeVersion(build.version)}`;
+}
+
+// Mirrors BlueprintCard.js's own clampProgress()/normalizeVersion() —
+// small, pure, single-purpose helpers already duplicated per-file
+// throughout this codebase (renderBuild.js has its own equivalents too),
+// not extracted here since only the status LABEL mapping was called out
+// for sharing.
+function clampProgress(value) {
+    const number = Number(value || 0);
+
+    if (!Number.isFinite(number)) return 0;
+
+    return Math.min(100, Math.max(0, Math.round(number)));
+}
+
+function normalizeVersion(version) {
+    if (!version) return "v1.0";
+
+    const value = String(version);
+    return value.toLowerCase().startsWith("v")
+        ? value
+        : `v${value}`;
 }
 
 function nextBuild() {

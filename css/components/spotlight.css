@@ -80,6 +80,27 @@
     text-transform: uppercase;
 }
 
+/* Status-color modifiers for #featuredStage (js/features/featured.js) --
+   same tokens as .blueprint-card-stage's own is-planning/is-project/
+   is-completed/is-paused modifiers (css/components/blueprint-card.css),
+   so the Spotlight's lifecycle badge carries the same visual meaning as
+   every card surface, not a separate color scheme. */
+.featured-label.is-planning {
+    color: var(--color-info);
+}
+
+.featured-label.is-project {
+    color: var(--primary-hover);
+}
+
+.featured-label.is-completed {
+    color: var(--success);
+}
+
+.featured-label.is-paused {
+    color: var(--warning);
+}
+
 .featured-info h1 {
     margin-bottom: 18px;
     font-size: clamp(2.4rem, 5vw, 4.5rem);
@@ -98,19 +119,17 @@
     margin-bottom: 10px;
 }
 
-.progress-bar {
+/* .progress-track is the standard CSP-safe progress-bar pattern (see
+   js/utils/progressBar.js) -- .progress-fill itself is intentionally not
+   redefined here; css/components/progress.css's shared rule (width:
+   var(--progress, 0%), driven by hydrateProgressBars()) already applies
+   and is what every other progress bar in the app relies on. */
+.progress-track {
     width: 100%;
     height: 10px;
     overflow: hidden;
     border-radius: 999px;
     background: var(--surface-raised);
-}
-
-.progress-fill {
-    width: 0%;
-    height: 100%;
-    border-radius: inherit;
-    background: var(--primary);
 }
 
 .version {

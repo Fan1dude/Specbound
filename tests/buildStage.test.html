@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>js/utils/buildStage.js — shared build-status label/color mapping</title>
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>js/utils/buildStage.js — shared build-status label/color mapping</h1>
+    <p>
+        Direct unit coverage of getBuildStage() — the single mapping now
+        shared by js/components/BlueprintCard.js and
+        js/features/featured.js (Home Featured Spotlight), extracted from
+        BlueprintCard's own previously-private getStage() so neither file
+        maintains an independent copy.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        const { getBuildStage } = await import("../js/utils/buildStage.js");
+
+        const expected = {
+            planning: { label: "Blueprint", className: "is-planning" },
+            in_progress: { label: "Project", className: "is-project" },
+            paused: { label: "Paused", className: "is-paused" },
+            completed: { label: "Completed Build", className: "is-completed" },
+            // Legacy, read-only-alias values -- must never be written
+            // again (see draftValidation.js's CANONICAL_STATUSES comment),
+            // but a not-yet-migrated historical snapshot could still carry
+            // one.
+            building: { label: "Project", className: "is-project" }
+        };
+
+        for (const [status, expectation] of Object.entries(expected)) {
+            const result = getBuildStage(status);
+
+            test(
+                `${status}: label is "${expectation.label}"`,
+                result.label === expectation.label,
+                result.label
+            );
+            test(
+                `${status}: className is "${expectation.className}"`,
+                result.className === expectation.className,
+                result.className
+            );
+        }
+
+        // Unknown/undefined/null all fall back to the same Blueprint/
+        // planning default, not a crash or an "undefined" label.
+        for (const status of [undefined, null, "", "archived", "not_a_real_status"]) {
+            const result = getBuildStage(status);
+
+            test(
+                `unrecognized status (${JSON.stringify(status)}) falls back to Blueprint/is-planning`,
+                result.label === "Blueprint" && result.className === "is-planning",
+                JSON.stringify(result)
+            );
+        }
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`buildStage.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>
