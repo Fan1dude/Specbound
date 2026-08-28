@@ -23,7 +23,7 @@
 
 set -eu
 
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
 cd "$SCRIPT_DIR"
 
 DIST_DIR="dist"
@@ -51,8 +51,8 @@ assets
 
 # Start clean so a stale previous build can never leak an entry that should
 # no longer be present.
-rm -rf -- "$DIST_DIR"
-mkdir -p -- "$DIST_DIR"
+rm -rf "$DIST_DIR"
+mkdir -p "$DIST_DIR"
 
 for entry in $ALLOWLIST_FILES; do
     [ -z "$entry" ] && continue
@@ -60,7 +60,7 @@ for entry in $ALLOWLIST_FILES; do
         echo "build.sh: required file '$entry' is missing from the repository root — aborting." >&2
         exit 1
     fi
-    cp -- "$entry" "$DIST_DIR/$entry"
+    cp "$entry" "$DIST_DIR/$entry"
 done
 
 for entry in $ALLOWLIST_DIRS; do
@@ -69,7 +69,7 @@ for entry in $ALLOWLIST_DIRS; do
         echo "build.sh: required directory '$entry/' is missing from the repository root — aborting." >&2
         exit 1
     fi
-    cp -r -- "$entry" "$DIST_DIR/$entry"
+    cp -r "$entry" "$DIST_DIR/$entry"
 done
 
 echo "build.sh: dist/ built successfully from the approved allowlist."
