@@ -198,8 +198,13 @@
 
                     <div class="featured-info">
 
-                        <p class="featured-label">
-                            Featured Blueprint
+                        <!-- Text/class set per-slide by js/features/featured.js
+                             via the shared js/utils/buildStage.js helper (the
+                             same one BlueprintCard.js uses) -- "Blueprint" here
+                             is that helper's own default label, not a static
+                             "Featured Blueprint" caption. -->
+                        <p class="featured-label" id="featuredStage">
+                            Blueprint
                         </p>
 
                         <h2 id="featuredTitle">
@@ -226,15 +231,24 @@
 
                             <p>Completion</p>
 
+                            <!-- Standard CSP-safe progress-bar markup (see
+                                 js/utils/progressBar.js) -- data-progress is
+                                 read by hydrateProgressBars(), never an inline
+                                 style attribute. -->
                             <div
-                                class="progress-bar"
+                                id="featuredProgressBar"
+                                class="progress-track"
                                 role="progressbar"
                                 aria-label="Blueprint completion"
                                 aria-valuemin="0"
                                 aria-valuemax="100"
                                 aria-valuenow="0"
                             >
-                                <div class="progress-fill"></div>
+                                <div
+                                    id="featuredProgressFill"
+                                    class="progress-fill"
+                                    data-progress="0"
+                                ></div>
                             </div>
 
                             <span id="featuredProgress">

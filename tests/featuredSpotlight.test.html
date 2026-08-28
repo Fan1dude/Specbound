@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Home Featured Spotlight — real status/progress/version</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Home Featured Spotlight — real status/progress/version</h1>
+    <p>
+        Real js/features/featured.js against a DOM fixture matching
+        index.html's own Featured Spotlight element ids. Only
+        buildRepository.js/profileRepository.js/mediaRepository.js are
+        mocked (network boundaries) — formatCategory.js, escapeHtml.js,
+        buildStage.js, and progressBar.js are all real, unmodified files
+        with no imports of their own.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <!-- Minimal DOM matching index.html's own Featured Spotlight markup. -->
+    <button id="prevFeatured" type="button">Prev</button>
+    <div id="featuredImage"><div class="featured-placeholder">Loading featured projects...</div></div>
+    <p class="featured-label" id="featuredStage">Blueprint</p>
+    <h2 id="featuredTitle">Loading...</h2>
+    <p id="featuredCategory">Category</p>
+    <a id="featuredCreator" class="featured-creator" href="#">Built by Creator</a>
+    <p id="featuredUpdated">Updated recently</p>
+    <div class="progress-box">
+        <p>Completion</p>
+        <div id="featuredProgressBar" class="progress-track" role="progressbar" aria-label="Blueprint completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div id="featuredProgressFill" class="progress-fill" data-progress="0"></div>
+        </div>
+        <span id="featuredProgress">0%</span>
+    </div>
+    <p class="version" id="featuredVersion">Current Version v1.0</p>
+    <a href="#" class="btn btn-primary" id="featuredLink">View Blueprint</a>
+    <button id="nextFeatured" type="button">Next</button>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        // --- Fixture builds, one per required scenario -----------------------
+        const builds = [
+            // 0: planning, partial progress, non-default/no-"v"-prefix version.
+            { id: "b0", user_id: "u1", title: "Planning Rig", category: "pc_build", slug: "planning-rig", status: "planning", progress: 42, version: "2.3", image_url: "planning.jpg" },
+            // 1: in_progress
+            { id: "b1", user_id: "u1", title: "In Progress Rig", category: "pc_build", slug: "in-progress-rig", status: "in_progress", progress: 65, version: "v1.4", image_url: "inprogress.jpg" },
+            // 2: paused
+            { id: "b2", user_id: "u1", title: "Paused Rig", category: "setup", slug: "paused-rig", status: "paused", progress: 30, version: "v0.9", image_url: "paused.jpg" },
+            // 3: completed at 100%
+            { id: "b3", user_id: "u1", title: "Completed Rig", category: "pc_build", slug: "completed-rig", status: "completed", progress: 100, version: "v2.0", image_url: "completed.jpg" },
+            // 4: legacy "building" read-only alias
+            { id: "b4", user_id: "u1", title: "Legacy Building Rig", category: "pc_build", slug: "legacy-rig", status: "building", progress: 75, version: "v1.1", image_url: "legacy.jpg" },
+            // 5: missing version entirely
+            { id: "b5", user_id: "u1", title: "No Version Rig", category: "arduino", slug: "no-version-rig", status: "planning", progress: 10, version: null, image_url: "noversion.jpg" },
+            // 6: out-of-range progress (above 100) and a bare numeric version.
+            { id: "b6", user_id: "u1", title: "Overflow Progress Rig", category: "pc_build", slug: "overflow-rig", status: "completed", progress: 150, version: "3", image_url: "overflow.jpg" },
+            // 7: negative/invalid progress.
+            { id: "b7", user_id: "u1", title: "Negative Progress Rig", category: "pc_build", slug: "negative-rig", status: "planning", progress: -20, version: "v1.0", image_url: "negative.jpg" }
+        ];
+
+        const buildRepoSrc = `export async function getNewestBuilds() { return ${JSON.stringify(builds)}; }`;
+        const profileRepoSrc = `export async function getProfilesByIds(ids) { return ids.map(id => ({ id, username: "tester" })); }`;
+        const mediaRepoSrc = `export async function resolveBuildImageUrls(builds) { return builds; }`;
+
+        // escapeHtml.js/formatCategory.js/buildStage.js/progressBar.js all
+        // have no imports of their own, so the real files are used as-is
+        // (as an absolute URL — a blob module has no location of its own
+        // for a relative import to resolve against).
+        const escapeHtmlUrl = new URL("../js/utils/escapeHtml.js", location.href).href;
+        const formatCategoryUrl = new URL("../js/utils/formatCategory.js", location.href).href;
+        const buildStageUrl = new URL("../js/utils/buildStage.js", location.href).href;
+        const progressBarUrl = new URL("../js/utils/progressBar.js", location.href).href;
+
+        const rewrites = {
+            '"../repositories/buildRepository.js"': blobUrl(buildRepoSrc),
+            '"../repositories/profileRepository.js"': blobUrl(profileRepoSrc),
+            '"../repositories/mediaRepository.js"': blobUrl(mediaRepoSrc),
+            '"../utils/escapeHtml.js"': escapeHtmlUrl,
+            '"../utils/formatCategory.js"': formatCategoryUrl,
+            '"../utils/buildStage.js"': buildStageUrl,
+            '"../utils/progressBar.js"': progressBarUrl
+        };
+
+        async function loadFeaturedModule() {
+            const src = await (await fetch("../js/features/featured.js")).text();
+            let rewritten = src;
+
+            for (const [from, to] of Object.entries(rewrites)) {
+                rewritten = rewritten.replaceAll(from, `"${to}"`);
+            }
+
+            return import(blobUrl(rewritten));
+        }
+
+        function readSlide() {
+            return {
+                title: document.getElementById("featuredTitle").textContent,
+                category: document.getElementById("featuredCategory").textContent,
+                stageLabel: document.getElementById("featuredStage").textContent.trim(),
+                stageClass: document.getElementById("featuredStage").className,
+                progressText: document.getElementById("featuredProgress").textContent.trim(),
+                ariaValueNow: document.getElementById("featuredProgressBar").getAttribute("aria-valuenow"),
+                dataProgress: document.getElementById("featuredProgressFill").dataset.progress,
+                cssVar: document.getElementById("featuredProgressFill").style.getPropertyValue("--progress"),
+                version: document.getElementById("featuredVersion").textContent.trim(),
+                imageHtml: document.getElementById("featuredImage").innerHTML
+            };
+        }
+
+        function wait(ms) {
+            return new Promise(r => setTimeout(r, ms));
+        }
+
+        // Deterministic auto-advance: capture the interval callback instead
+        // of waiting a real 6 seconds. Installed BEFORE the module loads
+        // (it calls startCarousel() as part of its own top-level init), and
+        // never lets the real interval actually run in the background —
+        // avoids any chance of it firing mid-suite and corrupting a later
+        // case's assertions.
+        let capturedAutoAdvance = null;
+        const realSetInterval = window.setInterval;
+        const realClearInterval = window.clearInterval;
+
+        window.setInterval = fn => {
+            capturedAutoAdvance = fn;
+            return 999999;
+        };
+        window.clearInterval = () => {};
+
+        try {
+
+        await loadFeaturedModule();
+
+        // Initial load is async (getNewestBuilds/resolveBuildImageUrls/
+        // getProfilesByIds all await before the first showBuild() call).
+        await wait(50);
+
+        // --- Case 1: initial render shows the first build's real data -------
+        {
+            const slide = readSlide();
+
+            test("initial render: title is the real build's title", slide.title === "Planning Rig", slide.title);
+            test("initial render: category is formatted", slide.category === "PC Build", slide.category);
+            test("initial render: status badge reads Blueprint (planning)", slide.stageLabel === "Blueprint", slide.stageLabel);
+            test("initial render: status badge carries the is-planning color class, not a second color scheme", slide.stageClass.includes("is-planning"), slide.stageClass);
+            test("initial render: visible progress is the real 42%, not a fake 0%", slide.progressText === "42%", slide.progressText);
+            test("initial render: aria-valuenow matches the real progress", slide.ariaValueNow === "42", slide.ariaValueNow);
+            test("initial render: data-progress matches the real progress (CSP-safe, not inline style)", slide.dataProgress === "42", slide.dataProgress);
+            test("initial render: --progress custom property was hydrated by hydrateProgressBars()", slide.cssVar === "42%", slide.cssVar);
+            test("initial render: version is the real, normalized value (no leading 'v' in source, prefix added)", slide.version === "Current Version v2.3", slide.version);
+            test("initial render: image reflects the real build's image_url, not the loading placeholder", slide.imageHtml.includes("planning.jpg"), slide.imageHtml);
+        }
+
+        // --- Case 2: Next -> in_progress ---------------------------------------
+        {
+            document.getElementById("nextFeatured").click();
+            await wait(10);
+
+            const slide = readSlide();
+
+            test("Next: title advances to the second build", slide.title === "In Progress Rig", slide.title);
+            test("Next: status badge reads Project (in_progress)", slide.stageLabel === "Project", slide.stageLabel);
+            test("Next: status badge carries is-project", slide.stageClass.includes("is-project"), slide.stageClass);
+            test("Next: progress updates to the new build's real value", slide.progressText === "65%", slide.progressText);
+            test("Next: aria-valuenow updates on every slide", slide.ariaValueNow === "65", slide.ariaValueNow);
+            test("Next: version updates and keeps its existing 'v' prefix as-is", slide.version === "Current Version v1.4", slide.version);
+        }
+
+        // --- Case 3: Next -> paused ---------------------------------------------
+        {
+            document.getElementById("nextFeatured").click();
+            await wait(10);
+
+            const slide = readSlide();
+
+            test("Next: status badge reads Paused", slide.stageLabel === "Paused", slide.stageLabel);
+            test("Next: status badge carries is-paused", slide.stageClass.includes("is-paused"), slide.stageClass);
+            test("Next: progress reflects the paused build's own value", slide.progressText === "30%", slide.progressText);
+        }
+
+        // --- Case 4: Next -> completed at 100% -----------------------------
+        {
+            document.getElementById("nextFeatured").click();
+            await wait(10);
+
+            const slide = readSlide();
+
+            test("Next: status badge reads Completed Build", slide.stageLabel === "Completed Build", slide.stageLabel);
+            test("Next: status badge carries is-completed", slide.stageClass.includes("is-completed"), slide.stageClass);
+            test("Next: a genuinely completed build shows a real 100%, not a stale prior value", slide.progressText === "100%", slide.progressText);
+            test("Next: aria-valuenow is 100 for a completed build", slide.ariaValueNow === "100", slide.ariaValueNow);
+        }
+
+        // --- Case 5: Next -> legacy "building" reads as the Project alias ------
+        {
+            document.getElementById("nextFeatured").click();
+            await wait(10);
+
+            const slide = readSlide();
+
+            test("Next: legacy 'building' status renders the same badge as in_progress", slide.stageLabel === "Project" && slide.stageClass.includes("is-project"), JSON.stringify(slide));
+        }
+
+        // --- Case 6: Next -> missing version falls back gracefully -----------
+        {
+            document.getElementById("nextFeatured").click();
+            await wait(10);
+
+            const slide = readSlide();
+
+            test("Next: a missing version falls back to v1.0, never 'undefined'/'null'", slide.version === "Current Version v1.0", slide.version);
+            test("Next: a missing version never displays the literal word 'undefined'", !slide.version.includes("undefined"), slide.version);
+            test("Next: a missing version never displays the literal word 'null'", !slide.version.toLowerCase().includes("null"), slide.version);
+        }
+
+        // --- Case 7: Next -> progress above 100 is clamped, bare numeric
+        // version gets a "v" prefix. --------------------------------------------
+        {
+            document.getElementById("nextFeatured").click();
+            await wait(10);
+
+            const slide = readSlide();
+
+            test("Next: progress above 100 is clamped to 100, not displayed raw", slide.progressText === "100%", slide.progressText);
+            test("Next: aria-valuenow is also clamped to 100", slide.ariaValueNow === "100", slide.ariaValueNow);
+            test("Next: a bare numeric version gets the 'v' prefix added", slide.version === "Current Version v3", slide.version);
+        }
+
+        // --- Case 8: Next -> negative progress is clamped to 0 -----------------
+        {
+            document.getElementById("nextFeatured").click();
+            await wait(10);
+
+            const slide = readSlide();
+
+            test("Next: negative progress is clamped to 0, not displayed raw", slide.progressText === "0%", slide.progressText);
+            test("Next: aria-valuenow is also clamped to 0", slide.ariaValueNow === "0", slide.ariaValueNow);
+        }
+
+        // --- Case 9: Previous steps back correctly, wrapping at the start ------
+        {
+            // Currently on index 7 (negative progress rig, the last build).
+            // One Previous goes back to index 6 (overflow rig).
+            document.getElementById("prevFeatured").click();
+            await wait(10);
+
+            const slide = readSlide();
+
+            test("Previous: steps back to the prior build", slide.title === "Overflow Progress Rig", slide.title);
+        }
+
+        // --- Case 10: deterministic auto-advance (captured setInterval
+        // callback, no real 6s wait) advances the slide the same way Next
+        // does, with no stale values left behind. ------------------------------
+        {
+            test("auto-advance: the carousel's interval callback was captured", typeof capturedAutoAdvance === "function");
+
+            const before = readSlide();
+            capturedAutoAdvance();
+            await wait(10);
+            const after = readSlide();
+
+            test("auto-advance: the slide actually changed", after.title !== before.title, JSON.stringify({ before: before.title, after: after.title }));
+            test("auto-advance: the new slide's status/progress/version are all internally consistent (no mixed old/new fields)", after.stageLabel !== "" && after.progressText.endsWith("%") && after.version.startsWith("Current Version"), JSON.stringify(after));
+        }
+
+        // --- Case 11: an empty result set must never show fake data as if it
+        // were a real, specific build's data -- it must leave the page in its
+        // pre-load state, not synthesize a 0%/v1.0 that looks committed. -------
+        {
+            const emptyRewrites = {
+                '"../repositories/buildRepository.js"': blobUrl(`export async function getNewestBuilds() { return []; }`),
+                '"../repositories/profileRepository.js"': blobUrl(profileRepoSrc),
+                '"../repositories/mediaRepository.js"': blobUrl(mediaRepoSrc),
+                '"../utils/escapeHtml.js"': escapeHtmlUrl,
+                '"../utils/formatCategory.js"': formatCategoryUrl,
+                '"../utils/buildStage.js"': buildStageUrl,
+                '"../utils/progressBar.js"': progressBarUrl
+            };
+
+            const src = await (await fetch("../js/features/featured.js")).text();
+            let rewritten = src;
+            for (const [from, to] of Object.entries(emptyRewrites)) {
+                rewritten = rewritten.replaceAll(from, `"${to}"`);
+            }
+
+            // A fresh module instance needs its own fresh DOM ids -- reuses
+            // the same document, but showBuild() is never reached on this
+            // path at all (loadFeaturedBuilds returns early on an empty
+            // array), so nothing should touch the DOM captured just above.
+            const beforeEmpty = readSlide();
+            await import(blobUrl(rewritten));
+            await wait(50);
+            const afterEmpty = readSlide();
+
+            test(
+                "empty result set: the DOM is untouched, not overwritten with fake/default values",
+                JSON.stringify(beforeEmpty) === JSON.stringify(afterEmpty),
+                JSON.stringify({ beforeEmpty, afterEmpty })
+            );
+        }
+
+        } catch (crashError) {
+            test("no scenario threw or timed out before the file finished running", false, String(crashError?.stack || crashError));
+        } finally {
+            window.setInterval = realSetInterval;
+            window.clearInterval = realClearInterval;
+        }
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`featuredSpotlight.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

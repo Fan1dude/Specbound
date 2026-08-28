@@ -2,6 +2,7 @@ import { escapeHtml, escapeAttribute } from "../utils/escapeHtml.js";
 import { formatCategory } from "../utils/formatCategory.js";
 import { icon } from "../utils/icons.js";
 import { getSpecDisplayName, isSpecEntryFilled } from "../utils/specifications.js";
+import { getBuildStage } from "../utils/buildStage.js";
 
 export function BlueprintCard(build, pathPrefix = "", options = {}) {
     const { variant = "default" } = options;
@@ -14,7 +15,7 @@ export function BlueprintCard(build, pathPrefix = "", options = {}) {
     const profileId = build.user_id || build.profiles?.id;
     const progress = clampProgress(build.progress);
     const version = normalizeVersion(build.version);
-    const stage = getStage(build.status);
+    const stage = getBuildStage(build.status);
 
     const buildUrl =
         `${pathPrefix}pages/build/build.html?slug=${encodeURIComponent(build.slug || "")}`;
@@ -224,42 +225,6 @@ function getSpecificationItems(category, specs) {
             value: getSpecDisplayName(value)
         }));
 }
-
-function getStage(status) {
-    switch (status) {
-        case "planning":
-            return {
-                label: "Blueprint",
-                className: "is-planning"
-            };
-
-        case "building":
-        case "in_progress":
-            return {
-                label: "Project",
-                className: "is-project"
-            };
-
-        case "completed":
-            return {
-                label: "Completed Build",
-                className: "is-completed"
-            };
-
-        case "paused":
-            return {
-                label: "Paused",
-                className: "is-paused"
-            };
-
-        default:
-            return {
-                label: "Blueprint",
-                className: "is-planning"
-            };
-    }
-}
-
 
 function normalizeVersion(version) {
     if (!version) return "v1.0";
