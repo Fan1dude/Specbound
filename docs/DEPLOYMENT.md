@@ -189,9 +189,13 @@ Kept deliberately separated by who or what actually performs each check, so noth
 - Homepage, a `pages/` sample, `css/`, `js/`, `assets/` all still `200` with correct content and unchanged `_headers`-driven response headers.
 - `robots.txt`/`sitemap.xml`/`manifest.webmanifest` still `200`.
 - A nonexistent path still returns the real branded `404`.
-- `tests/`, `tools/`, `.github/`, `.claude/`, `supabase/`, `docs/`, `README.md` all now return the real branded `404` (not the WAF's `403`) — proving `build.sh`'s allowlist, not just the WAF rule, is what keeps them out.
 - Clean URLs (`/design-system`) and every auth page (login/signup/forgot-password/Discord connect) still load and function.
 - Pull-request preview deployments also build correctly via the same `build.sh`.
+
+**Excluded-path checks — two different expected results, not one, since the WAF rule (§3) intercepts four of the six excluded categories before Cloudflare Pages ever sees the request:**
+
+- **WAF-protected paths — expected result: Cloudflare's `403` block page, *not* a `404`, as long as the WAF rule stays enabled:** `/tests/`, `/tools/`, `/.github/`, `/.claude/`. A live HTTP check against these cannot independently prove `build.sh`'s allowlist also excludes them — the WAF answers first, so the request never reaches `dist/` either way. Their absence from `dist/` itself is proven instead by: `tools/ci/check-deploy-artifact.js` (§12, runs on every push/PR), direct inspection of the generated `dist/` tree (`sh build.sh` then `ls dist/`), and, if available, a PR preview / `*.pages.dev` deployment — which is not covered by the custom-domain WAF rule — showing the real branded `404` for these same paths instead of a `403`.
+- **Newly excluded, not WAF-protected — expected result: the real branded `404`, proving `build.sh`'s allowlist (not the WAF) is what keeps them out:** `/docs/`, `/supabase/`, `/README.md`, `/build.sh`.
 
 **Safe public endpoint checks (no sign-in, no state change) — performed for this documentation task, results above:** homepage HTTPS/200, HTTP→HTTPS redirect, `robots.txt`, `sitemap.xml`, `manifest.webmanifest`, a nonexistent-path 404, and response headers on an HTML/CSS/JS sample. These are safe to repeat at any time.
 
