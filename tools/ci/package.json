@@ -6,6 +6,7 @@
     "scripts": {
         "check-syntax": "node check-syntax.js",
         "check-references": "node check-references.js",
+        "check-deploy-artifact": "node check-deploy-artifact.js",
         "test": "node run-tests.js"
     },
     "devDependencies": {
