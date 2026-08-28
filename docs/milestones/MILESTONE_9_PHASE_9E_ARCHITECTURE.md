@@ -159,7 +159,7 @@ Authenticated (QA account, `fan1dude`):
 | ComponentAutocomplete accessibility | **Pass** — see P-3 above. |
 | Notification-bell accessibility | **Pass** — see P-3 above. |
 
-**Test-data cleanup performed**: both test comments deleted; the follow relationship removed; the settings bio field restored to its original (empty) value; the test build (`phase-9e-qa-test-draft`) set back to `visibility: private` (unpublished, not deleted — this app has no build-delete feature, and deleting isn't necessary to remove it from public view). **Left behind, low-impact**: the test build itself still exists as a private/unpublished row (harmless, not publicly visible, same treatment any real abandoned draft gets); one earlier unrelated test signup (`sectest...@gmail.com`, from the profiles-INSERT investigation) remains unconfirmed with an auto-created profile row — pre-existing test-data noise from this same investigation, not new clutter from this pass.
+**Test-data cleanup performed**: both test comments deleted; the follow relationship removed; the settings bio field restored to its original (empty) value; the test build (`phase-9e-qa-test-draft`) set back to `visibility: private` (unpublished, not deleted — this app has no build-delete feature, and deleting isn't necessary to remove it from public view). **Left behind, low-impact**: the test build itself still exists as a private/unpublished row (harmless, not publicly visible, same treatment any real abandoned draft gets); one earlier unrelated test signup (`qa-user@example.invalid`, from the profiles-INSERT investigation) remains unconfirmed with an auto-created profile row — pre-existing test-data noise from this same investigation, not new clutter from this pass.
 
 ## 4. Production readiness — local-only results
 
@@ -180,7 +180,7 @@ All from `docs/DEPLOYMENT.md`'s checklist that can run without a real deployment
 
 **Your live query result** (`SELECT * FROM pg_policies WHERE tablename = 'profiles' AND cmd = 'INSERT'`) returned **zero rows**. Investigated per your 4 questions:
 
-**1. Does profile creation succeed?** Yes, unconditionally. Confirmed for the QA account (`fan1dude`, an established account with a real working profile) and — more tellingly — for a brand-new, still-email-unconfirmed signup from earlier this session (`sectest1785120843704@gmail.com`, id `35d9e517-74fa-463d-9cd0-46f86f0a8873`) that **never received a browser session and for which the app's own `ensureProfile()` client-side code was never called** (its call site is explicitly gated `if (data.session)`, and no session existed). That user has a real `profiles` row anyway, with the exact username passed at signup.
+**1. Does profile creation succeed?** Yes, unconditionally. Confirmed for the QA account (`fan1dude`, an established account with a real working profile) and — more tellingly — for a brand-new, still-email-unconfirmed signup from earlier this session (`qa-user@example.invalid`, id `35d9e517-74fa-463d-9cd0-46f86f0a8873`) that **never received a browser session and for which the app's own `ensureProfile()` client-side code was never called** (its call site is explicitly gated `if (data.session)`, and no session existed). That user has a real `profiles` row anyway, with the exact username passed at signup.
 
 **2. What mechanism?** By elimination, backed by direct testing:
 - Not a database policy — confirmed zero rows for `cmd = 'INSERT'`.

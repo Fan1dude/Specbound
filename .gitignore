@@ -1,3 +1,4 @@
 .claude/settings.local.json
 tools/ci/node_modules/
 tests/generated/
+dist/

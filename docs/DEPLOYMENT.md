@@ -9,7 +9,7 @@ This is Specbound's current production deployment and operations guide — how t
 - **Production URL:** https://specboundapp.com
 - **Production branch:** `main`
 - **Hosting:** Cloudflare Pages, deploying directly from this GitHub repository
-- **Architecture:** static HTML/CSS/JavaScript — no framework, no bundler, no root-level application build step
+- **Architecture:** static HTML/CSS/JavaScript — no framework, no bundler, no transpilation. `build.sh` (§2, §3) assembles the deployment artifact by copying an approved allowlist of files into `dist/`; it is not an application build step.
 
 The site is live, HTTPS is active, and Cloudflare preview deployments on pull requests have been observed working. Supabase Auth's Site URL, Redirect URLs, and Discord provider are configured for this domain, and the Discord account-linking flow has been manually verified end-to-end in production (see §9). This document does not claim every operational item below is finished — §14 lists what's genuinely still open.
 
@@ -17,7 +17,7 @@ The site is live, HTTPS is active, and Cloudflare preview deployments on pull re
 
 ## 2. Architecture and hosting model
 
-Cloudflare Pages serves the static files from its configured output directory without transforming them. The developer and CI directories are kept out of production through the build command and a WAF rule described in §§3 and 5. `tools/ci/package.json` exists only for CI's own tooling (Playwright, for the browser test suite) and is deliberately kept out of the repository root so Cloudflare Pages' root-directory build detection never sees it; see `docs/CI.md`.
+Cloudflare Pages serves the static files from its configured output directory without transforming them. **`dist/` is that output directory** — a generated, gitignored artifact assembled fresh on every build by `build.sh`, a tracked, POSIX-compatible script at the repository root that copies an explicit *allowlist* of public runtime files and directories into `dist/` and nothing else (§3, §5). This is a default-deny model: any repository content not named in `build.sh`'s allowlist — including anything added to the repository later — is structurally absent from every deployment, not merely hidden by a separate exclusion step. A Cloudflare WAF rule (§3) remains as a second, independent layer of defense. `tools/ci/package.json` exists only for CI's own tooling (Playwright, for the browser test suite) and is deliberately kept out of the repository root so Cloudflare Pages' root-directory build detection never sees it; see `docs/CI.md`.
 
 Supabase provides everything server-side: Auth (including Discord's native OAuth identity-linking), the PostgreSQL database, Storage for images, RPC functions, and Row Level Security as the access-control layer on every table. The frontend talks to Supabase directly from the browser using a publishable client key — see §7.
 
@@ -25,27 +25,30 @@ Supabase provides everything server-side: Auth (including Discord's native OAuth
 
 ## 3. Cloudflare Pages configuration
 
+**As of the deployment-surface hardening change (chore/deployment-surface-hardening), the values below are what must be set in the Cloudflare dashboard once that PR merges — they are not yet live; see the migration sequence at the end of this section.**
+
 | Setting | Value |
 |---|---|
 | Framework preset | None |
-| Build command | `rm -rf tests tools .github .claude` |
-| Build output directory | `/` (repository root) |
-| Root directory | `/` (repository root) |
+| Build command | `sh build.sh` |
+| Build output directory | `dist` |
+| Root directory | `/` (repository root — unchanged) |
 | Production branch | `main` |
 
-The build command isn't building anything — it removes the developer/CI-only directories (`tests/`, `tools/`, `.github/`, `.claude/`) from each new deployment's copy of the repository before Cloudflare Pages publishes it. This only affects Cloudflare's own temporary deployment copy — it doesn't delete anything from GitHub or from any local development environment. Cloudflare's build-watch exclusions are a separate setting that only controls whether a commit triggers a new build; they don't remove anything from what's already published, which is why the `rm -rf` build command above is the mechanism that actually performs the pruning.
+`build.sh` (tracked at the repository root) copies an explicit allowlist of public runtime files and directories into a fresh `dist/` directory on every build — see §5 for the exact list. Nothing outside that allowlist is ever copied, so `tests/`, `tools/`, `.github/`, `.claude/`, `supabase/`, `docs/`, `README.md`, `build.sh` itself, and any future top-level entry are all structurally absent from `dist/` regardless of whether anyone remembers to update an exclusion list. This replaces the previous `rm -rf tests tools .github .claude` build command, which pruned four specific directories from an otherwise-published repository root — an exclusion-list (default-allow) model that this allowlist (default-deny) model supersedes.
 
-A Cloudflare WAF custom rule, **"Block developer and CI paths,"** additionally blocks requests to the `tests/`, `tools/`, `.github/`, and `.claude/` path prefixes at the edge — a second, independent layer on top of the build command. This protects against legacy Pages assets that may remain distributed temporarily (for example, cached at a specific edge location from a deployment made before the build command was corrected), not just new deployments going forward.
+A Cloudflare WAF custom rule, **"Block developer and CI paths,"** additionally blocks requests to the `tests/`, `tools/`, `.github/`, and `.claude/` path prefixes at the edge — kept in place as a second, independent layer of defense even though `dist/` can no longer contain those paths at all. This protects against legacy Pages assets that may remain distributed temporarily (for example, cached at a specific edge location from a deployment made before this change), and guards against a future regression in `build.sh` itself.
 
-**Read-only production checks performed for this task confirm these two layers separately, since a 403 from the WAF rule alone can't prove anything about what the deployment copy itself contains — the WAF intercepts a request before Cloudflare Pages would ever get to answer it.**
+`tools/ci/check-deploy-artifact.js` (run in CI on every push and pull request, §12) is the automated, version-controlled proof that `dist/` contains exactly the approved allowlist and nothing else — see that section for what it checks.
 
-- **Pruning layer:** confirmed by the fresh production deployment's own build log, which showed `rm -rf tests tools .github .claude` executing successfully. Before the WAF rule below was enabled, cache-busted requests for representative tracked files from all four directories returned `404` — supporting that those files were genuinely absent from that deployment's published copy, not just cached-and-then-blocked.
-- **WAF layer:** confirmed afterward, once the rule was enabled — representative plain and cache-busted requests across all four path prefixes consistently returned `403`, with Cloudflare's own generic block page as the response body in every case, never the original file content.
-- The production homepage remained available at `200` throughout both rounds of checking.
+`design-system.html` remains in the allowlist and is published — it's harmless (an unlinked internal style-guide page) and is already covered by `robots.txt`'s disallow list (§11).
 
-Together these are two independent pieces of evidence for two independent mechanisms, not one check standing in for both. Neither round tested every file under every directory — only representative tracked files.
+**Migration sequence** (repository change and dashboard change are two parts of one coordinated rollout — see §13 for why they must be rolled back together, not independently):
 
-`design-system.html` (an unlinked internal style-guide page) is deliberately **not** pruned — it's harmless to publish and is already covered by `robots.txt`'s disallow list (§11).
+1. `chore/deployment-surface-hardening` merges to `main` — this alone changes nothing in production yet; Cloudflare continues using its prior dashboard build command/output directory until step 2.
+2. A repository owner updates the Cloudflare Pages dashboard: Build command → `sh build.sh`, Build output directory → `dist` (both values above). This triggers a new production deployment.
+3. Run the production verification checklist in §12 against the new deployment immediately.
+4. If anything breaks, use the dashboard **Rollback to this deployment** action (§13) to restore the last-known-good deployment while `build.sh`'s allowlist is corrected in a follow-up commit — do not revert only the dashboard settings or only the repository change in isolation.
 
 ---
 
@@ -59,9 +62,17 @@ Together these are two independent pieces of evidence for two independent mechan
 
 ## 5. Published and excluded content
 
-**Intended to be published:** `index.html`, `404.html`, `robots.txt`, `sitemap.xml`, `manifest.webmanifest`, `_headers`, `pages/**`, `css/**`, `js/**`, `assets/**`, `design-system.html`, and `supabase/**` (the SQL migration/rollback source). These SQL files are not executable by a static host and publishing them does not grant any database access — the live database is reachable only through Supabase's own API surface, governed by RLS, entirely independent of whether its schema source is publicly readable. They aren't secret; they simply document schema history.
+**Published (the exact `build.sh` allowlist — top-level entries in `dist/`):** `index.html`, `404.html`, `design-system.html`, `_headers`, `robots.txt`, `sitemap.xml`, `manifest.webmanifest`, `pages/`, `css/`, `js/`, `assets/`. `tools/ci/check-deploy-artifact.js` asserts this is the *exact* top-level set on every CI run — nothing missing, nothing extra.
 
-**Pruned before publishing:** `tests/` (the browser-based regression suite), `.claude/` (local dev tooling), `tools/` (CI scripts and CI-only `package.json`), `.github/` (the CI workflow definition). Removed from each new deployment's published copy by the build command in §3, with a Cloudflare WAF rule additionally blocking those four path prefixes at the edge as a second, independent layer — see §3 for the separate deployment-log and HTTP evidence behind each.
+**Excluded from the deployed artifact, available via the public GitHub repository instead:**
+
+- `supabase/**` — the SQL migration/rollback/test source (schema, `SECURITY DEFINER` function bodies, RLS policies, rollback scripts). Not executable by a static host, and publishing it never granted any database access on its own — the live database is reachable only through Supabase's own API surface, governed by RLS, entirely independent of whether its schema source is readable. It was previously served directly from `specboundapp.com`; a Launch Readiness Audit flagged unrestricted production-domain exposure of full schema/function source as unnecessary attack surface for automated reconnaissance, even though the content itself carries no secrets and duplicates what the (public) GitHub repository already exposes. It remains readable at `github.com/Fan1dude/Specbound/tree/main/supabase` — this change only removes it from `specboundapp.com` specifically.
+- `docs/**` — this operations/architecture documentation itself, including internal runbooks. Same reasoning: not secret, not previously addressed one way or the other in this document, removed from the production domain as part of the same hardening pass.
+- `tests/` (the browser-based regression suite), `.claude/` (local dev tooling), `tools/` (CI scripts and CI-only `package.json`), `.github/` (the CI workflow definition) — as before, now excluded structurally (§2, §3) rather than by a separate `rm -rf` step, with the WAF rule (§3) retained as a second layer.
+- `README.md`, `build.sh` itself, and any package/lockfile — never part of the allowlist.
+- **Any future top-level repository entry**, unless explicitly added to `build.sh`'s allowlist and reviewed in that PR's diff — this is the point of the default-deny model in §2.
+
+None of this reflects new confidentiality concerns: the GitHub repository is public, so nothing above becomes newly inaccessible to someone who goes looking — this change only removes the ability to reach it directly from the production apex domain without first finding the GitHub repository.
 
 ---
 
@@ -170,7 +181,21 @@ Verified directly against the repository source and, where noted, a live fetch t
 
 Kept deliberately separated by who or what actually performs each check, so nothing gets assumed covered by a layer that doesn't actually cover it.
 
-**Automated, on every push and pull request (GitHub Actions, `.github/workflows/ci.yml`):** JavaScript syntax validation, local reference checking, accessibility regressions, CSP/bootstrap validation, production-domain validation, and the browser-based regression suite under `tests/*.test.html`. See `docs/CI.md` for exactly what each covers and its known limitations. **GitHub Actions does not run the SQL migration/RLS policy tests** — those live under `supabase/tests/` and require a separate, disposable local Supabase/Docker stack (`supabase db reset --local`); they are not part of this CI pipeline.
+**Automated, on every push and pull request (GitHub Actions, `.github/workflows/ci.yml`):** JavaScript syntax validation, local reference checking, accessibility regressions, CSP/bootstrap validation, production-domain validation, crawl-policy validation, security-header validation, **the deployment-artifact check (`tools/ci/check-deploy-artifact.js`)**, and the browser-based regression suite under `tests/*.test.html`. See `docs/CI.md` for exactly what each covers and its known limitations. **GitHub Actions does not run the SQL migration/RLS policy tests** — those live under `supabase/tests/` and require a separate, disposable local Supabase/Docker stack (`supabase db reset --local`); they are not part of this CI pipeline.
+
+`tools/ci/check-deploy-artifact.js` runs the real `build.sh`, then asserts against the resulting `dist/`: its top-level entries exactly match §5's allowlist (nothing missing, nothing unexpected); none of the excluded categories (`docs/`, `supabase/`, `tests/`, `tools/`, `.github/`, `.claude/`, `README.md`, `build.sh`, package files) exist anywhere within it, at any depth; `_headers`, `404.html`, `robots.txt`, `sitemap.xml`, and `manifest.webmanifest` are present; and every local HTML/CSS/JS reference resolves to a real file *within* `dist/` — not merely somewhere in the repository — so a reference that would 404 in production is caught in CI, not discovered live.
+
+**Post-dashboard-change production verification (run once §3's migration sequence step 2 is complete — not yet performed as of this writing):**
+- Homepage, a `pages/` sample, `css/`, `js/`, `assets/` all still `200` with correct content and unchanged `_headers`-driven response headers.
+- `robots.txt`/`sitemap.xml`/`manifest.webmanifest` still `200`.
+- A nonexistent path still returns the real branded `404`.
+- Clean URLs (`/design-system`) and every auth page (login/signup/forgot-password/Discord connect) still load and function.
+- Pull-request preview deployments also build correctly via the same `build.sh`.
+
+**Excluded-path checks — two different expected results, not one, since the WAF rule (§3) intercepts four of the six excluded categories before Cloudflare Pages ever sees the request:**
+
+- **WAF-protected paths — expected result: Cloudflare's `403` block page, *not* a `404`, as long as the WAF rule stays enabled:** `/tests/`, `/tools/`, `/.github/`, `/.claude/`. A live HTTP check against these cannot independently prove `build.sh`'s allowlist also excludes them — the WAF answers first, so the request never reaches `dist/` either way. Their absence from `dist/` itself is proven instead by: `tools/ci/check-deploy-artifact.js` (§12, runs on every push/PR), direct inspection of the generated `dist/` tree (`sh build.sh` then `ls dist/`), and, if available, a PR preview / `*.pages.dev` deployment — which is not covered by the custom-domain WAF rule — showing the real branded `404` for these same paths instead of a `403`.
+- **Newly excluded, not WAF-protected — expected result: the real branded `404`, proving `build.sh`'s allowlist (not the WAF) is what keeps them out:** `/docs/`, `/supabase/`, `/README.md`, `/build.sh`.
 
 **Safe public endpoint checks (no sign-in, no state change) — performed for this documentation task, results above:** homepage HTTPS/200, HTTP→HTTPS redirect, `robots.txt`, `sitemap.xml`, `manifest.webmanifest`, a nonexistent-path 404, and response headers on an HTML/CSS/JS sample. These are safe to repeat at any time.
 
@@ -195,6 +220,8 @@ Cloudflare Pages retains every deployment. To roll back:
 4. Once confirmed, the selected deployment becomes production immediately—no rebuild or git operation is required. Cloudflare's deployment history is independent of git history; a bad deploy can be undone without touching the repository.
 
 This describes Cloudflare Pages' documented rollback **capability**. **No live rollback drill has been performed and is not claimed here** — see §14. Reverting through git (`git revert` on the bad commit and pushing the resulting commit to `main`) is a separate, slower path that triggers a brand-new build rather than instantly restoring a prior one; the dashboard rollback above is the faster option for an active incident.
+
+**Coordinated rollback for the `build.sh`/`dist/` change specifically:** the migration sequence in §3 is a two-part change — a repository commit (`build.sh`, `.gitignore`, `check-deploy-artifact.js`) *and* a Cloudflare dashboard setting (Build command, Build output directory). A `git revert` of the repository commit alone does **not** undo the dashboard setting, and a dashboard-only revert alone leaves `build.sh` untracked-but-referenced. If this change needs to be undone, do both together: dashboard rollback (or reset Build command/Build output directory back to `rm -rf tests tools .github .claude` / `/`) **and** `git revert` the repository commit, in either order, before considering the rollback complete.
 
 ---
 
