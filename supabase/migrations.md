@@ -1789,4 +1789,68 @@ recorded as applied, not the original application date or actor.
   transactional database half of `supabase/functions/delete-account`;
   see `docs/DEPLOYMENT.md` §8.1 for the full deployment sequence and
   `docs/OPERATIONS.md` §10 for how this relates to the existing manual
-  procedure.
+  procedure. **Superseded by `0049` before this ever shipped** — see
+  that entry below.
+
+## 0049_account_deletion_challenge
+
+- **Status**: Proposed — not yet applied to production. Not executed in
+  the authoring session (same environmental limitation as `0044`-`0048`).
+- **File**: `migrations/0049_account_deletion_challenge.sql`
+- **Rollback**: `rollbacks/0049_account_deletion_challenge_rollback.sql`
+  — WARNING: restores `0048`'s original zero-argument
+  `self_delete_account()`, reintroducing the gap this migration fixes.
+  Drops `account_deletion_challenges` and
+  `request_account_deletion_challenge()`, destroying any outstanding
+  unconsumed challenge (harmless — a caller simply requests a new one).
+- **Security-review fix**: `0048`'s zero-argument `self_delete_account()`
+  relied on the delete-account Edge Function checking the caller's JWT
+  `iat` claim for "recent reauthentication." That check was
+  insufficient — Supabase's own refresh-token grant mints a new access
+  token, with a new `iat`, **without re-verifying the password at all**
+  (confirmed directly against `supabase/auth`'s own source,
+  `internal/models/amr.go`: each `(session_id, authentication_method)`
+  pair is its own row, updated only when that specific method is
+  actually satisfied — a token refresh records its own
+  `token_refresh`-tagged entry and never touches the `password` entry's
+  timestamp for that session). This migration:
+  - Drops `self_delete_account()` (zero-argument) outright — not left
+    callable alongside the fix, which would have left the bypass fully
+    open.
+  - Adds `public.account_deletion_challenges` (RLS enabled, zero client
+    policies) and `request_account_deletion_challenge()` (`SECURITY
+    DEFINER`, no parameters), which checks the caller's own
+    `auth.jwt() -> 'amr'` for a `password` entry within the last 5
+    minutes — the GoTrue-native, refresh-immune signal, read via
+    Supabase's own supported `auth.jwt()` Postgres helper, never
+    decoded or trusted client-side. Fails closed if `amr` is absent
+    entirely. Issues a short-lived (2-minute), single-use token,
+    replacing (not accumulating) any prior unconsumed one.
+  - Adds `self_delete_account(p_challenge_token uuid)`, replacing the
+    dropped zero-argument version. Consumes the challenge atomically via
+    a single `DELETE ... WHERE user_id = auth.uid() AND token = ... AND
+    expires_at > now() RETURNING ...` — the row's absence afterward IS
+    the single-use guarantee. A missing, expired, foreign (another
+    user's), or already-consumed token all fail identically, checked
+    before the (unchanged) legal-hold query. Every other step —
+    Storage-path capture, `builds`/`build_revisions`/`profiles` cleanup,
+    job creation/resumption, the self-attributed audit row exactly once
+    per deletion event — is unchanged from `0048`.
+- **Testing**: `supabase/tests/migration_0049_account_deletion_challenge.test.sql`
+  (zero-argument function confirmed gone; challenge rejected with no
+  `amr` claim and with a stale `password` entry alongside a recent
+  `token_refresh` entry — the exact scenario the old `iat`-only check
+  would have wrongly accepted; a fresh `password` entry issues a real
+  token; a second request supersedes, not accumulates, the first; an
+  invalid/foreign token rejected with no destructive step run; cross-
+  user token binding proven directly; the full real deletion flow
+  end-to-end; replay of an already-consumed token rejected; function
+  identity/`SECURITY DEFINER`/ACL for both new functions; zero
+  client-readable policies on the new table) — written, not executed
+  (see Status above). `supabase/tests/migration_0048_self_delete_account.test.sql`
+  is kept unmodified as a historical record of `0048`'s own,
+  now-superseded behavior — its own header now discloses this and
+  points here.
+- **Context**: Launch Readiness self-service account deletion, PR
+  review fix. Found and fixed before this feature was deployed anywhere
+  — no production account was ever at risk from this gap.

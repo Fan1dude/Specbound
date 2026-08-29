@@ -1,23 +1,48 @@
 -- Migration 0048 test —
 -- supabase/tests/migration_0048_self_delete_account.test.sql
 --
--- Covers self_delete_account(): anonymous rejection, legal-hold
--- rejection (with a generic message, never distinguishing it from any
--- other failure), Storage-path capture (avatar, revision-media minus
--- legacy avatar_url, project-media, published and never-published
+-- SUPERSEDED, disclosed here rather than silently left stale: PR review
+-- found that 0048's zero-argument self_delete_account() relied on the
+-- calling Edge Function checking a JWT `iat` claim for "recent
+-- reauthentication" — insufficient, since Supabase's own token-refresh
+-- grant advances `iat` without re-verifying the password. Migration
+-- 0049_account_deletion_challenge.sql fixes this by DROPPING this
+-- zero-argument function entirely and replacing it with
+-- self_delete_account(p_challenge_token uuid), gated by a
+-- database-verified, single-use challenge. This file is therefore only
+-- valid against a database with 0048 applied and 0049 NOT YET applied —
+-- a state that will never persist in any real deployment, since 0049
+-- ships as an immediate, same-PR follow-up, never adopted separately.
+-- Running this file against the current migration chain (0000-0049) WILL
+-- fail (the zero-argument function this file tests no longer exists) —
+-- that is expected, not a regression. **The current, authoritative
+-- coverage for self-service account deletion is
+-- supabase/tests/migration_0049_account_deletion_challenge.test.sql**,
+-- which re-verifies every property below under the new signature and
+-- adds the challenge-specific security properties. This file is kept,
+-- unmodified in its actual test logic, only as a historical record of
+-- what 0048 itself did before the fix — per this repository's "do not
+-- rewrite old migrations" convention extended to their test coverage.
+--
+-- Original scope (0048, in isolation, pre-0049): anonymous rejection,
+-- legal-hold rejection (with a generic message, never distinguishing it
+-- from any other failure), Storage-path capture (avatar, revision-media
+-- minus legacy avatar_url, project-media, published and never-published
 -- drafts), builds/build_revisions/profiles cleanup, the
 -- authored-but-not-owned build_revisions clear-not-delete case, job-row
 -- creation, the self-attributed audit row (and 0045's fix keeping it
 -- alive later), idempotent retry (no duplicate audit row, same job
--- resumed), function identity/ACL, and — the key security property —
--- that the function has NO parameter of any kind, so no caller can name
--- a different account.
+-- resumed), function identity/ACL, and — the key security property, for
+-- 0048's own zero-argument design specifically — that the function had
+-- NO parameter of any kind, so no caller could name a different
+-- account.
 --
 -- STATUS: intended to run against the local disposable Supabase/Docker
--- stack only — NOT executed in the authoring session (no `supabase`
--- CLI, no reachable Docker daemon, no `psql` were available; see this
--- PR's own report for the exact environmental limitation). Depends on
--- migrations 0000-0048 already being applied.
+-- stack only, at the specific 0048-applied/0049-not-yet-applied
+-- migration state described above — NOT executed in the authoring
+-- session (no `supabase` CLI, no reachable Docker daemon, no `psql`
+-- were available; see this PR's own report for the exact environmental
+-- limitation).
 --
 -- Fail-closed: every assertion raises via `raise exception ... using
 -- errcode = 'M0048'`.

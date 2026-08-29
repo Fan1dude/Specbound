@@ -2,50 +2,20 @@
 // separated from index.ts the same way product-metadata/lib.ts is, so
 // index.test.ts can exercise this logic without Deno.serve/network/DB
 // access.
-
-// Decodes a JWT's payload segment ONLY — this is never used as a
-// substitute for signature verification. By the time this is called,
-// the token has already been cryptographically verified by Supabase
-// Auth itself (via supabaseClient.auth.getUser(), which round-trips to
-// Supabase's own verification endpoint) — this function exists purely
-// to read the `iat` claim out of an already-verified-valid token, so
-// the server can independently enforce how recently it was issued
-// (see requireRecentAuthentication below). Never trust a value decoded
-// here from an unverified token.
-export function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
-    const parts = jwt.split(".");
-    if (parts.length !== 3) return null;
-
-    try {
-        const base64url = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-        const padded = base64url + "=".repeat((4 - (base64url.length % 4)) % 4);
-        const json = atob(padded);
-        const parsed = JSON.parse(json);
-        return typeof parsed === "object" && parsed !== null ? parsed : null;
-    } catch {
-        return null;
-    }
-}
-
-// Server-side enforcement of "recent authentication" — never trusts a
-// client-side claim that password reauthentication happened. The
-// client re-authenticates via supabase.auth.signInWithPassword()
-// immediately before calling this function, which mints a genuinely
-// fresh session/access token; this checks that FRESH token's own `iat`
-// (issued-at) claim is actually recent, independent of anything the
-// client asserts. A caller that skips reauthentication and sends an
-// old, otherwise-still-valid access token is rejected here, not merely
-// discouraged by client-side UI.
-export const MAX_REAUTH_AGE_SECONDS = 300; // 5 minutes
-
-export function isRecentlyAuthenticated(jwt: string, nowSeconds: number = Math.floor(Date.now() / 1000)): boolean {
-    const payload = decodeJwtPayload(jwt);
-    const iat = payload?.iat;
-
-    if (typeof iat !== "number") return false;
-
-    return nowSeconds - iat <= MAX_REAUTH_AGE_SECONDS && nowSeconds - iat >= 0;
-}
+//
+// Security-review note (see this function's own history): recent
+// password reauthentication is NOT checked here, and never was checked
+// correctly via a JWT `iat` (issued-at) claim — Supabase's own
+// refresh-token grant mints a new access token, with a new `iat`,
+// WITHOUT re-verifying the password at all. The actual, GoTrue-native
+// signal (the `amr` claim's per-method timestamp, which a token refresh
+// does not touch for the `password` method) is checked entirely
+// server-side in Postgres, via `auth.jwt() -> 'amr'` inside
+// `request_account_deletion_challenge()`
+// (supabase/migrations/0049_account_deletion_challenge.sql) — not here,
+// and not by decoding the JWT in this Edge Function at all. This file
+// intentionally contains no JWT-decoding or freshness logic; see
+// index.ts for the two-RPC-call flow that replaces it.
 
 // Sanitized, enum-like error codes only — never a raw exception
 // message, which could carry internal Postgres/Storage/Auth detail.

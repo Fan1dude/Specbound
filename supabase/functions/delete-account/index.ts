@@ -2,13 +2,26 @@
 //
 // Self-service account deletion — the orchestration half. The
 // transactional database work happens entirely inside
-// public.self_delete_account() (migration 0048); this function's job is
-// everything that RPC cannot do itself: verify the caller, enforce
-// recent reauthentication, call it, then call Supabase Auth's Admin API
-// (service-role only — never reachable from browser code) to actually
-// remove the auth.users row, then best-effort clean up Storage. See
-// docs/OPERATIONS.md §10.7/§10.8/§10.11/§10.14 for the underlying
-// non-atomicity/recovery reasoning this function's sequencing mirrors.
+// public.self_delete_account(uuid) (migration 0049, replacing 0048's
+// zero-argument version); this function's job is everything that RPC
+// cannot do itself: verify the caller, request a short-lived deletion
+// challenge, consume it via the RPC, then call Supabase Auth's Admin
+// API (service-role only — never reachable from browser code) to
+// actually remove the auth.users row, then best-effort clean up
+// Storage. See docs/OPERATIONS.md §10.7/§10.8/§10.11/§10.14 for the
+// underlying non-atomicity/recovery reasoning this function's
+// sequencing mirrors.
+//
+// Security-review note: recent password reauthentication is verified
+// entirely server-side in Postgres — request_account_deletion_challenge()
+// (0049) checks the caller's own auth.jwt() -> 'amr' claim for a
+// `password` entry within the last 5 minutes, a signal Supabase's own
+// refresh-token grant does not touch (unlike the JWT's top-level `iat`,
+// which DOES advance on every routine token refresh and was
+// insufficient — see 0049's own header). This function does not decode
+// or inspect the JWT for freshness at all; it only forwards the
+// caller's own authenticated context to the two RPCs below, which do
+// the real verification.
 //
 // Never exposes: the service-role key itself (read once from
 // Deno.env, never echoed anywhere), legal-hold status or existence
@@ -19,7 +32,7 @@
 // than the verified caller.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
-import { errorResponseBody, isRecentlyAuthenticated, type DeleteAccountErrorCode } from "./lib.ts";
+import { errorResponseBody, type DeleteAccountErrorCode } from "./lib.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -90,15 +103,13 @@ Deno.serve(async req => {
         return fail("auth_required", 401);
     }
 
-    const jwt = authHeader.replace(/^Bearer\s+/i, "");
-
     // User-authenticated client — carries the caller's own JWT, so
-    // auth.uid() resolves correctly inside self_delete_account() and
-    // that RPC's own security model (SECURITY DEFINER, deriving the
-    // target exclusively from auth.uid()) applies exactly as it does
-    // for any other authenticated client call. This client is never
-    // used for anything requiring elevated privilege — see adminClient
-    // below for that.
+    // auth.uid() (and auth.jwt(), for the challenge RPC's own amr
+    // check) resolve correctly inside both RPCs below, and their
+    // security model (SECURITY DEFINER, deriving the target exclusively
+    // from auth.uid()) applies exactly as it does for any other
+    // authenticated client call. This client is never used for anything
+    // requiring elevated privilege — see adminClient below for that.
     const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         global: { headers: { Authorization: authHeader } }
     });
@@ -110,14 +121,33 @@ Deno.serve(async req => {
 
     const userId = userData.user.id;
 
-    // Recent reauthentication — enforced server-side against the
-    // verified token's own `iat` claim (lib.ts), never a client-supplied
-    // flag. The client is expected to have called
+    // Recent reauthentication — enforced entirely server-side in
+    // Postgres, against the caller's own verified `auth.jwt() -> 'amr'`
+    // claim (0049_account_deletion_challenge.sql), never a client-
+    // supplied flag and never a JWT field this function inspects
+    // itself. The client is expected to have called
     // supabase.auth.signInWithPassword() immediately before this
-    // request, which mints a fresh access token; if it didn't (or an
-    // old token is replayed), this rejects outright regardless of what
-    // the client claims.
-    if (!isRecentlyAuthenticated(jwt)) {
+    // request; if it didn't (or only a routinely-refreshed session is
+    // presented), this RPC rejects outright regardless of what the
+    // client claims — see this function's own header.
+    let challengeToken: string;
+
+    try {
+        const { data, error } = await userClient.rpc("request_account_deletion_challenge");
+
+        if (error) {
+            logInternal("request_account_deletion_challenge", error);
+            return fail("reauth_required", 401);
+        }
+
+        if (typeof data !== "string") {
+            logInternal("request_account_deletion_challenge", new Error("missing/invalid token in response"));
+            return fail("reauth_required", 401);
+        }
+
+        challengeToken = data;
+    } catch (error) {
+        logInternal("request_account_deletion_challenge", error);
         return fail("reauth_required", 401);
     }
 
@@ -128,11 +158,17 @@ Deno.serve(async req => {
     const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // --- Step 1: database preparation (transactional, inside the RPC) ---
+    // Passes the just-issued challenge token, consumed atomically inside
+    // this same RPC call (0049) before any other work happens — a
+    // missing/expired/foreign/already-used token is rejected identically
+    // to any other db_prep_failed cause here, never distinguished.
     let jobId: string;
     let storagePaths: string[];
 
     try {
-        const { data, error } = await userClient.rpc("self_delete_account");
+        const { data, error } = await userClient.rpc("self_delete_account", {
+            p_challenge_token: challengeToken
+        });
 
         if (error) {
             logInternal("self_delete_account", error);
@@ -165,10 +201,14 @@ Deno.serve(async req => {
             });
             // The database side already committed and is safely
             // retryable (self_delete_account() resolves to the same job
-            // row on a second call, per 0048's own header) — the
+            // row on a second call, per 0049's own header) — the
             // caller's session is still valid at this point, since Auth
             // deletion did not succeed, so a retry from the client is a
-            // legitimate recovery path, not a dead end.
+            // legitimate recovery path, not a dead end. A retry will
+            // request and consume a fresh challenge token (the one used
+            // here is already gone) — that's expected, not a problem,
+            // since the underlying account still exists and a fresh
+            // `amr` password entry is still required either way.
             return fail("auth_admin_failed", 500);
         }
     } catch (error) {
