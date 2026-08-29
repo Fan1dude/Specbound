@@ -253,6 +253,41 @@
 
         </section>
 
+        <!-- Launch Readiness self-service account deletion. Extends the
+             same Danger Zone pattern pages/build/edit.html's
+             #editorDangerZone already established for per-build
+             deletion — a distinct, visually set-apart card for an
+             irreversible action, not folded into a routine form. -->
+        <section class="settings-card settings-danger-zone" id="settingsDangerZone">
+
+            <div class="section-heading">
+                <h2>Danger Zone</h2>
+                <p>An irreversible action for your entire account.</p>
+            </div>
+
+            <div class="settings-danger-zone-action">
+                <div>
+                    <h3>Delete Account</h3>
+                    <p class="text-secondary">
+                        Permanently deletes your profile, published builds,
+                        drafts, comments, likes, saves, and follows. Feedback
+                        you submitted remains on record with your identity
+                        removed. Any moderation record involving your account
+                        remains on record the same way.
+                    </p>
+                </div>
+
+                <button
+                    type="button"
+                    id="deleteAccountBtn"
+                    class="btn btn-danger"
+                >
+                    Delete Account
+                </button>
+            </div>
+
+        </section>
+
     </main>
 
     <footer id="footer" class="footer"></footer>

@@ -24,6 +24,7 @@ import {
     readDiscordOAuthRedirectError,
     describeDiscordRedirectError
 } from "../../utils/discordAuthErrors.js";
+import { renderDeleteAccountSection } from "./renderDeleteAccountSection.js";
 
 loadNavbar("../");
 loadFooter("../");
@@ -32,6 +33,7 @@ const user = await requireAuth("login.html");
 
 if (user) {
     initPasswordForm(user);
+    renderDeleteAccountSection(user);
 
     // Beta launch gate (js/core/featureFlags.js) — while `discordConnections`
     // is off, the entire Connected Accounts card stays hidden (ships

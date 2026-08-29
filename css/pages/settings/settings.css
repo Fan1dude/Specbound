@@ -24,6 +24,37 @@
     margin-bottom: var(--space-4);
 }
 
+/* Launch Readiness self-service account deletion. Same
+   distinct-visually-set-apart-card treatment as
+   css/pages/build/editor.css's .editor-danger-zone, scoped separately
+   here rather than reused directly (this card is always visible, unlike
+   the editor's own version which is hidden until a build is published —
+   they don't share visibility logic and shouldn't share a class name). */
+.settings-danger-zone {
+    border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+.settings-danger-zone .section-heading h2 {
+    color: var(--danger);
+}
+
+.settings-danger-zone-action {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+}
+
+.settings-danger-zone-action h3 {
+    font-size: var(--font-size-md);
+    margin-bottom: 4px;
+}
+
+.settings-danger-zone-action p {
+    max-width: 46ch;
+}
+
 .settings-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -125,6 +125,42 @@ Deploying the website **before** the migration is what would have produced the e
 
 Metadata extraction is always best-effort — manual product entry (title, price paid, free toggle, source) works with or without the Edge Function deployed, is never blocked by a fetch failure, and never requires a successful metadata fetch to add or publish a product.
 
+### 8.1 `delete-account` — self-service account deletion (implementation-reviewed, NOT yet deployed to production)
+
+**This is a genuine architectural first for this project: `delete-account` is the first Edge Function — and the first anything in this repository — that requires a service-role key.** `docs/OPERATIONS.md` §5 has stated since Milestone 27A "there is no service-role key... anywhere in this codebase to rotate... If that ever changes... this section will need real secret-management guidance that doesn't exist today." That change has now happened; §5's rotation guidance has been updated accordingly — read it before deploying this function.
+
+**Deploy command** (from the repository root, once linked to the target project):
+
+```
+supabase functions deploy delete-account --project-ref <project-ref>
+```
+
+**Requires one new secret, set once before first deploy:**
+
+```
+supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<the project's actual service-role key, from the Supabase dashboard's API settings> --project-ref <project-ref>
+```
+
+**Never**: paste the service-role key into this repository, a commit, a terminal transcript that gets saved anywhere, a screenshot, or this document. The command above is written with a placeholder deliberately — the real value is entered directly wherever you run the `supabase secrets set` command, from the Supabase dashboard, not copied through any intermediate file. `SUPABASE_URL`/`SUPABASE_ANON_KEY` continue to be auto-provided by Supabase for every deployed function, same as `product-metadata`.
+
+**Required migrations, in order, before this function is deployed** (see `supabase/migrations/0044`-`0048`'s own headers for the full rationale behind each):
+
+1. `0044_normalize_user_deletion_fks.sql` — converges the `profiles`/`builds`/`build_revisions` foreign-key discrepancy between the reconstructed baseline and production's actual, confirmed shape.
+2. `0045_moderation_actions_preserve_audit.sql` — `moderation_actions.actor_id` becomes nullable, `ON DELETE SET NULL` instead of `CASCADE`. **Deploying `delete-account` before this migration is applied would mean every self-deletion's own audit row destroys itself the instant the Auth user is actually removed** — see `0048_self_delete_account.sql`'s own header for why this isn't just a departing-moderator edge case.
+3. `0046_legal_holds.sql` — the private hold table and its two staff-gated RPCs.
+4. `0047_account_deletion_jobs.sql` — the durable orchestration table.
+5. `0048_self_delete_account.sql` — `self_delete_account()`, the RPC this Edge Function calls.
+
+**Production verification checklist, once deployed** (none of this has been performed yet — this function has not been deployed anywhere beyond implementation review):
+
+- Confirm `verify_jwt` behavior matches this function's own manual JWT check (it verifies the caller itself via `userClient.auth.getUser()`, same pattern as `product-metadata`) — a request with no `Authorization` header returns `401 {"error":"auth_required"}` before any database or Auth Admin call runs.
+- Confirm a request with a valid but NOT recently-reauthenticated token (a session older than `MAX_REAUTH_AGE_SECONDS`, `supabase/functions/delete-account/lib.ts`) returns `401 {"error":"reauth_required"}`, never proceeding to the database step.
+- Using a genuinely disposable test account only, never a real one: confirm the full success path end-to-end (self_delete_account() commits, `auth.admin.deleteUser()` succeeds, Storage cleanup runs, `account_deletion_jobs` reaches `storage_cleaned`), then confirm the same test account can no longer sign in.
+- Confirm a legal hold placed on a disposable test account (via `place_legal_hold()`) blocks deletion with the generic `db_prep_failed`-shaped response, never a response distinguishable from any other failure.
+- Confirm `account_deletion_jobs` rows are genuinely unreachable via the anon/publishable key from the browser (RLS enabled, zero policies) — the same kind of direct-REST-API check this document's own Launch Readiness Audit history already establishes as standard practice for a sensitive table.
+
+**Non-atomicity, disclosed explicitly**: this function spans three genuinely separate systems (Postgres, the Supabase Auth Admin API, Storage) with no cross-system transaction — see `supabase/functions/delete-account/index.ts`'s own header and `public.account_deletion_jobs` (`0047`) for the full retry/recovery design. A partial failure never leaves the database half-cleaned with the Auth user still reachable in an inconsistent way; the worst case is a delayed-but-eventually-consistent completion via retry, tracked in `account_deletion_jobs`.
+
 ---
 
 ## 9. Discord production configuration

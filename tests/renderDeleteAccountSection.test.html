@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Launch Readiness self-service account deletion — Settings Danger Zone</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body { font-family: ui-monospace, monospace; background: #0a0a0a; color: #e5e5e5; padding: 24px; }
+        .case { padding: 4px 0; border-bottom: 1px solid #222; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; font-weight: 700; }
+        #summary { margin: 16px 0; font-size: 1.1rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <h1>Launch Readiness self-service account deletion — Settings Danger Zone</h1>
+    <p>
+        Real js/pages/settings/renderDeleteAccountSection.js and the real,
+        unmocked js/components/DeleteAccountDialog.js against a DOM
+        fixture matching pages/settings.html's own element ids — only
+        core/supabase.js, repositories/accountRepository.js, and
+        core/toast.js are mocked (network/auth boundaries). The real
+        <code>window.location.href</code> assignment is never exercised
+        directly — doing so would navigate this test tab away mid-suite —
+        renderDeleteAccountSection.js instead accepts an injectable
+        <code>redirectTo</code> function (defaulting to the real
+        navigation in production, never passed by production callers),
+        which Case 4 below spies on to verify the real success path
+        reaches the redirect with the right target.
+    </p>
+    <div id="results"></div>
+    <div id="summary"></div>
+
+    <!-- Minimal DOM matching pages/settings.html's own element id. -->
+    <button type="button" id="deleteAccountBtn" class="btn btn-danger">
+        Delete Account
+    </button>
+
+    <script type="module">
+        const results = [];
+        function test(name, pass, detail = "") {
+            results.push({ name, pass, detail });
+        }
+
+        function blobUrl(src) {
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        }
+
+        // --- Mock state -----------------------------------------------------
+        const calls = [];
+        const toastMessages = [];
+        let reauthShouldFail = false;
+        let deleteAccountShouldFail = false;
+        let deleteAccountFailureCode = null;
+
+        globalThis.__mock = {
+            calls, toastMessages,
+            get reauthShouldFail() { return reauthShouldFail; },
+            get deleteAccountShouldFail() { return deleteAccountShouldFail; },
+            get deleteAccountFailureCode() { return deleteAccountFailureCode; }
+        };
+
+        // A small artificial delay on each mocked async call — without
+        // it, the whole signInWithPassword -> deleteAccount -> signOut
+        // chain can resolve entirely within the microtask queue before a
+        // single macrotask-based nextTick() ever gets to observe the
+        // in-flight (disabled) button state, since none of these mocks
+        // would otherwise have any real asynchronous delay at all. Each
+        // blob-loaded mock module below defines its own local copy (blob
+        // modules don't share this outer script's scope).
+        const MOCK_DELAY_MS = 20;
+
+        const supabaseSrc = `
+            const mockDelay = () => new Promise(r => setTimeout(r, ${MOCK_DELAY_MS}));
+            export const supabase = {
+                auth: {
+                    async signInWithPassword({ email, password }) {
+                        globalThis.__mock.calls.push(["signInWithPassword", email, password]);
+                        await mockDelay();
+                        if (globalThis.__mock.reauthShouldFail) {
+                            return { error: { message: "Invalid login credentials" } };
+                        }
+                        return { error: null };
+                    },
+                    async signOut() {
+                        globalThis.__mock.calls.push(["signOut"]);
+                        await mockDelay();
+                        return { error: null };
+                    }
+                }
+            };
+        `;
+        const accountRepoSrc = `
+            const mockDelay = () => new Promise(r => setTimeout(r, ${MOCK_DELAY_MS}));
+            export const DELETE_ACCOUNT_REAUTH_REQUIRED = "reauth_required";
+            export async function deleteAccount() {
+                globalThis.__mock.calls.push(["deleteAccount"]);
+                await mockDelay();
+                if (globalThis.__mock.deleteAccountShouldFail) {
+                    const err = new Error("Your request could not be completed. Contact support@specboundapp.com.");
+                    if (globalThis.__mock.deleteAccountFailureCode) {
+                        err.code = globalThis.__mock.deleteAccountFailureCode;
+                    }
+                    throw err;
+                }
+            }
+        `;
+        const toastSrc = `
+            export function showToast(message, type) {
+                globalThis.__mock.toastMessages.push({ message, type });
+            }
+        `;
+
+        const supabaseUrl = blobUrl(supabaseSrc);
+        const accountRepoUrl = blobUrl(accountRepoSrc);
+        const toastUrl = blobUrl(toastSrc);
+
+        // js/components/DeleteAccountDialog.js is used REAL, unmocked
+        // (only imports escapeHtml.js, itself import-free) — this test
+        // drives the actual <dialog>, not a stand-in.
+        const dialogUrl = new URL("../js/components/DeleteAccountDialog.js", location.href).href;
+
+        async function loadRewritten(path) {
+            const src = await (await fetch(path)).text();
+            const rewritten = src
+                .replaceAll('"../../core/supabase.js"', `"${supabaseUrl}"`)
+                .replaceAll('"../../repositories/accountRepository.js"', `"${accountRepoUrl}"`)
+                .replaceAll('"../../core/toast.js"', `"${toastUrl}"`)
+                .replaceAll('"../../components/DeleteAccountDialog.js"', `"${dialogUrl}"`);
+            return import(blobUrl(rewritten));
+        }
+
+        const { renderDeleteAccountSection } = await loadRewritten("../js/pages/settings/renderDeleteAccountSection.js");
+
+        const FAKE_USER = { id: "user-1", email: "builder@example.invalid" };
+
+        function resetDom() {
+            const oldBtn = document.getElementById("deleteAccountBtn");
+            const newBtn = oldBtn.cloneNode(true);
+            oldBtn.replaceWith(newBtn);
+            newBtn.disabled = false;
+            newBtn.textContent = "Delete Account";
+            return newBtn;
+        }
+
+        function click(el) {
+            el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        }
+
+        function findOpenDialog() {
+            const dialogs = document.querySelectorAll("dialog.modal-delete-account");
+            return dialogs[dialogs.length - 1] || null;
+        }
+
+        async function nextTick(n = 1) {
+            for (let i = 0; i < n; i++) await new Promise(r => setTimeout(r, 0));
+        }
+
+        function wait(ms) {
+            return new Promise(r => setTimeout(r, ms));
+        }
+
+        const CORRECT_PHRASE = "DELETE MY ACCOUNT";
+
+        try {
+
+        // --- Case 1: clicking opens the dialog; the confirm button stays
+        // disabled until BOTH the password field is non-empty AND the
+        // typed phrase exactly matches. --------------------------------------
+        {
+            const button = resetDom();
+            renderDeleteAccountSection(FAKE_USER);
+            click(button);
+            await nextTick(2);
+
+            const dialog = findOpenDialog();
+            test("dialog opens on click", Boolean(dialog));
+
+            const passwordInput = dialog.querySelector("#deleteAccountPassword");
+            const phraseInput = dialog.querySelector("#deleteAccountPhrase");
+            const confirmBtn = dialog.querySelector('[data-action="confirm"]');
+
+            test("confirm starts disabled", confirmBtn.disabled === true);
+
+            passwordInput.value = "hunter2";
+            passwordInput.dispatchEvent(new Event("input", { bubbles: true }));
+            test("confirm still disabled with only the password filled", confirmBtn.disabled === true);
+
+            phraseInput.value = "delete my account"; // wrong case
+            phraseInput.dispatchEvent(new Event("input", { bubbles: true }));
+            test("confirm still disabled for a near-miss (wrong case) phrase", confirmBtn.disabled === true);
+
+            phraseInput.value = CORRECT_PHRASE;
+            phraseInput.dispatchEvent(new Event("input", { bubbles: true }));
+            test("confirm enabled once both fields are exactly correct", confirmBtn.disabled === false);
+
+            passwordInput.value = "";
+            passwordInput.dispatchEvent(new Event("input", { bubbles: true }));
+            test("confirm disabled again if the password is cleared, even with a correct phrase", confirmBtn.disabled === true);
+
+            dialog.querySelector('[data-action="cancel"]').click();
+            await wait(200);
+        }
+
+        // --- Case 2: cancelling never calls signInWithPassword or
+        // deleteAccount. -------------------------------------------------------
+        {
+            const button = resetDom();
+            calls.length = 0;
+            renderDeleteAccountSection(FAKE_USER);
+            click(button);
+            await nextTick(2);
+
+            const dialog = findOpenDialog();
+            dialog.querySelector('[data-action="cancel"]').click();
+            await wait(200);
+
+            test("cancelling never calls signInWithPassword or deleteAccount", calls.length === 0, JSON.stringify(calls));
+        }
+
+        // --- Case 3: incorrect password — signInWithPassword called,
+        // deleteAccount NEVER called, a specific "incorrect" message shown
+        // (matches the existing password-change flow's own established
+        // reasoning: this is the user's own account, so a specific
+        // wrong-password message here is fine). ---------------------------
+        {
+            const button = resetDom();
+            calls.length = 0;
+            toastMessages.length = 0;
+            reauthShouldFail = true;
+
+            renderDeleteAccountSection(FAKE_USER);
+            click(button);
+            await nextTick(2);
+
+            let dialog = findOpenDialog();
+            dialog.querySelector("#deleteAccountPassword").value = "wrong-password";
+            dialog.querySelector("#deleteAccountPassword").dispatchEvent(new Event("input", { bubbles: true }));
+            dialog.querySelector("#deleteAccountPhrase").value = CORRECT_PHRASE;
+            dialog.querySelector("#deleteAccountPhrase").dispatchEvent(new Event("input", { bubbles: true }));
+            dialog.querySelector('[data-action="confirm"]').click();
+            await wait(200);
+
+            test("wrong password: signInWithPassword called", calls.some(c => c[0] === "signInWithPassword"), JSON.stringify(calls));
+            test("wrong password: deleteAccount is never called", !calls.some(c => c[0] === "deleteAccount"), JSON.stringify(calls));
+            test("wrong password: an error toast is shown", toastMessages.some(t => t.type === "error"));
+            test("wrong password: the message says the password is incorrect", toastMessages.some(t => t.message === "Current password is incorrect."), JSON.stringify(toastMessages));
+            test("wrong password: the button is re-enabled with its original label", button.disabled === false && button.textContent.trim() === "Delete Account");
+
+            reauthShouldFail = false;
+        }
+
+        // --- Case 4: success — correct password + correct phrase calls
+        // signInWithPassword, then deleteAccount, then signOut, then the
+        // redirect. The real `window.location.href` assignment is never
+        // exercised — a spy `redirectTo` is injected instead (see
+        // js/pages/settings/renderDeleteAccountSection.js's own
+        // `redirectTo` parameter, added specifically for this), so this
+        // case can verify the real success path without navigating this
+        // test page away mid-suite. Also verifies the in-flight loading
+        // label and double-submission guard. --------------------------------
+        {
+            const button = resetDom();
+            calls.length = 0;
+            toastMessages.length = 0;
+            const redirectCalls = [];
+
+            renderDeleteAccountSection(FAKE_USER, { redirectTo: url => redirectCalls.push(url) });
+            click(button);
+            await nextTick(2);
+
+            let dialog = findOpenDialog();
+            dialog.querySelector("#deleteAccountPassword").value = "correct-password";
+            dialog.querySelector("#deleteAccountPassword").dispatchEvent(new Event("input", { bubbles: true }));
+            dialog.querySelector("#deleteAccountPhrase").value = CORRECT_PHRASE;
+            dialog.querySelector("#deleteAccountPhrase").dispatchEvent(new Event("input", { bubbles: true }));
+            dialog.querySelector('[data-action="confirm"]').click();
+
+            // Immediately after confirming — the in-flight state should
+            // already be visible (loading label swaps from "Verifying
+            // password..." to "Deleting your account..." once reauth
+            // resolves; either counts as "in flight" for this assertion).
+            await nextTick(1);
+            test("in-flight: button is disabled while the request is running", button.disabled === true);
+
+            // A second click while in flight must not queue a second attempt.
+            click(button);
+            await wait(200);
+
+            test(
+                "success: calls happen in order signInWithPassword -> deleteAccount -> signOut",
+                calls.map(c => c[0]).join(",") === "signInWithPassword,deleteAccount,signOut",
+                JSON.stringify(calls)
+            );
+            test("success: deleteAccount called exactly once (double-submit guarded)", calls.filter(c => c[0] === "deleteAccount").length === 1, JSON.stringify(calls));
+            test("success: no error toast is shown", !toastMessages.some(t => t.type === "error"), JSON.stringify(toastMessages));
+            test("success: redirects to account-deleted.html", JSON.stringify(redirectCalls) === JSON.stringify(["account-deleted.html"]), JSON.stringify(redirectCalls));
+        }
+
+        // --- Case 5: deleteAccount failure (generic backend rejection,
+        // e.g. a legal hold or any other server-side failure) — the SAME
+        // generic message is shown regardless of cause, never the raw
+        // internal error text, and the button is restored. -----------------
+        {
+            const button = resetDom();
+            calls.length = 0;
+            toastMessages.length = 0;
+            deleteAccountShouldFail = true;
+            deleteAccountFailureCode = null;
+
+            let focusCallCount = 0;
+            const originalFocus = button.focus.bind(button);
+            button.focus = (...args) => {
+                focusCallCount++;
+                return originalFocus(...args);
+            };
+
+            renderDeleteAccountSection(FAKE_USER);
+            click(button);
+            await nextTick(2);
+
+            let dialog = findOpenDialog();
+            dialog.querySelector("#deleteAccountPassword").value = "correct-password";
+            dialog.querySelector("#deleteAccountPassword").dispatchEvent(new Event("input", { bubbles: true }));
+            dialog.querySelector("#deleteAccountPhrase").value = CORRECT_PHRASE;
+            dialog.querySelector("#deleteAccountPhrase").dispatchEvent(new Event("input", { bubbles: true }));
+            dialog.querySelector('[data-action="confirm"]').click();
+            await wait(200);
+
+            test("backend failure: signOut is never called (deletion did not succeed)", !calls.some(c => c[0] === "signOut"), JSON.stringify(calls));
+            test("backend failure: a generic error toast is shown", toastMessages.some(t => t.type === "error"));
+            test(
+                "backend failure: the message never distinguishes a legal hold from any other failure",
+                toastMessages.some(t => t.message.includes("support@specboundapp.com")) && !toastMessages.some(t => /legal|hold/i.test(t.message)),
+                JSON.stringify(toastMessages)
+            );
+            test("backend failure: the button is re-enabled with its original label", button.disabled === false && button.textContent.trim() === "Delete Account");
+            test("backend failure: focus is restored to the button", focusCallCount === 1, String(focusCallCount));
+
+            deleteAccountShouldFail = false;
+        }
+
+        // --- Case 6: a "reauth_required" failure code (server-side
+        // recent-authentication check rejected the token) gets its own,
+        // still-safe message distinct from the generic one, since the
+        // user can meaningfully act on it (try again). ---------------------
+        {
+            const button = resetDom();
+            calls.length = 0;
+            toastMessages.length = 0;
+            deleteAccountShouldFail = true;
+            deleteAccountFailureCode = "reauth_required";
+
+            renderDeleteAccountSection(FAKE_USER);
+            click(button);
+            await nextTick(2);
+
+            let dialog = findOpenDialog();
+            dialog.querySelector("#deleteAccountPassword").value = "correct-password";
+            dialog.querySelector("#deleteAccountPassword").dispatchEvent(new Event("input", { bubbles: true }));
+            dialog.querySelector("#deleteAccountPhrase").value = CORRECT_PHRASE;
+            dialog.querySelector("#deleteAccountPhrase").dispatchEvent(new Event("input", { bubbles: true }));
+            dialog.querySelector('[data-action="confirm"]').click();
+            await wait(200);
+
+            test("reauth_required: a distinct, still-safe message is shown", toastMessages.some(t => /try again/i.test(t.message)), JSON.stringify(toastMessages));
+            test("reauth_required: the raw error message is never exposed", !toastMessages.some(t => t.message === "Your request could not be completed. Contact support@specboundapp.com."), JSON.stringify(toastMessages));
+
+            deleteAccountShouldFail = false;
+            deleteAccountFailureCode = null;
+        }
+
+        } catch (crashError) {
+            test("no scenario threw or timed out before the file finished running", false, String(crashError?.stack || crashError));
+        }
+
+        // --- Render + report ------------------------------------------------
+        const resultsEl = document.getElementById("results");
+        resultsEl.innerHTML = results
+            .map(r => `<div class="case ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"} — ${r.name}${r.pass ? "" : ` (${r.detail})`}</div>`)
+            .join("");
+
+        const passCount = results.filter(r => r.pass).length;
+        const failCount = results.length - passCount;
+
+        document.getElementById("summary").textContent = `${passCount} / ${results.length} passed${failCount ? `, ${failCount} FAILED` : ""}`;
+        document.getElementById("summary").className = failCount ? "fail" : "pass";
+
+        window.__testResults = { passCount, failCount, total: results.length, results };
+        console.log(`renderDeleteAccountSection.test.html: ${passCount}/${results.length} passed`);
+    </script>
+</body>
+</html>

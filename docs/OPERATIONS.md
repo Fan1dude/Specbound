@@ -43,7 +43,16 @@ To rotate it (e.g. as a periodic hygiene practice, or if ever suspected compromi
 3. Commit and push — this deploys like any other code change (§3).
 4. **Old key behavior**: confirm with Supabase's current documentation whether the old key is invalidated immediately or has a grace period — plan the rollout window accordingly so there's no gap where neither key works for in-flight users.
 
-There is no service-role key, database password, or other server-side secret anywhere in this codebase to rotate — this architecture has no server component beyond Supabase itself. If that ever changes (e.g. a future serverless function is added), this section will need real secret-management guidance (Cloudflare Pages environment variables, marked as "encrypted" in the dashboard) that doesn't exist today because nothing requires it yet.
+**Update, Launch Readiness self-service account deletion**: the statement above ("there is no service-role key... to rotate") is no longer true once `supabase/functions/delete-account` is deployed — see `docs/DEPLOYMENT.md` §8.1. That function is the first thing in this codebase to require a service-role key, set as a Supabase Function secret (`SUPABASE_SERVICE_ROLE_KEY`), never as a Cloudflare Pages environment variable and never anywhere in this repository — this app's frontend still has no server-side secret of its own; the secret lives entirely inside Supabase's own Function runtime, scoped to that one function.
+
+To rotate `SUPABASE_SERVICE_ROLE_KEY` (periodic hygiene, or if ever suspected compromised — this key genuinely does grant broad access, unlike the publishable key above, so treat a real compromise as urgent):
+
+1. Supabase dashboard → Project Settings → API → regenerate the service-role key.
+2. `supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<new value> --project-ref <project-ref>` — entered directly from the dashboard, never through an intermediate file or this repository (`docs/DEPLOYMENT.md` §8.1's own warning applies identically here).
+3. No redeploy of `delete-account` is required — Supabase Functions read secrets at invocation time, not build time.
+4. Confirm the old key is actually invalidated (Supabase's own dashboard/documentation) before considering rotation complete.
+
+Prior to this function's deployment, the original statement remains accurate: this architecture has no server-side secret beyond Supabase's own runtime. If any future function needs its own additional secret, follow this same pattern (a Supabase Function secret, never a repository file, never a Cloudflare Pages environment variable) rather than reinventing one.
 
 ## 6. Dependency updates
 
@@ -108,7 +117,9 @@ Recurring things worth checking periodically, not because anything is currently 
 
 > **Production-use disclaimer**: this procedure has been rehearsed only against disposable local fixtures, inside a Postgres transaction that was rolled back — it has **never been executed against production**. Using it against real production data requires, every time: separate adult-owner authorization for that specific case (§10.2), independent identity verification (§10.1), a current backup/PITR confirmation (§10.5), and a fresh re-read of this entire section against the live schema immediately before use. Schemas drift; a stale reading of this document is not a substitute for re-checking it.
 
-**Specbound has no self-service account-deletion flow today.** This procedure is the only path by which a user's account and published builds are removed, and it is manual, staff-run, and gated on adult-operator approval at every irreversible step. It reflects the approved decision to hard-delete a departing user's published builds along with their account — not a soft-delete or anonymization.
+**As of this writing, Specbound has no self-service account-deletion flow deployed to production.** This manual procedure remains the only path currently live for removing a user's account and published builds, and it is manual, staff-run, and gated on adult-operator approval at every irreversible step. It reflects the approved decision to hard-delete a departing user's published builds along with their account — not a soft-delete or anonymization.
+
+**A self-service flow has been designed, implemented, and implementation-reviewed, but is NOT yet deployed to production** — migrations `0044`-`0048`, `supabase/functions/delete-account`, and `js/pages/settings/renderDeleteAccountSection.js`, per decision packet item 11's requirement that self-service deletion exist before public registration opens (`docs/milestones/MILESTONE_27B_ADULT_OWNER_DECISION_PACKET.md`). See `docs/DEPLOYMENT.md` §8.1 for the exact deployment steps and production verification checklist, none of which have been performed yet. This manual procedure remains necessary as a fallback even after that flow deploys — for accounts whose owner has lost access and cannot complete the self-service reauthentication step, and for any case requiring a legal hold (§10's own audit-log durability concern below is exactly what motivated `0045`'s fix, now applied ahead of the self-service flow specifically so it doesn't reintroduce the same audit-loss problem for every ordinary self-deletion).
 
 Every schema fact cited below (column nullability, constraint definitions, `ON DELETE` behavior) was confirmed by direct, read-only queries (`information_schema.columns`, `pg_constraint`) against the linked production project on 2026-08-15, not assumed from memory.
 

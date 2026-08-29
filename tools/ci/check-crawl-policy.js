@@ -95,8 +95,13 @@ const AUTH_UTILITY_PAGES = [
 // real requests that hit it already receive an HTTP 404 status, which is
 // itself sufficient signal to any crawler; disallowing the template file
 // would serve no purpose (nothing ever legitimately links to /404.html as
-// a URL) and could only ever cause confusion.
-const NOINDEX_WITHOUT_DISALLOW = ["404.html"];
+// a URL) and could only ever cause confusion. pages/account-deleted.html
+// (Launch Readiness self-service account deletion) is the same shape —
+// usable while signed out (by definition, since the account no longer
+// exists by the time it's reached), but reachable only via a client-side
+// redirect after a successful deletion, never a real <a href> anywhere,
+// so Disallow-ing it would serve no purpose either.
+const NOINDEX_WITHOUT_DISALLOW = ["404.html", "pages/account-deleted.html"];
 
 // A representative sample of pages that must always stay public/
 // crawlable — this check fails loudly if robots.txt ever ends up

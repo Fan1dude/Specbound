@@ -1657,3 +1657,136 @@ recorded as applied, not the original application date or actor.
   function, or policy. No `DELETE` policy is added to `public.builds` —
   `delete_build()` remains the only path, matching every other protected
   write in this schema.
+
+## 0044_normalize_user_deletion_fks
+
+- **Status**: Proposed — not yet applied to production. **Not executed
+  in the authoring session** — no `supabase` CLI, no reachable Docker
+  daemon, and no `psql` were available in this environment (confirmed:
+  `which supabase`/`which psql` found nothing, `docker ps` could not
+  reach a running daemon). Written and reviewed against both the
+  reconstructed-baseline and production-confirmed starting shapes; must
+  be run against the local disposable Supabase/Docker stack before this
+  migration is considered verified.
+- **File**: `migrations/0044_normalize_user_deletion_fks.sql`
+- **Rollback**: `rollbacks/0044_normalize_user_deletion_fks_rollback.sql`
+  — restores the reconstructed-baseline shape (CASCADE on all three FKs),
+  explicitly flagged in the rollback's own header as not a claim that
+  shape is correct for production.
+- **Converges a documented schema-drift discrepancy** between
+  `0000_baseline_pre_tracked_tables.sql` (reconstructed; claims
+  `profiles.id`/`builds.user_id`/`build_revisions.user_id` are all `ON
+  DELETE CASCADE`) and `docs/OPERATIONS.md` §10 (live `pg_constraint`
+  introspection against production, later directly re-confirmed:
+  `profiles.id`/`builds.user_id` have no FK to `auth.users` at all;
+  `build_revisions.user_id` has one, but `NO ACTION`) — production is
+  confirmed authoritative. Uses read-before-write PL/pgSQL (queries
+  `pg_constraint` by `confrelid`, not by assumed constraint name) so the
+  same migration file converges either starting shape correctly.
+- **Testing**: `supabase/tests/migration_0044_fresh_install.test.sql` and
+  `supabase/tests/migration_0044_legacy_upgrade.test.sql` (the latter
+  using the new `supabase/tests/fixtures/production_shaped_user_deletion_fks_fixture.sql`
+  to simulate production's real starting shape locally) — both written,
+  neither executed (see Status above).
+- **Context**: Launch Readiness self-service account deletion,
+  foundation pass. Prerequisite for `0048`'s RPC, which explicitly
+  deletes `builds`/`profiles`/`build_revisions` rather than relying on a
+  cascade that production does not actually have.
+
+## 0045_moderation_actions_preserve_audit
+
+- **Status**: Proposed — not yet applied to production. Not executed in
+  the authoring session (same environmental limitation as `0044`).
+- **File**: `migrations/0045_moderation_actions_preserve_audit.sql`
+- **Rollback**: `rollbacks/0045_moderation_actions_preserve_audit_rollback.sql`
+  — aborts (rather than proceeding) if any row's `actor_id` is already
+  null, since restoring `NOT NULL` would otherwise fail against or
+  destroy a real anonymized audit record.
+- **Implements decision packet item 12** — `moderation_actions.actor_id`
+  becomes nullable, `ON DELETE CASCADE` becomes `ON DELETE SET NULL`.
+  **Hard prerequisite for `0048`**: a self-deletion's own
+  `account_deleted` audit row is authored with `actor_id` = the deleting
+  user's own id, so without this fix every self-deletion's audit trail
+  would destroy itself the instant `auth.users` is actually removed.
+- **Testing**: `supabase/tests/migration_0045_moderation_actions_preserve_audit.test.sql`
+  — written, not executed (see Status above).
+- **Context**: Launch Readiness self-service account deletion.
+
+## 0046_legal_holds
+
+- **Status**: Proposed — not yet applied to production. Not executed in
+  the authoring session (same environmental limitation as `0044`).
+- **File**: `migrations/0046_legal_holds.sql`
+- **Rollback**: `rollbacks/0046_legal_holds_rollback.sql` — drops
+  `place_legal_hold()`/`release_legal_hold()` and the `legal_holds`
+  table. Destroys any recorded hold state.
+- **Adds**: `public.legal_holds` (RLS enabled, zero client policies for
+  any role — same maximally-restrictive pattern as
+  `public.catalog_moderators`), `place_legal_hold(p_user_id uuid,
+  p_reason text)` and `release_legal_hold(p_user_id uuid)` (both
+  staff-gated via `is_platform_staff()`, `SECURITY DEFINER`). Hold
+  existence and reason are never exposed to the held user or any
+  publicly-readable table — see `0048`'s RPC for the generic-failure
+  check that consumes this table without ever returning its contents.
+- **Testing**: `supabase/tests/migration_0046_legal_holds.test.sql` —
+  written, not executed (see Status above).
+- **Context**: Launch Readiness self-service account deletion. Decision
+  packet item 11.
+
+## 0047_account_deletion_jobs
+
+- **Status**: Proposed — not yet applied to production. Not executed in
+  the authoring session (same environmental limitation as `0044`).
+- **File**: `migrations/0047_account_deletion_jobs.sql`
+- **Rollback**: `rollbacks/0047_account_deletion_jobs_rollback.sql` —
+  drops the table and its trigger. Destroys any in-flight or historical
+  orchestration records.
+- **Adds**: `public.account_deletion_jobs` (RLS enabled, zero client
+  policies). `former_user_id` is deliberately a plain `uuid`, not a
+  foreign key to `auth.users` — the same "survives its own subject's
+  deletion" pattern `content_reports.target_id`/`moderation_actions.target_id`
+  already use, since this row's entire purpose is to outlive the
+  `auth.users` row it tracks. Reuses the shared `public.set_updated_at()`
+  trigger function (`0001`) rather than defining a new one.
+- **Testing**: `supabase/tests/migration_0047_account_deletion_jobs.test.sql`
+  — written, not executed (see Status above).
+- **Context**: Launch Readiness self-service account deletion. Makes the
+  three-system (Postgres/Auth/Storage) orchestration in
+  `supabase/functions/delete-account` idempotent and recoverable after
+  partial failure.
+
+## 0048_self_delete_account
+
+- **Status**: Proposed — not yet applied to production. Not executed in
+  the authoring session (same environmental limitation as `0044`).
+- **File**: `migrations/0048_self_delete_account.sql`
+- **Rollback**: `rollbacks/0048_self_delete_account_rollback.sql` —
+  drops `self_delete_account()`. Cannot restore any account already
+  deleted through this function — permanent, real data loss by design.
+- **Adds**: `self_delete_account() returns table(job_id uuid,
+  storage_paths text[])` — `SECURITY DEFINER`, `search_path = public,
+  pg_temp`, `EXECUTE` revoked from `public`/`anon`, granted only to
+  `authenticated`. Takes **no parameters** — the caller is derived
+  exclusively from `auth.uid()`, structurally preventing any caller from
+  naming a different account. Checks for an active legal hold first
+  (generic failure, `0046`); captures Storage paths (avatar, revision-
+  media, project-media, excluding legacy `avatar_url`-only rows) before
+  any delete; explicitly deletes the caller's own `builds` (cascading to
+  their `build_revisions`/`revision_media`/etc.) and `profiles` row (no
+  automatic FK does this on production, per `0044`); clears — never
+  deletes — any `build_revisions` row the caller authored on a build
+  they don't own; creates or resumes a durable job row (`0047`);
+  inserts a self-attributed `moderation_actions` audit row exactly once
+  per deletion event, even across a retried call.
+- **Testing**: `supabase/tests/migration_0048_self_delete_account.test.sql`
+  (anonymous rejection, no-parameter/security proof, legal-hold
+  rejection with a generic message, Storage-path capture correctness,
+  the authored-but-not-owned `build_revisions` clear-not-delete case,
+  idempotent retry with no duplicate audit row, function identity/
+  `SECURITY DEFINER`/`search_path`/ACL) — written, not executed (see
+  Status above).
+- **Context**: Launch Readiness self-service account deletion. The
+  transactional database half of `supabase/functions/delete-account`;
+  see `docs/DEPLOYMENT.md` §8.1 for the full deployment sequence and
+  `docs/OPERATIONS.md` §10 for how this relates to the existing manual
+  procedure.
