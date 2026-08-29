@@ -2,11 +2,21 @@
 
 **Who this is for**: an adult (parent, guardian, or other adult taking responsibility for Specbound) who is not necessarily technical, and who needs to make — or arrange for a lawyer to help make — the real decisions behind Specbound's legal pages and launch posture.
 
-**What this is not**: this is not legal advice, and nothing in this document is a legal conclusion. It's a worksheet. Every item below explains why it matters, what Specbound's code and database actually do *right now* (verified by directly reading the code, not guessed at), the range of options a reasonable adult or lawyer might consider, and exactly what stays blocked until you answer it. No answer has been chosen for you anywhere in this document.
+**What this is not**: this is not legal advice, and nothing in this document is a legal conclusion. It's a worksheet. Every item below explains why it matters, what Specbound's code and database actually do *right now* (verified by directly reading the code, not guessed at), the range of options a reasonable adult or lawyer might consider, and exactly what stays blocked until you answer it.
 
 **Companion document**: `docs/milestones/MILESTONE_27B_LEGAL_READINESS_SPECIFICATION.md` has the full technical detail (with file/line citations) behind every claim made here, if you or a lawyer want to verify anything yourselves.
 
-**How to use this document**: for each decision, fill in the blank "Decision," "Approver," and "Date" lines. Leave anything blank that isn't decided yet — a blank line is the honest, correct state until a real decision is made. Nothing in Specbound's product changes because a line in this document gets filled in; a filled-in decision here is the *input* to a future PR that actually builds or publishes something, never the action itself.
+**How to use this document**: for each decision, the "Decision," "Approver," and "Date" lines are now filled in — see the Approval record immediately below. Nothing in Specbound's product changes because a line in this document gets filled in; a filled-in decision here is the *input* to a future PR that actually builds or publishes something, never the action itself. **A decision recorded below does not mean the corresponding product behavior has been implemented** — each item's "Implementation status" line, and the companion specification document's "Remaining implementation prerequisites" section, state plainly what's actually built today versus what's approved-but-not-yet-built.
+
+---
+
+## Approval record
+
+**The adult owner has reviewed and approved the decisions recorded in this document on 2026-08-29.**
+
+Per this milestone's own standing rule (item 1/item 4 below), the adult owner's name, personal email, home address, signature, or any other private identifier is **not** recorded in this Git repository — this repository is public. The adult owner's actual identity is kept in a private operational record outside of Git, maintained by the minor product owner and the adult owner directly. Every "Approver" line below reads **"Adult operator (identity retained in a private operational record, not committed to this repository)"** rather than a name, consistent with this rule applied uniformly across the whole document.
+
+This approval record is a governance fact — it does not itself publish, draft, or implement anything. See each item's "Implementation status" line for what remains to be built before any of this becomes live product behavior, and see the specification document's "Remaining implementation prerequisites" section for the consolidated list.
 
 ---
 
@@ -14,13 +24,14 @@
 
 **Why it matters**: every other decision in this document, every legal document Specbound eventually publishes, and every account-deletion or moderation action that requires "adult-operator approval" (see `docs/OPERATIONS.md`) needs a specific real person attached to it — not just "an adult," but a named individual (or, if a business entity is formed, that entity acting through a named individual) who is actually accountable.
 
-**Current product behavior**: Specbound's own internal documentation (`docs/OPERATIONS.md`, line 5) already states plainly that "Specbound's owner is a minor" and that legal publication, age-policy decisions, and account-deletion approval all require "an adult owner/guardian's direct action or explicit authorization." No specific adult has been named anywhere in the repository — this is intentional; no name, email, or other personal identifier for that person has been or should be put into this Git repository (see item 3 for why).
+**Current product behavior**: Specbound's own internal documentation (`docs/OPERATIONS.md`, line 5) already states plainly that "Specbound's owner is a minor" and that legal publication, age-policy decisions, and account-deletion approval all require "an adult owner/guardian's direct action or explicit authorization." No specific adult has been named anywhere in the repository — this is intentional; no name, email, or other personal identifier for that person has been or should be put into this Git repository (see item 4 for why).
 
 **Options to consider**: a parent or legal guardian of the minor owner; another trusted adult with the minor's and their guardian's agreement; a small business entity once/if one is formed (see item 2), acting through a named responsible individual.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: An adult operator is confirmed and has reviewed and approved this document. Their specific identity is intentionally not recorded in this repository — see the Approval record above and item 4. Specbound operates as an individual, not through a business entity (see item 2).
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: N/A — this is a governance fact, not a product/code change.
 
 ---
 
@@ -32,9 +43,10 @@
 
 **Options to consider**: continue as an individual-operated project for now, and revisit if it grows; form a business entity before public launch; consult a lawyer or accountant specifically about this question before deciding either way.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: Continue as an individual-operated project. Specbound does not operate through a formal business entity for this launch.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: N/A — governance decision, not a product/code change.
 
 ---
 
@@ -46,9 +58,10 @@
 
 **Options to consider**: a dedicated email address just for Specbound (many providers let you create one for free or cheap); a role-based address like `support@` or `legal@` at a domain Specbound already controls (specboundapp.com); continuing to route everything through a personal address for now, with a plan to change it later.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: `support@specboundapp.com`. This mailbox is confirmed created, functional, and actively monitored by the adult operator (see item 23's reuse of this same address for privacy, copyright, security, and accessibility requests).
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: The mailbox itself exists and is operational today (outside this codebase). Publishing this address on the actual legal pages, and wiring it into any in-product contact/report flow, is not yet implemented — see the specification document's "Remaining implementation prerequisites."
 
 ---
 
@@ -60,9 +73,10 @@
 
 **Options to consider**: a registered agent or business-formation service that provides a legal address (common if item 2 results in forming an entity); a P.O. box; a virtual mailbox service; consulting a lawyer about what's actually required for your situation before assuming an address is needed at all.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: No public mailing address is published at this time. A real home address must never be added to this repository, or to any published page, at any point.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: N/A — this is a standing constraint on all future work, not something to build. Nothing in the product currently violates it.
 
 ---
 
@@ -74,9 +88,10 @@
 
 **Options to consider**: U.S.-only launch; U.S. plus specific other countries; worldwide with no restriction; worldwide but with specific jurisdictions you choose to exclude for legal-complexity reasons.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: The website itself remains publicly viewable worldwide (no access restriction on who can *view* public content). However, official account registration and the launch market are **United States only** — Specbound is not soliciting or knowingly registering accounts outside the U.S. for this launch. Age/eligibility is confirmed via attestation at signup (see item 9), not IP-based geolocation.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: Not yet implemented. No U.S.-eligibility attestation or registration restriction exists in the signup flow today — see item 9 and the specification document's "Remaining implementation prerequisites."
 
 ---
 
@@ -88,9 +103,10 @@
 
 **Options to consider**: set a minimum age (commonly 13, sometimes 16 or 18) and add an age-attestation step at signup; explicitly prohibit users under 13 and design signup/enforcement around that; build a legally-reviewed parental-consent system to knowingly support under-13 users (this is a significant undertaking — see the FTC's own compliance-plan resource linked in the specification document, §17); consult a lawyer before deciding, given how much COPPA exposure turns on this exact choice.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: The minimum account age for Specbound is **13**.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: Not yet implemented. No age signal of any kind is collected at signup today — see item 9's attestation-mechanism decision and the specification document's "Remaining implementation prerequisites."
 
 ---
 
@@ -102,9 +118,10 @@
 
 **Options to consider**: an age-attestation checkbox at signup, with account termination if later found to be false; a legally-reviewed parental-consent flow (verifiable consent, not just a checkbox — COPPA is specific about what counts); explicitly deciding under-13 support is out of scope indefinitely.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: **Under-13 accounts are prohibited.** No parental-consent flow will be built — Specbound does not knowingly support under-13 users. Enforcement is via an affirmative age-13+ attestation at signup (see item 9's mechanism decision), not birthdate collection and not IP-based geolocation.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: Not yet implemented — see item 9 and the specification document's "Remaining implementation prerequisites."
 
 ---
 
@@ -116,9 +133,10 @@
 
 **Options to consider**: no differentiated treatment; stricter default privacy settings for teen accounts (e.g., a private-by-default profile, since profiles are fully public by default today — see specification §3); additional content or contact restrictions; consult a lawyer about what Virginia's minor-specific provisions actually require, if anything, before deciding.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: No differentiated technical privacy defaults for teen (13-17) accounts at this time — every account continues to use the same public-by-default design. Instead, add clear, visible warnings (at signup and/or in Settings) that **profiles, follows, published builds, and comments can be public**, so every user — teen or adult — makes an informed choice under the existing design rather than the design itself changing per age group.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: Not yet implemented — no such public-visibility warning exists anywhere in the product today.
 
 ---
 
@@ -130,9 +148,10 @@
 
 **Options to consider**: keep it invite-only until every item in this packet is answered and any resulting legal pages are published; keep it invite-only until a specific subset of items is answered (name which ones); open it at a specific future date regardless of remaining items (not recommended without at least the age and privacy-policy decisions settled, but your call).
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: Keep invite-code gating (`BETA_INVITE_REQUIRED`) enabled until **all** of the following are live: (a) real Privacy Policy, Terms of Service, and Affiliate Disclosure are published; (b) signup-time acceptance controls (age-13+ and U.S.-eligibility attestations, item 5/item 7) are built and live; and (c) self-service account deletion (item 11) is built. Do not open public signup before all three are in place.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: The gate itself is already satisfied — signup remains invite-only today, unchanged by this decision. The three listed prerequisites are not yet built; see the specification document's "Remaining implementation prerequisites."
 
 ---
 
@@ -144,9 +163,10 @@
 
 **Options to consider**: formally adopt "indefinite, until deletion is requested" as the stated policy (matches current reality, simplest to implement); set specific retention windows for specific categories (e.g., closed feedback purged after N years) and build the cleanup logic to match; something in between, decided category by category using the data-category matrix in the specification document (§4) as a starting checklist.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: Keep data for as long as an account exists. Data is deleted or anonymized only through the approved deletion process (item 11) following a valid request — no automatic, blanket expiration/TTL policy is adopted.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: Matches current database behavior already (no TTL exists anywhere) — this decision formally adopts that reality as the stated policy. The "approved deletion process" this policy depends on is not yet fully self-service — see item 11.
 
 ---
 
@@ -158,9 +178,10 @@
 
 **Options to consider**: keep the current manual, you-approve-every-case process as the permanent design (simplest, but doesn't scale past a small number of users); build a self-service deletion flow, once you decide exactly what it should and shouldn't delete; add a legal-hold flag/mechanism now, before it's ever needed, versus deciding to build it only if a real situation arises.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: **Build self-service account deletion before public registration opens** — it is one of item 9's explicit prerequisites for lifting invite-gating. Permit a documented, private legal hold **only when legally necessary**, to pause deletion for a specific account.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: Not yet implemented. Today, full-account deletion remains the manual, staff-run procedure in `docs/OPERATIONS.md` §10 (never executed against production). Self-service **per-build** deletion already exists (migration `0043`, see specification §3) — full-account self-service deletion does not yet exist. No legal-hold mechanism exists in the schema today.
 
 ---
 
@@ -172,9 +193,10 @@
 
 **Options to consider**: accept both behaviors as-is; keep anonymized feedback but set a maximum retention period; decide the moderation-audit-deletion behavior needs to change (this would require a database change, not just a policy decision — flag it if you want it revisited) or decide it's acceptable given how rarely a moderator would also be the one deleting their own account.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: **Retain feedback in anonymized form after account deletion** (confirms the current design as acceptable, no change needed). **Preserve moderation audit records while removing departed users' or moderators' identities where necessary** — the audit entry itself must survive, with attribution stripped, rather than being deleted along with the account.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: The feedback half already matches current behavior (`feedback_submissions.user_id` → `SET NULL` on deletion, row retained) — no change needed there. **The moderation-audit half is a decided change from current behavior**, not yet implemented: `moderation_actions.actor_id` today cascade-*deletes* the entire row when the acting moderator's account is deleted (per migration `0028`'s original design), rather than anonymizing it. Implementing this decision requires a schema/migration change (changing that column's `ON DELETE` behavior from `CASCADE` to `SET NULL` or equivalent) — not yet done. See the specification document's "Remaining implementation prerequisites."
 
 ---
 
@@ -186,9 +208,10 @@
 
 **Options to consider**: a standard "you own it, you grant us a license to host and display it" clause (the common approach for user-generated-content platforms); something more specific to Specbound's use case (e.g., addressing whether Specbound can ever use a user's project in its own marketing); consult a lawyer for standard UGC-platform license language rather than drafting from scratch.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: **Users retain ownership of their content.** They grant Specbound a **non-exclusive** license limited to **operating, displaying, distributing, and promoting** the service.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: Decision recorded; the license clause itself has not yet been drafted into a published Terms of Service (`pages/legal/terms.html` remains a "Coming Soon" placeholder).
 
 ---
 
@@ -200,9 +223,10 @@
 
 **Options to consider**: adopt the existing Community Guidelines language as the basis for a formal Terms of Service enforcement section, rather than writing a second, separate set of rules; decide whether a formal appeals process should be built (currently explicitly absent); decide whether anything in the existing Guidelines needs to change once real Terms exist alongside it.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: **Incorporate the existing Community Guidelines into the Terms of Service** rather than writing a second, separate rule set. Use **proportionate warnings/suspensions for ordinary violations**, and **immediate removal for severe or illegal content**.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: Decision recorded; not yet drafted into a published Terms of Service. The existing Community Guidelines page itself is unaffected by this decision until that drafting happens.
 
 ---
 
@@ -214,9 +238,10 @@
 
 **Options to consider**: designate a contact (likely the same email as item 3) and register it with the Copyright Office once ready; consult a lawyer about whether formal DMCA safe-harbor registration is worth the effort at Specbound's current size, versus just building a basic "report copyright infringement" flow using the existing reporting system as a starting point.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: **Accept copyright complaints at `support@specboundapp.com`.** Formal DMCA-agent registration with the U.S. Copyright Office is **deferred** — not decided against, deferred for later reconsideration.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: Not yet implemented — no copyright-complaint intake process or page exists in the product today.
 
 ---
 
@@ -228,9 +253,10 @@
 
 **Options to consider**: keep the current minimal application-level footprint and describe it accurately in a future Privacy/Cookie Policy — including Cloudflare's own edge-level Web Analytics and conditional Bot Management cookie, rather than an unqualified "no cookies" claim; add first-party analytics later if you want usage insight beyond what Cloudflare already provides, and revisit this decision then; decide whether Cloudflare's Bot Management challenge cookie needs its own disclosure line in a future Privacy/Cookie Policy even though it isn't something the app code sets or controls; consult a lawyer about whether a conditionally-set vendor security cookie changes what a Cookie Policy needs to say.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: **Use the existing Cloudflare analytics/security features only** (Web Analytics, Bot Management). **Do not add advertising or additional tracking tools without a new review.**
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: Matches current state already (no additional tracking exists anywhere in the product today). This decision is now also a standing constraint on future changes, not something to build.
 
 ---
 
@@ -242,9 +268,10 @@
 
 **Options to consider**: review Supabase's and Cloudflare's published DPAs (both link directly from the specification document) and decide if anything needs to change; consult a lawyer about whether formal execution is necessary given your answers to items 5 and 2; decide it's not necessary at Specbound's current scale and revisit later.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: **Review current vendor (Supabase, Cloudflare) privacy terms before launch.** Review any **new** data-processing vendor's terms before adoption, going forward, as a standing practice.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: The review itself is not yet performed/recorded as complete — this decision commits to doing it before launch, not that it has already happened.
 
 ---
 
@@ -256,9 +283,10 @@
 
 **Options to consider**: write a basic internal incident-response checklist (who to notify, how fast, using what contact method) even before anything happens; consult a lawyer about what's actually legally required for your target jurisdictions (item 5) before drafting a formal process; treat this as a pre-launch requirement rather than something to defer.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: **Maintain an incident-response checklist.** The adult operator is responsible for handling and escalating reports.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: Not yet implemented — no incident-response checklist exists in the product or its documentation today. See the specification document's "Remaining implementation prerequisites."
 
 ---
 
@@ -270,9 +298,10 @@
 
 **Options to consider**: use the same general contact email for everything, at least initially; set up a separate address specifically for accessibility or legal requests once volume justifies it; note in the eventual Privacy Policy/Terms exactly how to reach you for each kind of request.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: **Use `support@specboundapp.com` initially for privacy, copyright, security, and accessibility requests** — one shared address, not separate ones, at this stage.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: The mailbox exists and is monitored (item 3). Publishing this address, and this specific scope of use, on the actual legal pages is still pending real page content.
 
 ---
 
@@ -284,11 +313,13 @@
 
 **Options to consider**: the same adult operator named in item 1 approves everything; different documents get approved by different people (e.g., a lawyer specifically approves final legal wording, while the adult operator approves the decision to publish); require both a lawyer's review *and* the adult operator's separate sign-off before anything publishes.
 
-- [ ] Decision (Privacy Policy approver): ___________________________________________
-- [ ] Decision (Terms of Service approver): ___________________________________________
-- [ ] Decision (Cookie Policy approver, if built): ___________________________________________
-- [ ] Decision (Copyright/DMCA page approver, if built): ___________________________________________
-- Date: ___________________________________________
+- [x] Decision (Privacy Policy approver): The adult operator (item 1) gives final approval to every legal-policy version.
+- [x] Decision (Terms of Service approver): The adult operator (item 1) gives final approval to every legal-policy version.
+- [x] Decision (Cookie Policy approver, if built): The adult operator (item 1) gives final approval to every legal-policy version.
+- [x] Decision (Copyright/DMCA page approver, if built): The adult operator (item 1) gives final approval to every legal-policy version.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: N/A — governance decision. No legal document has been drafted or published yet, so no approval has been exercised under this decision.
 
 ---
 
@@ -300,9 +331,10 @@
 
 **Options to consider**: full attorney review of all final legal documents before publication; attorney review limited to the highest-stakes items (age/COPPA, and whichever jurisdictions item 5 selects); no attorney review, proceeding on your own judgment and the official-source links provided in the specification document (§17).
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: **No attorney review is planned for the initial U.S.-only launch.** This is recorded as an **explicit adult-owner decision**, made with awareness that the option existed — not as a claim that legal review is unnecessary in general, and not as a claim that any Specbound legal document is or will be attorney-approved.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: N/A — this decision governs process, not product.
 
 ---
 
@@ -314,43 +346,76 @@
 
 **Options to consider**: reuse the same version/re-acceptance pattern already built for Community Guidelines, for the Privacy Policy and Terms as well; use a simpler "last updated" date only, without a forced re-acceptance flow; decide case-by-case which future changes are significant enough to require re-acceptance versus just updating the date.
 
-- [ ] Decision: ___________________________________________
-- Approver: ___________________________________________
-- Date: ___________________________________________
+- [x] Decision: **Maintain dated policy versions and acceptance records.** **Require re-acceptance only for material policy changes** — a wording or formatting fix that doesn't change what the policy actually says does not require re-acceptance, only a date update.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: This versioning pattern already exists and works for Community Guidelines today (`js/config/guidelines.js`, migration `0034`). Extending the same pattern to the Privacy Policy and Terms of Service is not yet built.
+
+---
+
+## 23. Should Specbound participate in an affiliate program, and if so, where?
+
+**Why it matters**: Specbound already has affiliate-disclosure *infrastructure* built (a sitewide "As an Amazon Associate I earn from qualifying purchases" sentence, live in the footer of every page today, and a per-link "Affiliate link" disclosure component) — but whether Specbound is actually, currently enrolled in that program, and where affiliate links should be allowed to appear, are business facts only the adult operator can confirm.
+
+**Current product behavior**: the sitewide Amazon Associates disclosure sentence is already live (`js/core/layout.js`); the per-link disclosure helper (`js/utils/affiliateLink.js`'s `renderExternalLink()`) exists and is tested but is not yet called from any live retailer-link rendering path (see specification §3's affiliate-implementation finding for the exact gap). No schema field distinguishes a real, enrolled affiliate link from an ordinary user-submitted or catalog retailer link.
+
+**Options to consider**: confirm active enrollment and scope affiliate links to a specific market; confirm enrollment but hold off on any real affiliate link until the wiring gap above is closed; decide not to participate at this time.
+
+- [x] Decision: **Amazon Associates membership is confirmed active.** Affiliate functionality (real, enrolled affiliate links) is scoped to the **U.S. experience only**, consistent with item 5's launch-market decision.
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: Not yet implemented as a live feature. See the specification document's affiliate-implementation finding (§3) and "Remaining implementation prerequisites" for the exact wiring/schema gap that must close before a real affiliate link can go live.
+
+---
+
+## 24. Should Specbound support private direct messaging between users during this launch?
+
+**Why it matters**: no messaging feature exists in Specbound today. Adding one has real safety, moderation, and data-retention implications (private message content, who can message whom, retention/deletion of message history) that this packet's other decisions don't cover — deciding the scope now avoids it being added informally later without the same review.
+
+**Current product behavior**: no private messaging feature exists anywhere in the product or database schema today — confirmed, not assumed.
+
+**Options to consider**: build direct messaging with appropriate safety/moderation controls; defer it entirely for this launch phase; consider a more limited, public-only communication model (comments, which already exist) instead.
+
+- [x] Decision: **Do not add private direct messaging during this launch phase.**
+- Approver: Adult operator (identity retained in a private operational record, not committed to this repository)
+- Date: 2026-08-29
+- Implementation status: N/A — decision not to build. Matches current product state (the feature does not exist today).
 
 ---
 
 ## Summary checklist
 
-Use this as a quick at-a-glance view. Nothing here is checked off by this document — check a box only once the corresponding decision above has a real answer, approver, and date filled in.
+**A checked box means a real decision, approver, and date exists below — it does not mean the corresponding product behavior has been implemented.** See each item's "Implementation status" line above for what's actually built today, and the specification document's "Remaining implementation prerequisites" section for the consolidated list of what's still outstanding.
 
-- [ ] 1. Adult operator named
-- [ ] 2. Business-entity question resolved
-- [ ] 3. Official contact email chosen
-- [ ] 4. Lawful address approach chosen (no home address in Git, ever)
-- [ ] 5. Target countries/states decided
-- [ ] 6. Minimum age decided
-- [ ] 7. Under-13 approach decided (prohibited, or reviewed parental-consent system)
-- [ ] 8. Teen (13-17) safeguards decided
-- [ ] 9. Signup-closed-until-review posture confirmed or changed
-- [ ] 10. Data-retention periods decided
-- [ ] 11. Account-deletion and legal-hold approach decided
-- [ ] 12. Anonymized feedback / moderation-audit retention decided
-- [ ] 13. User-content ownership/license decided
-- [ ] 14. Prohibited-content and enforcement approach finalized
-- [ ] 15. Copyright/DMCA contact and process established
-- [ ] 16. Analytics/cookie approach decided
-- [ ] 17. Vendor DPA review decided
-- [ ] 18. Incident/breach-notification process defined
-- [ ] 19. Accessibility/legal contact mechanism decided
-- [ ] 20. Final approvers named for each legal document
-- [ ] 21. Attorney-review decision made
-- [ ] 22. Version/change-log process decided
+- [x] 1. Adult operator named (identity kept private — see item 1)
+- [x] 2. Business-entity question resolved (individual)
+- [x] 3. Official contact email chosen (`support@specboundapp.com`, confirmed functional)
+- [x] 4. Lawful address approach chosen (no public address at this time; no home address in Git, ever)
+- [x] 5. Target countries/states decided (worldwide viewable; U.S.-only registration/launch market) — *not yet implemented*
+- [x] 6. Minimum age decided (13) — *not yet implemented*
+- [x] 7. Under-13 approach decided (prohibited; attestation-based, not birthdate/geolocation) — *not yet implemented*
+- [x] 8. Teen (13-17) safeguards decided (public-visibility warnings, not differentiated defaults) — *not yet implemented*
+- [x] 9. Signup-closed-until-review posture confirmed (invite gating stays on until 3 named prerequisites are live)
+- [x] 10. Data-retention periods decided (indefinite while account exists; deletion/anonymization via approved process)
+- [x] 11. Account-deletion and legal-hold approach decided (self-service deletion required before public registration; documented private legal hold) — *not yet implemented*
+- [x] 12. Anonymized feedback / moderation-audit retention decided (feedback: matches current behavior; moderation audit: requires a schema change) — *moderation-audit half not yet implemented*
+- [x] 13. User-content ownership/license decided (user-owned, non-exclusive license to Specbound) — *not yet drafted into Terms*
+- [x] 14. Prohibited-content and enforcement approach finalized (Community Guidelines incorporated into Terms; proportionate vs. immediate removal) — *not yet drafted into Terms*
+- [x] 15. Copyright/DMCA contact and process established (`support@specboundapp.com`; formal agent registration deferred) — *intake process not yet implemented*
+- [x] 16. Analytics/cookie approach decided (Cloudflare only; no new tracking without review)
+- [x] 17. Vendor DPA review decided (review Supabase/Cloudflare now; review new vendors before adoption) — *review not yet performed*
+- [x] 18. Incident/breach-notification process defined (checklist; adult operator handles escalation) — *not yet implemented*
+- [x] 19. Accessibility/legal contact mechanism decided (`support@specboundapp.com`, shared address) — *not yet published on legal pages*
+- [x] 20. Final approvers named for each legal document (adult operator, all documents)
+- [x] 21. Attorney-review decision made (no attorney review planned for initial U.S.-only launch — explicit decision, not a necessity claim)
+- [x] 22. Version/change-log process decided (reuse Community Guidelines pattern; re-acceptance only for material changes) — *not yet extended to Privacy Policy/Terms*
+- [x] 23. Affiliate program participation decided (Amazon Associates active, U.S.-only) — *not yet wired into live rendering*
+- [x] 24. Direct-messaging scope decided (not added during this launch phase)
 
 ---
 
 ## Related documents
 
-- `docs/milestones/MILESTONE_27B_LEGAL_READINESS_SPECIFICATION.md` — full technical detail and source citations behind every item above.
+- `docs/milestones/MILESTONE_27B_LEGAL_READINESS_SPECIFICATION.md` — full technical detail, source citations, and the "Remaining implementation prerequisites" section behind every item above.
 - `docs/OPERATIONS.md` §10 — the account-deletion procedure referenced in items 11-12.
 - `docs/ROADMAP.md` — where this milestone sits relative to the rest of Specbound's plan.
