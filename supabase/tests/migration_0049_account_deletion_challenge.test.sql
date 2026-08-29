@@ -8,7 +8,11 @@
 -- superseding migration_0048_self_delete_account.test.sql's own
 -- coverage of the now-dropped zero-argument version. See this file's
 -- own security-property tests (2-6) for the exact gaps the review
--- found and this migration fixes.
+-- found and this migration fixes, and test 7e/7f specifically for the
+-- SECOND bug the same review found: 0048's original retry ordering
+-- unconditionally recomputed the Storage-path capture query, silently
+-- losing already-captured paths on any retry after the first
+-- successful call.
 --
 -- IMPORTANT — mocking `auth.jwt()`: this suite sets the
 -- `request.jwt.claims` GUC to a full JSON object (including `sub` and
@@ -55,6 +59,13 @@ insert into auth.users (id, email, raw_user_meta_data) values
     ('00000000-0000-0000-0000-000000001501', 'm0049-user@example.invalid', '{"username": "m0049_user"}'::jsonb),
     ('00000000-0000-0000-0000-000000001502', 'm0049-other@example.invalid', '{"username": "m0049_other"}'::jsonb)
 on conflict (id) do nothing;
+
+-- Gives u1 a real, non-empty Storage path to capture -- needed so test
+-- 7's retry check (below) can prove a real path survives a retry,
+-- rather than trivially "surviving" an already-empty array.
+update public.profiles
+    set avatar_path = 'avatars/00000000-0000-0000-0000-000000001501/512.jpg'
+    where id = '00000000-0000-0000-0000-000000001501';
 
 -- ---------------------------------------------------------------------
 -- Test 1: the OLD zero-argument self_delete_account() no longer exists
@@ -291,6 +302,7 @@ do $$
 declare
     v_token uuid;
     v_job_id uuid;
+    v_paths text[];
 begin
     perform pg_temp.set_test_jwt(
         '00000000-0000-0000-0000-000000001501',
@@ -298,12 +310,17 @@ begin
     );
     select public.request_account_deletion_challenge() into v_token;
 
-    select job_id into v_job_id from public.self_delete_account(v_token);
+    select job_id, storage_paths into v_job_id, v_paths from public.self_delete_account(v_token);
 
     if v_job_id is null then
         raise exception 'FAIL (test 7a): no job_id returned from the real deletion call' using errcode = 'M0049';
     end if;
     raise notice 'PASS (test 7a): real deletion call succeeds with a freshly-issued token, returns a job_id';
+
+    if v_paths is distinct from array['avatars/00000000-0000-0000-0000-000000001501/512.jpg']::text[] then
+        raise exception 'FAIL (test 7a2): unexpected captured Storage-path array on the FIRST call: %', v_paths using errcode = 'M0049';
+    end if;
+    raise notice 'PASS (test 7a2): the first call correctly captures the real avatar path (%)', v_paths;
 end $$;
 reset role;
 
@@ -328,17 +345,78 @@ begin
     raise notice 'PASS (test 7d): the consumed challenge row is gone -- single-use confirmed';
 end $$;
 
--- Replay: the exact same token, used again, must fail identically to
--- any other invalid token -- proving atomic single-use consumption,
--- not merely "checked, not enforced."
+-- ---------------------------------------------------------------------
+-- Test 7e/7f: retry -- a SECOND call to self_delete_account(), for the
+-- same account, with a FRESH challenge (the account still exists in
+-- auth.users in this test harness, even though its profile/builds are
+-- already gone -- exactly the "DB-complete, Auth-pending" state a real
+-- retry after an Edge Function crash before admin.deleteUser() would be
+-- in). Must resolve to the SAME job row and return the SAME,
+-- previously-captured Storage paths -- not an empty array, which is
+-- exactly the bug this migration's own header documents finding and
+-- fixing (0048's original ordering recomputed the capture query
+-- unconditionally, silently losing it on any retry).
+-- ---------------------------------------------------------------------
 do $$
+declare
+    v_token_2 uuid;
+    v_job_id_2 uuid;
+    v_job_id_1 uuid;
+    v_paths_2 text[];
 begin
-    perform pg_temp.set_test_jwt('00000000-0000-0000-0000-000000001501', '[]'::jsonb);
-    -- (auth.uid() no longer resolves to a real account at this point in
-    -- a live system, but this RPC's own auth.uid()-null check and the
-    -- challenge lookup both still function correctly against a
-    -- nonexistent/already-deleted user id -- this test targets the
-    -- challenge-replay property specifically, independent of that.)
+    select id into v_job_id_1 from public.account_deletion_jobs where former_user_id = '00000000-0000-0000-0000-000000001501';
+
+    perform pg_temp.set_test_jwt(
+        '00000000-0000-0000-0000-000000001501',
+        jsonb_build_array(jsonb_build_object('method', 'password', 'timestamp', extract(epoch from now())::bigint))
+    );
+    select public.request_account_deletion_challenge() into v_token_2;
+
+    select job_id, storage_paths into v_job_id_2, v_paths_2 from public.self_delete_account(v_token_2);
+
+    if v_job_id_2 <> v_job_id_1 then
+        raise exception 'FAIL (test 7e): retry created a new job row (%) instead of resuming % ', v_job_id_2, v_job_id_1 using errcode = 'M0049';
+    end if;
+    raise notice 'PASS (test 7e): retry resumes the same job row';
+
+    if v_paths_2 is distinct from array['avatars/00000000-0000-0000-0000-000000001501/512.jpg']::text[] then
+        raise exception 'FAIL (test 7f): retry returned % instead of the originally-captured path -- this is exactly the storage-path-loss bug this migration fixes', v_paths_2 using errcode = 'M0049';
+    end if;
+    raise notice 'PASS (test 7f): retry returns the ORIGINALLY-captured path, not an empty array -- the storage-path-loss bug is fixed';
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------
+-- Test 7g: replay -- the FIRST token (already consumed by test 7a) is
+-- rejected if presented again, identically to any other invalid token
+-- -- proving atomic single-use consumption, not merely "checked, not
+-- enforced." Captured and used within the same DO block so the
+-- variable stays in scope.
+-- ---------------------------------------------------------------------
+do $$
+declare
+    v_replay_token uuid;
+begin
+    perform pg_temp.set_test_jwt(
+        '00000000-0000-0000-0000-000000001501',
+        jsonb_build_array(jsonb_build_object('method', 'password', 'timestamp', extract(epoch from now())::bigint))
+    );
+    -- A fresh token, immediately consumed once (simulating "the first
+    -- token" for a clean replay test, independent of test 7a/7e's own
+    -- already-consumed tokens above).
+    select public.request_account_deletion_challenge() into v_replay_token;
+    perform public.self_delete_account(v_replay_token);
+
+    begin
+        perform public.self_delete_account(v_replay_token);
+        raise exception 'FAIL (test 7g): the same token was accepted a second time -- single-use consumption is not actually enforced' using errcode = 'M0049';
+    exception when others then
+        if sqlerrm like '%Deletion authorization is invalid or has expired%' then
+            raise notice 'PASS (test 7g): replaying an already-consumed token is correctly rejected';
+        else
+            raise exception 'FAIL (test 7g): rejected for the wrong reason: %', sqlerrm using errcode = 'M0049';
+        end if;
+    end;
 end $$;
 reset role;
 

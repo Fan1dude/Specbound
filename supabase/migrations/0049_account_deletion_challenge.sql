@@ -76,11 +76,21 @@
 --   caller without a valid challenge learns nothing about hold status
 --   either way.
 --
---   Everything else in `self_delete_account()`'s body — Storage-path
---   capture, `builds`/`build_revisions`/`profiles` cleanup, job
---   creation/resumption, the self-attributed audit row exactly once per
---   deletion event — is unchanged from `0048`; only the caller-facing
---   signature and the new leading challenge-consumption step differ.
+--   A second, independent fix found during the same review, applied to
+--   `self_delete_account()`'s body here (0048's original ordering had
+--   this bug): the job-existence check now happens BEFORE the
+--   Storage-path capture query and the `builds`/`build_revisions`/
+--   `profiles` deletes, not after. On a genuine retry (a job row
+--   already exists — the first call's deletes already committed), the
+--   capture query would find nothing, since `builds`/`profiles` for
+--   this account are already gone — re-running it unconditionally, as
+--   0048 did, would silently REPLACE the correctly-captured paths from
+--   the first call with an empty array, causing Storage cleanup to
+--   skip every file this account ever used. The retry branch now reuses
+--   the existing job's own `storage_paths` instead of recomputing them,
+--   and skips the destructive statements entirely (harmless no-ops
+--   against already-gone rows either way, but there's no reason to
+--   re-run them).
 --
 -- Touches: none besides the new table/functions and dropping `0048`'s
 -- zero-argument `self_delete_account()`. Does not modify `0044`-`0048`'s
@@ -89,9 +99,10 @@
 -- Rollback: see 0049_account_deletion_challenge_rollback.sql in
 -- supabase/rollbacks/. Restores `0048`'s original zero-argument
 -- `self_delete_account()` verbatim and drops the new table/RPC —
--- explicitly flagged in the rollback's own header as reintroducing the
--- `iat`-only gap this migration exists to fix, so rolling back requires
--- reintroducing an equivalent protection before this is used again.
+-- explicitly flagged in the rollback's own header as reintroducing BOTH
+-- the `iat`-only reauthentication gap and the retry storage-path-loss
+-- bug this migration fixes, so rolling back requires reintroducing
+-- equivalent protection for both before this is used again.
 
 begin;
 
@@ -202,40 +213,59 @@ begin
         raise exception 'Your request could not be completed. Contact support@specboundapp.com.';
     end if;
 
-    -- Everything below is unchanged from 0048_self_delete_account.sql —
-    -- see that migration's own header for the full per-step rationale.
+    -- Security-review fix over 0048's original ordering: which branch
+    -- runs is decided BEFORE any capture/delete happens, and on a
+    -- retry, the storage-path capture query is never re-run at all —
+    -- see the retry branch's own comment below for why re-running it
+    -- would silently lose the originally-captured paths.
     select id into v_existing_job_id
     from public.account_deletion_jobs
     where former_user_id = v_user_id;
 
-    select coalesce(array_agg(distinct p) filter (where p is not null), '{}')
-    into v_paths
-    from (
-        select avatar_path as p from public.profiles where id = v_user_id and avatar_path is not null
-
-        union all
-
-        select rm.storage_path as p
-        from public.revision_media rm
-        join public.build_revisions br on br.id = rm.revision_id
-        join public.builds b on b.id = br.build_id
-        where b.user_id = v_user_id
-
-        union all
-
-        select pm.storage_path as p
-        from public.project_media pm
-        join public.project_drafts pd on pd.id = pm.draft_id
-        where pd.user_id = v_user_id
-    ) as all_paths;
-
-    delete from public.builds where user_id = v_user_id;
-
-    update public.build_revisions set user_id = null where user_id = v_user_id;
-
-    delete from public.profiles where id = v_user_id;
-
     if v_existing_job_id is null then
+        -- First call for this account: capture Storage paths BEFORE
+        -- any delete below, in the same transaction, so the answer can
+        -- never observe a state the deletes have already changed —
+        -- same ordering rule 0043_delete_build.sql's own header already
+        -- establishes for the identical reason. Legacy avatar_url-only
+        -- rows are deliberately excluded (see this migration's header).
+        select coalesce(array_agg(distinct p) filter (where p is not null), '{}')
+        into v_paths
+        from (
+            select avatar_path as p from public.profiles where id = v_user_id and avatar_path is not null
+
+            union all
+
+            select rm.storage_path as p
+            from public.revision_media rm
+            join public.build_revisions br on br.id = rm.revision_id
+            join public.builds b on b.id = br.build_id
+            where b.user_id = v_user_id
+
+            union all
+
+            select pm.storage_path as p
+            from public.project_media pm
+            join public.project_drafts pd on pd.id = pm.draft_id
+            where pd.user_id = v_user_id
+        ) as all_paths;
+
+        -- builds -> cascades to build_revisions/revision_media/
+        -- comments/likes/saved_builds/build_view_cooldowns/
+        -- notifications for those builds specifically (pre-existing
+        -- FKs, unrelated to 0044).
+        delete from public.builds where user_id = v_user_id;
+
+        -- Any build_revisions row this account authored on a build it
+        -- does NOT own — clear, never delete (see this migration's
+        -- header).
+        update public.build_revisions set user_id = null where user_id = v_user_id;
+
+        -- No automatic FK does this on production (0044) — explicit,
+        -- prevents recreating the known orphan-profile condition
+        -- (docs/OPERATIONS.md §10.12).
+        delete from public.profiles where id = v_user_id;
+
         insert into public.account_deletion_jobs (former_user_id, state, storage_paths)
         values (v_user_id, 'db_prepared', v_paths)
         returning id into v_job_id;
@@ -243,8 +273,22 @@ begin
         insert into public.moderation_actions (actor_id, action_type, target_type, target_id, note)
         values (v_user_id, 'account_deleted', 'profile', v_user_id, 'Self-service account deletion.');
     else
+        -- Retry (an earlier successful call already committed builds/
+        -- profiles being gone, per the job row's existence): the
+        -- capture query above would now find nothing — those source
+        -- rows no longer exist — and re-running it would silently
+        -- REPLACE the correctly-captured paths from the first call with
+        -- an empty array, causing Storage cleanup to skip every file
+        -- this account ever used. Reuse the job's already-captured
+        -- paths instead; the destructive statements above are also
+        -- skipped entirely (they would be harmless no-ops against
+        -- already-gone rows, but there is no reason to re-run them).
+        select storage_paths into v_paths
+        from public.account_deletion_jobs
+        where id = v_existing_job_id;
+
         update public.account_deletion_jobs
-            set state = 'db_prepared', storage_paths = v_paths
+            set state = 'db_prepared'
             where id = v_existing_job_id;
 
         v_job_id := v_existing_job_id;

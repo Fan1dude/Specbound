@@ -1,10 +1,17 @@
 -- Rollback for: 0049_account_deletion_challenge
 --
 -- WARNING: this restores 0048's original zero-argument
--- self_delete_account() — i.e., it REINTRODUCES the iat-only
--- reauthentication gap 0049 exists to fix. Do not run this rollback and
+-- self_delete_account() verbatim — i.e., it REINTRODUCES BOTH bugs
+-- 0049 exists to fix: (1) the iat-only reauthentication gap (no
+-- challenge/amr check at all in the restored function — reauthentication
+-- would need to be re-verified some other way before this is safe to
+-- use again), and (2) the retry storage-path-loss bug (the restored
+-- function unconditionally re-runs its Storage-path capture query
+-- before checking whether a job already exists, so a retried call after
+-- a first successful one would silently overwrite the correctly-
+-- captured paths with an empty array). Do not run this rollback and
 -- leave the delete-account Edge Function pointed at the restored
--- function without also reintroducing an equivalent protection first.
+-- function without addressing both first.
 --
 -- Drops request_account_deletion_challenge() and
 -- account_deletion_challenges (destroying any outstanding, unconsumed
