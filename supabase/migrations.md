@@ -1843,14 +1843,93 @@ recorded as applied, not the original application date or actor.
   would have wrongly accepted; a fresh `password` entry issues a real
   token; a second request supersedes, not accumulates, the first; an
   invalid/foreign token rejected with no destructive step run; cross-
-  user token binding proven directly; the full real deletion flow
-  end-to-end; replay of an already-consumed token rejected; function
-  identity/`SECURITY DEFINER`/ACL for both new functions; zero
-  client-readable policies on the new table) — written, not executed
-  (see Status above). `supabase/tests/migration_0048_self_delete_account.test.sql`
-  is kept unmodified as a historical record of `0048`'s own,
-  now-superseded behavior — its own header now discloses this and
-  points here.
+  user token binding proven directly; **a legal-hold rejection rolls
+  back challenge consumption along with the rest of the failed
+  transaction, so the same token remains valid for a safe retry until
+  expiration (test 6e/6f, added in a second review pass)**; the full
+  real deletion flow end-to-end; replay of an already-consumed token
+  rejected; function identity/`SECURITY DEFINER`/ACL for both new
+  functions; zero client-readable policies on the new table) — written,
+  not executed (see Status above).
+  `supabase/tests/superseded/migration_0048_self_delete_account.superseded.sql`
+  (moved out of `supabase/tests/` and renamed off the `.test.sql`
+  pattern in the same second review pass — see that file's own header
+  and `supabase/tests/superseded/README.md`) is kept unmodified in its
+  actual test logic as a historical record of `0048`'s own,
+  now-superseded behavior.
 - **Context**: Launch Readiness self-service account deletion, PR
   review fix. Found and fixed before this feature was deployed anywhere
   — no production account was ever at risk from this gap.
+
+## 0050_account_deletion_recovery
+
+- **Status**: Proposed — not yet applied to production. Not executed in
+  the authoring session (same environmental limitation as `0044`-`0049`).
+- **File**: `migrations/0050_account_deletion_recovery.sql`
+- **Rollback**: `rollbacks/0050_account_deletion_recovery_rollback.sql`
+  — refuses to proceed if any `account_deletion_jobs` row is currently
+  claimed (`claimed_at is not null`); otherwise drops the three new
+  functions and the three new columns. After rollback,
+  `supabase/functions/account-deletion-recovery` can no longer do
+  anything (its own RPCs are gone).
+- **Second security-review fix** (same PR as `0049`, later review pass):
+  closes a gap that review explicitly disclosed as unaddressed —
+  once `auth.admin.deleteUser()` succeeds, the former user has no valid
+  session, so `delete-account` can never be invoked again on their
+  behalf to resume a failed Storage cleanup or retry a failed Auth
+  deletion. This migration adds the database primitives a restricted
+  recovery worker needs:
+  - `account_deletion_jobs` (`0047`) gains `claimed_at`/`claimed_by` (a
+    lease) and `recovery_attempts` (bounded retry counter for the
+    Auth-deletion phase, mirroring the existing
+    `storage_cleanup_attempts` for the Storage phase).
+  - `claim_account_deletion_jobs(p_worker_id, p_limit, p_lease_seconds,
+    p_max_attempts)` — atomically claims only `'db_prepared'`/
+    `'auth_deleted'` jobs under their own attempt bound and not under a
+    live lease, via `FOR UPDATE SKIP LOCKED`, so two concurrent workers
+    can never claim the same row.
+  - `record_account_deletion_auth_result(p_job_id, p_success,
+    p_error_code, p_max_attempts)` and
+    `record_account_deletion_storage_result(p_job_id,
+    p_remaining_paths, p_error_code, p_max_attempts)` — record a
+    claimed job's outcome, moving it to `'failed'` only once its own
+    bound is exhausted; every update is gated on the job still being in
+    its expected starting state, so a call against a job that already
+    moved on is a safe no-op (`returns boolean`, `false` on no-op).
+  - All three: `revoke all ... from public`, `grant execute ... to
+    service_role` only — never `anon`, never `authenticated`.
+  - Also fixes two real bugs found in the ORIGINAL (non-recovery)
+    `delete-account` Edge Function's own Storage step while building
+    this: it always set `state = 'storage_cleaned'` regardless of
+    whether Storage removal actually succeeded, and hardcoded
+    `storage_cleanup_attempts` to the literal `1` on every call, never
+    truly incrementing it. Both are now fixed at the source — the
+    Edge Function's own bookkeeping now goes through
+    `record_account_deletion_storage_result()`, the single place that
+    decision is made, shared with the recovery worker so the two paths
+    cannot drift apart on what counts as success. Storage removal
+    itself is now attempted one path at a time
+    (`removeStoragePathsIndividually()`,
+    `supabase/functions/delete-account/lib.ts`, shared by both Edge
+    Functions), so one bad path never makes every other path look like
+    it also failed.
+- **Testing**: `supabase/tests/migration_0050_account_deletion_recovery.test.sql`
+  (default column values; only resumable states are ever claimed;
+  a job at its attempt bound is not claimed; claim exclusivity under a
+  live lease and reclaimability once a lease expires; success/failure
+  recording for both phases, including repeated execution against an
+  already-finished or already-moved-on job being a safe no-op; partial
+  Storage-path success preserving only the real remainder rather than
+  marking the job complete; final completion only once nothing remains;
+  `service_role`-only ACL for all three functions) — written, not
+  executed (see Status above). The "already-deleted Auth user counts as
+  idempotent success" classification itself is JS-level logic
+  (`isUserAlreadyDeletedError()`,
+  `supabase/functions/account-deletion-recovery/lib.ts`), covered in
+  that function's own `index.test.ts`, not here — this file only
+  verifies the SQL layer treats a reported success uniformly regardless
+  of which of those two cases produced it.
+- **Context**: Launch Readiness self-service account deletion, second
+  PR review pass (recovery/resume requirement). Found and fixed before
+  this feature was deployed anywhere — no production account was ever
+  at risk from either gap this migration closes.

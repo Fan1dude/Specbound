@@ -291,6 +291,70 @@ end $$;
 rollback to savepoint test_6;
 
 -- ---------------------------------------------------------------------
+-- Test 6e/6f: a failed deletion-preparation transaction rolls back
+-- challenge consumption, allowing a safe retry until expiration. A
+-- legal hold is the easiest way to force self_delete_account() to
+-- raise AFTER it has already deleted the challenge row (0049's own
+-- ordering: challenge consumption happens first, the legal-hold check
+-- second) but BEFORE the calling statement commits -- proving the
+-- challenge deletion is inside the SAME transaction as the rest of the
+-- function body, not committed separately. If this were not true, a
+-- user rejected for a legal hold would burn their only challenge and
+-- have no way to retry (pointlessly, since the hold would still block
+-- them, but the failure MODE matters -- "try again with a fresh
+-- password entry" must remain available for every OTHER rejection
+-- reason, and this is the one case in this function's own body where a
+-- consumed-then-rolled-back token is directly observable).
+-- ---------------------------------------------------------------------
+savepoint test_6e;
+do $$
+begin
+    insert into public.legal_holds (user_id, reason)
+    values ('00000000-0000-0000-0000-000000001501', 'M0049 test hold.');
+end $$;
+
+do $$
+declare
+    v_token uuid;
+begin
+    perform pg_temp.set_test_jwt(
+        '00000000-0000-0000-0000-000000001501',
+        jsonb_build_array(jsonb_build_object('method', 'password', 'timestamp', extract(epoch from now())::bigint))
+    );
+    select public.request_account_deletion_challenge() into v_token;
+
+    begin
+        perform public.self_delete_account(v_token);
+        raise exception 'FAIL (test 6e): deletion succeeded despite an active legal hold' using errcode = 'M0049';
+    exception when others then
+        if sqlerrm like '%Your request could not be completed%' then
+            raise notice 'PASS (test 6e): legal hold correctly rejects the first attempt (%)', sqlerrm;
+        else
+            raise exception 'FAIL (test 6e): rejected for the wrong reason: %', sqlerrm using errcode = 'M0049';
+        end if;
+    end;
+
+    -- The SAME token, presented again: if the first call's challenge
+    -- deletion had actually committed (i.e. was NOT rolled back with
+    -- the rest of that failed call), this would now fail with "invalid
+    -- or has expired" instead -- proving the token did NOT survive.
+    begin
+        perform public.self_delete_account(v_token);
+        raise exception 'FAIL (test 6f): deletion succeeded on the retry despite the still-active legal hold' using errcode = 'M0049';
+    exception when others then
+        if sqlerrm like '%Your request could not be completed%' then
+            raise notice 'PASS (test 6f): the SAME token is still valid after the failed attempt -- challenge consumption was rolled back along with the rest of that transaction, allowing a safe retry until expiration';
+        elsif sqlerrm like '%Deletion authorization is invalid or has expired%' then
+            raise exception 'FAIL (test 6f): the token was consumed even though the transaction that consumed it failed -- challenge consumption is NOT actually rolled back with the rest of self_delete_account(), so a rejected user loses their only challenge for no reason' using errcode = 'M0049';
+        else
+            raise exception 'FAIL (test 6f): rejected for the wrong reason: %', sqlerrm using errcode = 'M0049';
+        end if;
+    end;
+end $$;
+reset role;
+rollback to savepoint test_6e;
+
+-- ---------------------------------------------------------------------
 -- Test 7: the real end-to-end flow -- request a challenge, consume it
 -- via self_delete_account(), confirm it cannot be replayed a second
 -- time, and confirm the underlying deletion behavior (builds/profile

@@ -32,7 +32,7 @@
 // than the verified caller.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
-import { errorResponseBody, type DeleteAccountErrorCode } from "./lib.ts";
+import { errorResponseBody, removeStoragePathsIndividually, type DeleteAccountErrorCode } from "./lib.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -68,21 +68,51 @@ function logInternal(stage: string, error: unknown) {
     console.error(`delete-account: ${stage} failed:`, error);
 }
 
-// Updates the durable job row via the service-role client, which
-// bypasses RLS by Supabase's own default posture for that role —
-// account_deletion_jobs has zero client policies (0047), so this is the
-// only way any of these updates can happen at all. Never throws — a
-// failure to update job bookkeeping must never mask or override the
-// actual deletion outcome it's trying to record.
-async function updateJob(
+// Records an Auth-deletion outcome via record_account_deletion_auth_result()
+// (0050) — the same service-role-only RPC the account-deletion-recovery
+// worker uses for its own retries, so a job's state transitions happen
+// through exactly one code path regardless of which caller drove them.
+// Never throws — a failure to update job bookkeeping must never mask or
+// override the actual deletion outcome it's trying to record.
+async function recordAuthResult(
     adminClient: ReturnType<typeof createClient>,
     jobId: string,
-    fields: Record<string, unknown>
+    success: boolean,
+    errorCode: string | null
 ) {
     try {
-        await adminClient.from("account_deletion_jobs").update(fields).eq("id", jobId);
+        const { error } = await adminClient.rpc("record_account_deletion_auth_result", {
+            p_job_id: jobId,
+            p_success: success,
+            p_error_code: errorCode
+        });
+        if (error) logInternal("record_account_deletion_auth_result", error);
     } catch (error) {
-        logInternal("updateJob", error);
+        logInternal("record_account_deletion_auth_result", error);
+    }
+}
+
+// Records a Storage-cleanup outcome via
+// record_account_deletion_storage_result() (0050) — `remainingPaths` is
+// the full set still outstanding after this attempt, not a delta; the
+// RPC only marks the job complete when this is empty, and only
+// increments storage_cleanup_attempts here, never anywhere else. Never
+// throws, for the same reason as recordAuthResult() above.
+async function recordStorageResult(
+    adminClient: ReturnType<typeof createClient>,
+    jobId: string,
+    remainingPaths: string[],
+    errorCode: string | null
+) {
+    try {
+        const { error } = await adminClient.rpc("record_account_deletion_storage_result", {
+            p_job_id: jobId,
+            p_remaining_paths: remainingPaths,
+            p_error_code: errorCode
+        });
+        if (error) logInternal("record_account_deletion_storage_result", error);
+    } catch (error) {
+        logInternal("record_account_deletion_storage_result", error);
     }
 }
 
@@ -195,56 +225,64 @@ Deno.serve(async req => {
 
         if (error) {
             logInternal("admin.deleteUser", error);
-            await updateJob(adminClient, jobId, {
-                state: "failed",
-                last_error_code: "auth_admin_failed"
-            });
-            // The database side already committed and is safely
-            // retryable (self_delete_account() resolves to the same job
-            // row on a second call, per 0049's own header) — the
-            // caller's session is still valid at this point, since Auth
-            // deletion did not succeed, so a retry from the client is a
-            // legitimate recovery path, not a dead end. A retry will
-            // request and consume a fresh challenge token (the one used
-            // here is already gone) — that's expected, not a problem,
-            // since the underlying account still exists and a fresh
-            // `amr` password entry is still required either way.
+            // record_account_deletion_auth_result() (0050) leaves the
+            // job in 'db_prepared' with recovery_attempts incremented
+            // (moving to 'failed' only once its own bound is reached) —
+            // this function's own first attempt counts as attempt 1 of
+            // that same bound, not a separate, uncounted try. The
+            // database side already committed and is safely retryable
+            // (self_delete_account() resolves to the same job row on a
+            // second call, per 0049's own header) — the caller's session
+            // is still valid at this point, since Auth deletion did not
+            // succeed, so a retry from the client is a legitimate
+            // recovery path, not a dead end; the account-deletion-
+            // recovery worker (0050) is a second, independent path that
+            // does not require the client to retry at all. A client
+            // retry will request and consume a fresh challenge token
+            // (the one used here is already gone) — that's expected, not
+            // a problem, since the underlying account still exists and a
+            // fresh `amr` password entry is still required either way.
+            await recordAuthResult(adminClient, jobId, false, "auth_admin_failed");
             return fail("auth_admin_failed", 500);
         }
     } catch (error) {
         logInternal("admin.deleteUser", error);
-        await updateJob(adminClient, jobId, {
-            state: "failed",
-            last_error_code: "auth_admin_failed"
-        });
+        await recordAuthResult(adminClient, jobId, false, "auth_admin_failed");
         return fail("auth_admin_failed", 500);
     }
 
-    await updateJob(adminClient, jobId, { state: "auth_deleted" });
+    await recordAuthResult(adminClient, jobId, true, null);
 
     // --- Step 3: Storage cleanup — best-effort, never blocks or ---
     // --- reverses the deletion above, which has already succeeded. ---
+    // Removes each path individually (removeStoragePathsIndividually(),
+    // lib.ts) so one bad path cannot make every OTHER path look like it
+    // also failed, then records ONLY the genuinely still-outstanding
+    // remainder — record_account_deletion_storage_result() (0050) is
+    // what decides whether the job is actually complete, never this
+    // function directly, and it only reaches 'storage_cleaned' when that
+    // remainder is empty. If anything remains, the job stays in
+    // 'auth_deleted' and account-deletion-recovery (0050) will retry it
+    // on its own schedule — this function does not loop or block on
+    // that itself, matching its own "best-effort, never blocks" success
+    // response below.
+    let remainingPaths: string[] = [];
     let storageErrorCode: string | null = null;
 
     if (storagePaths.length > 0) {
-        try {
-            const { error } = await adminClient.storage.from(PROJECT_IMAGES_BUCKET).remove(storagePaths);
-            if (error) {
-                logInternal("storage.remove", error);
-                storageErrorCode = "storage_cleanup_partial";
-            }
-        } catch (error) {
-            logInternal("storage.remove", error);
+        const outcome = await removeStoragePathsIndividually(
+            adminClient.storage,
+            PROJECT_IMAGES_BUCKET,
+            storagePaths
+        );
+        remainingPaths = outcome.remainingPaths;
+        if (remainingPaths.length > 0) {
+            logInternal("storage.remove", new Error(`${remainingPaths.length} path(s) still outstanding`));
             storageErrorCode = "storage_cleanup_partial";
         }
     }
 
-    await updateJob(adminClient, jobId, {
-        state: "storage_cleaned",
-        last_error_code: storageErrorCode,
-        storage_cleanup_attempts: 1,
-        completed_at: new Date().toISOString()
-    });
+    await recordStorageResult(adminClient, jobId, remainingPaths, storageErrorCode);
 
     // Success is reported once Auth deletion has succeeded, regardless
     // of Storage outcome — an orphaned Storage object is a disclosed,

@@ -1,5 +1,7 @@
--- Migration 0048 test —
--- supabase/tests/migration_0048_self_delete_account.test.sql
+-- Migration 0048 test (SUPERSEDED — see below) —
+-- supabase/tests/superseded/migration_0048_self_delete_account.superseded.sql
+-- (moved here from supabase/tests/migration_0048_self_delete_account.test.sql;
+-- see this repository's own PR history for why)
 --
 -- SUPERSEDED, disclosed here rather than silently left stale: PR review
 -- found that 0048's zero-argument self_delete_account() relied on the
@@ -13,16 +15,32 @@
 -- valid against a database with 0048 applied and 0049 NOT YET applied —
 -- a state that will never persist in any real deployment, since 0049
 -- ships as an immediate, same-PR follow-up, never adopted separately.
--- Running this file against the current migration chain (0000-0049) WILL
+-- Running this file against the current migration chain (0000-0050) WILL
 -- fail (the zero-argument function this file tests no longer exists) —
 -- that is expected, not a regression. **The current, authoritative
 -- coverage for self-service account deletion is
--- supabase/tests/migration_0049_account_deletion_challenge.test.sql**,
--- which re-verifies every property below under the new signature and
--- adds the challenge-specific security properties. This file is kept,
--- unmodified in its actual test logic, only as a historical record of
--- what 0048 itself did before the fix — per this repository's "do not
--- rewrite old migrations" convention extended to their test coverage.
+-- supabase/tests/migration_0049_account_deletion_challenge.test.sql**
+-- (and, for the recovery worker, migration_0050_account_deletion_recovery.test.sql),
+-- which re-verify every property below under the new signature and add
+-- the challenge/recovery-specific security properties.
+--
+-- SECOND security-review finding (this PR) moved this file out of
+-- supabase/tests/ entirely, into supabase/tests/superseded/, and
+-- renamed its extension from `.test.sql` to `.superseded.sql`: this
+-- repository's documented test-run command (docs/DEPLOYMENT.md §8)
+-- iterates `supabase/tests/*.test.sql` and expects every file it runs to
+-- pass — leaving a file THERE that is designed to fail (see above) would
+-- make that command permanently, deliberately broken, which defeats its
+-- purpose as a real "did every active test pass" signal. Moving it here
+-- is option 2 the review offered ("move/rename it outside the executable
+-- test pattern as historical documentation") rather than option 1
+-- (rewriting it to test 0049's/0050's API) — this repository's own "do
+-- not rewrite old migrations" convention, already extended to this
+-- file's own test LOGIC below (kept verbatim, unmodified), is extended
+-- once more to cover WHERE that logic lives: a file documenting what an
+-- earlier, now-superseded design actually did is itself a small piece of
+-- history, not something to quietly rewrite into looking like it always
+-- tested the current API.
 --
 -- Original scope (0048, in isolation, pre-0049): anonymous rejection,
 -- legal-hold rejection (with a generic message, never distinguishing it

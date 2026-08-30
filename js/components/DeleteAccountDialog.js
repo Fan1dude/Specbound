@@ -13,11 +13,13 @@ import { escapeHtml } from "../utils/escapeHtml.js";
 // attentive action. Password re-entry here is the FIRST half of
 // reauthentication (client-side confirmation the user typed their
 // current password correctly, verified via signInWithPassword() by the
-// caller of this dialog) — the delete-account Edge Function separately,
-// server-side, enforces that the resulting session is actually recent
-// (see supabase/functions/delete-account/lib.ts's
-// isRecentlyAuthenticated()), so this dialog's own password field is
-// not, by itself, the security boundary.
+// caller of this dialog) — request_account_deletion_challenge() (
+// supabase/migrations/0049_account_deletion_challenge.sql) separately,
+// server-side, checks the resulting session's own `auth.jwt() -> 'amr'`
+// claim for a genuinely recent `password` entry (not just a fresh JWT —
+// see that migration's own header for why `iat` alone was insufficient),
+// so this dialog's own password field is not, by itself, the security
+// boundary.
 export const DELETE_ACCOUNT_CONFIRMATION_PHRASE = "DELETE MY ACCOUNT";
 
 export function deleteAccountDialog() {

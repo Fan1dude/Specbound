@@ -150,6 +150,19 @@ supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<the project's actual service-rol
 3. `0046_legal_holds.sql` — the private hold table and its two staff-gated RPCs.
 4. `0047_account_deletion_jobs.sql` — the durable orchestration table.
 5. `0049_account_deletion_challenge.sql` — the private, single-use challenge table, `request_account_deletion_challenge()`, and `self_delete_account(uuid)`, the RPC this Edge Function calls. **Supersedes `0048_self_delete_account.sql`** — that migration's zero-argument function is dropped by `0049`, not left callable alongside it; `0048` must still be applied first (`0049` depends on it), but `0049` is what this Edge Function actually targets. See `0049`'s own header for why the zero-argument version was insufficient (it relied on a caller-checked JWT `iat` claim, which Supabase's own routine token-refresh advances without re-verifying the password) and `docs/DEPLOYMENT.md`'s own PR history for the security-review finding that produced this migration.
+6. `0050_account_deletion_recovery.sql` — three new `account_deletion_jobs` columns (`claimed_at`/`claimed_by`/`recovery_attempts`) and the three `service_role`-only functions `§8.2` below's Edge Function calls. Also changes what `delete-account`'s own Step 2/3 job bookkeeping calls (`record_account_deletion_auth_result()`/`record_account_deletion_storage_result()` instead of a raw table update) — deploy `delete-account` itself no earlier than this migration, or its first two RPC calls to those functions will fail (function does not exist yet).
+
+**Running the SQL test suite** (all of `0044`-`0050`, against a disposable local stack only — never production):
+
+```
+supabase db reset --local
+for f in supabase/tests/*.test.sql; do
+    echo "=== $f ==="
+    psql "$(supabase status -o env --local | grep DB_URL | cut -d= -f2- | tr -d '"')" -v ON_ERROR_STOP=1 -f "$f" || { echo "FAILED: $f"; break; }
+done
+```
+
+This is the complete, documented command — it must run every file under `supabase/tests/*.test.sql` and every one must pass. `supabase/tests/superseded/*.superseded.sql` is deliberately NOT matched by this glob (see that directory's own `README.md`) — those files test an earlier, now-replaced design and are expected to fail if run directly against the current migration chain; that is not a regression and is not part of this command's own success criterion.
 
 **Production verification checklist, once deployed** (none of this has been performed yet — this function has not been deployed anywhere beyond implementation review):
 
@@ -160,7 +173,46 @@ supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<the project's actual service-rol
 - Confirm a legal hold placed on a disposable test account (via `place_legal_hold()`) blocks deletion with the generic `db_prep_failed`-shaped response, never a response distinguishable from any other failure.
 - Confirm `account_deletion_jobs` **and** `account_deletion_challenges` rows are genuinely unreachable via the anon/publishable key from the browser (RLS enabled, zero policies) — the same kind of direct-REST-API check this document's own Launch Readiness Audit history already establishes as standard practice for a sensitive table.
 
-**Non-atomicity, disclosed explicitly**: this function spans three genuinely separate systems (Postgres, the Supabase Auth Admin API, Storage) with no cross-system transaction — see `supabase/functions/delete-account/index.ts`'s own header and `public.account_deletion_jobs` (`0047`) for the full retry/recovery design. A partial failure never leaves the database half-cleaned with the Auth user still reachable in an inconsistent way; the worst case is a delayed-but-eventually-consistent completion via retry, tracked in `account_deletion_jobs`.
+**Non-atomicity, disclosed explicitly**: this function spans three genuinely separate systems (Postgres, the Supabase Auth Admin API, Storage) with no cross-system transaction — see `supabase/functions/delete-account/index.ts`'s own header and `public.account_deletion_jobs` (`0047`) for the full retry/recovery design. A partial failure never leaves the database half-cleaned with the Auth user still reachable in an inconsistent way; the worst case is a delayed-but-eventually-consistent completion via retry — either the same user's own client retrying `delete-account` (while their session is still valid — see below for the case where it no longer is), or `account-deletion-recovery` (§8.2).
+
+### 8.2 `account-deletion-recovery` — restricted resume worker (implementation-reviewed, NOT yet deployed to production)
+
+Closes a gap `§8.1`'s own original review disclosed: once `auth.admin.deleteUser()` succeeds, the former user has no valid session, so `delete-account` can never be invoked again on their behalf — there was previously no way to resume a Storage cleanup failure, or an Auth-deletion failure, once the client side of that specific attempt was gone. This function has no user-facing caller at all; it is never linked from `js/`, never invoked by `supabase.functions.invoke()`, and carries no user JWT of any kind — see its own `index.ts` header for the full security-boundary reasoning, summarized here only for the deploy procedure.
+
+**Deploy command** (from the repository root, once linked to the target project):
+
+```
+supabase functions deploy account-deletion-recovery --project-ref <project-ref>
+```
+
+**Requires one new secret, set once before first deploy** (independent of `delete-account`'s own `SUPABASE_SERVICE_ROLE_KEY`, which this function also needs and shares):
+
+```
+supabase secrets set ACCOUNT_DELETION_RECOVERY_SECRET=<a long, random value generated for this purpose only> --project-ref <project-ref>
+```
+
+**Never**: reuse any other secret in this codebase for this value, paste it into this repository, a commit, a terminal transcript that gets saved anywhere, a screenshot, or this document. Generate it fresh (e.g. `openssl rand -hex 32`, run locally, output entered directly into `supabase secrets set` — never saved to an intermediate file). Same posture `§8.1` already requires for the service-role key itself.
+
+**Requires migration `0050_account_deletion_recovery.sql`** applied first (see the migration list in `§8.1` above) — this function's every RPC call (`claim_account_deletion_jobs`, `record_account_deletion_auth_result`, `record_account_deletion_storage_result`) will fail with "function does not exist" until it is.
+
+**How it is invoked/scheduled** — two supported options, neither of which is set up yet (this function has not been deployed anywhere beyond implementation review):
+
+1. **Supabase's own scheduled Cron** (`pg_cron` + `pg_net`, configured via the Supabase dashboard's Database → Cron Jobs, or a migration calling `cron.schedule()`) — the recommended option for ongoing production use. The scheduled job calls this function's deployed URL via `net.http_post()`, with `x-recovery-secret` sourced from a Supabase Vault secret, never hardcoded into the cron job definition itself. A reasonable starting cadence is every 15-30 minutes — frequent enough that a failed Storage cleanup or Auth-deletion attempt does not sit unresolved for long, infrequent enough that it is never a meaningful load concern (`JOBS_PER_RUN = 10` per invocation, see the function's own `index.ts`).
+2. **Manual, operator-run invocation** — for a one-off check or before Cron is set up:
+
+```
+curl -X POST "https://<project-ref>.supabase.co/functions/v1/account-deletion-recovery" \
+  -H "x-recovery-secret: <the secret, entered directly, never from a file>"
+```
+
+**Which secret protects it**: `ACCOUNT_DELETION_RECOVERY_SECRET` alone — this function's own `supabase/config.toml` entry sets `verify_jwt = false` deliberately (see that entry's own comment for why a Supabase Auth JWT check would be actively misleading here, not merely redundant). A request missing the header, or presenting the wrong value, is rejected `401` before any database call — see `isAuthorizedRecoveryRequest()`/`timingSafeEqual()` in the function's own `lib.ts`.
+
+**Production verification checklist, once deployed** (none of this has been performed yet):
+
+- Confirm a request with no `x-recovery-secret` header, and a request with a wrong one, both return `401 {"error":"unauthorized"}` with zero database activity (check no new rows/updates in `account_deletion_jobs`, and nothing in Postgres logs for this request).
+- Confirm the correct secret, POSTed with no claimable jobs queued, returns `200 {"claimed":0,"results":[]}`.
+- Using a genuinely disposable test account only: drive it through `delete-account` far enough to land in `'db_prepared'` or `'auth_deleted'` deliberately (e.g. by having Storage cleanup fail — a bucket policy or path that will not remove cleanly on a disposable test project only), then invoke this function manually and confirm the job reaches `'auth_deleted'`/`'storage_cleaned'` as appropriate, with `storage_paths` reduced correctly, not reset to the original list.
+- Confirm `anon`/`authenticated` PostgREST calls to `claim_account_deletion_jobs`/`record_account_deletion_auth_result`/`record_account_deletion_storage_result` are rejected with a permission error, directly against the REST API with a real anon/authenticated key — not just the SQL-level `has_function_privilege()` check `migration_0050_account_deletion_recovery.test.sql` already covers.
 
 ---
 

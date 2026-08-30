@@ -81,7 +81,8 @@ export function renderDeleteAccountSection(user, { redirectTo = url => { window.
                 // internal/Postgres/Auth/Storage error text to the user,
                 // and must never distinguish a legal-hold rejection from
                 // any other failure (see supabase/migrations/
-                // 0048_self_delete_account.sql's own identical posture).
+                // 0049_account_deletion_challenge.sql's self_delete_account(),
+                // which carries this same posture forward from 0048).
                 showToast(GENERIC_FAILURE_MESSAGE, "error");
             }
         } finally {
