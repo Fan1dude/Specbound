@@ -253,6 +253,53 @@
     }
 }
 
+/* Launch Readiness self-service account deletion —
+   DeleteAccountDialog.js's confirmation dialog. Same widened-and-darker
+   treatment as .modal-guidelines above (two real text inputs plus
+   longer explanatory copy need more room than the base 420px), scoped
+   separately since this dialog has no relationship to Community
+   Guidelines and shouldn't be coupled to that class's own future
+   changes. */
+.modal-delete-account {
+    max-width: min(460px, 92vw);
+    background: var(--surface-card);
+}
+
+.delete-account-field {
+    margin: var(--space-2) 0;
+}
+
+.delete-account-field label {
+    display: block;
+    margin-bottom: var(--space-0-5);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+@media (max-width: 700px) {
+    .modal.modal-delete-account {
+        top: 50%;
+        left: 50%;
+        width: min(360px, 92vw);
+        height: auto;
+        max-width: min(360px, 92vw);
+        max-height: 85vh;
+        margin: 0;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-xl);
+        transform: translate(-50%, -50%) scale(0.96);
+        overflow-y: auto;
+    }
+
+    .modal.modal-delete-account.is-open {
+        transform: translate(-50%, -50%) scale(1);
+    }
+
+    .modal.modal-delete-account::backdrop {
+        background: rgba(10, 11, 15, 0.72);
+    }
+}
+
 /* Wider variant for the paste-and-review import flow — needs room for a
    textarea and a review list, unlike the fixed-width confirm dialog this
    component's base styles were designed around. */

@@ -1657,3 +1657,418 @@ recorded as applied, not the original application date or actor.
   function, or policy. No `DELETE` policy is added to `public.builds` —
   `delete_build()` remains the only path, matching every other protected
   write in this schema.
+
+## 0044_normalize_user_deletion_fks
+
+- **Status**: Proposed — not yet applied to production. **Not executed
+  in the authoring session** — no `supabase` CLI, no reachable Docker
+  daemon, and no `psql` were available in this environment (confirmed:
+  `which supabase`/`which psql` found nothing, `docker ps` could not
+  reach a running daemon). Written and reviewed against both the
+  reconstructed-baseline and production-confirmed starting shapes; must
+  be run against the local disposable Supabase/Docker stack before this
+  migration is considered verified.
+- **File**: `migrations/0044_normalize_user_deletion_fks.sql`
+- **Rollback**: `rollbacks/0044_normalize_user_deletion_fks_rollback.sql`
+  — restores the reconstructed-baseline shape (CASCADE on all three FKs),
+  explicitly flagged in the rollback's own header as not a claim that
+  shape is correct for production.
+- **Converges a documented schema-drift discrepancy** between
+  `0000_baseline_pre_tracked_tables.sql` (reconstructed; claims
+  `profiles.id`/`builds.user_id`/`build_revisions.user_id` are all `ON
+  DELETE CASCADE`) and `docs/OPERATIONS.md` §10 (live `pg_constraint`
+  introspection against production, later directly re-confirmed:
+  `profiles.id`/`builds.user_id` have no FK to `auth.users` at all;
+  `build_revisions.user_id` has one, but `NO ACTION`) — production is
+  confirmed authoritative. Uses read-before-write PL/pgSQL (queries
+  `pg_constraint` by `confrelid`, not by assumed constraint name) so the
+  same migration file converges either starting shape correctly.
+- **Testing**: `supabase/tests/migration_0044_fresh_install.test.sql` and
+  `supabase/tests/migration_0044_legacy_upgrade.test.sql` (the latter
+  using the new `supabase/tests/fixtures/production_shaped_user_deletion_fks_fixture.sql`
+  to simulate production's real starting shape locally) — both written,
+  neither executed (see Status above).
+- **Context**: Launch Readiness self-service account deletion,
+  foundation pass. Prerequisite for `0048`'s RPC, which explicitly
+  deletes `builds`/`profiles`/`build_revisions` rather than relying on a
+  cascade that production does not actually have.
+
+## 0045_moderation_actions_preserve_audit
+
+- **Status**: Proposed — not yet applied to production. Not executed in
+  the authoring session (same environmental limitation as `0044`).
+- **File**: `migrations/0045_moderation_actions_preserve_audit.sql`
+- **Rollback**: `rollbacks/0045_moderation_actions_preserve_audit_rollback.sql`
+  — aborts (rather than proceeding) if any row's `actor_id` is already
+  null, since restoring `NOT NULL` would otherwise fail against or
+  destroy a real anonymized audit record.
+- **Implements decision packet item 12** — `moderation_actions.actor_id`
+  becomes nullable, `ON DELETE CASCADE` becomes `ON DELETE SET NULL`.
+  **Hard prerequisite for `0048`**: a self-deletion's own
+  `account_deleted` audit row is authored with `actor_id` = the deleting
+  user's own id, so without this fix every self-deletion's audit trail
+  would destroy itself the instant `auth.users` is actually removed.
+- **Testing**: `supabase/tests/migration_0045_moderation_actions_preserve_audit.test.sql`
+  — written, not executed (see Status above).
+- **Context**: Launch Readiness self-service account deletion.
+
+## 0046_legal_holds
+
+- **Status**: Proposed — not yet applied to production. Not executed in
+  the authoring session (same environmental limitation as `0044`).
+- **File**: `migrations/0046_legal_holds.sql`
+- **Rollback**: `rollbacks/0046_legal_holds_rollback.sql` — drops
+  `place_legal_hold()`/`release_legal_hold()` and the `legal_holds`
+  table. Destroys any recorded hold state.
+- **Adds**: `public.legal_holds` (RLS enabled, zero client policies for
+  any role — same maximally-restrictive pattern as
+  `public.catalog_moderators`), `place_legal_hold(p_user_id uuid,
+  p_reason text)` and `release_legal_hold(p_user_id uuid)` (both
+  staff-gated via `is_platform_staff()`, `SECURITY DEFINER`). Hold
+  existence and reason are never exposed to the held user or any
+  publicly-readable table — see `0048`'s RPC for the generic-failure
+  check that consumes this table without ever returning its contents.
+- **Testing**: `supabase/tests/migration_0046_legal_holds.test.sql` —
+  written, not executed (see Status above).
+- **Context**: Launch Readiness self-service account deletion. Decision
+  packet item 11.
+
+## 0047_account_deletion_jobs
+
+- **Status**: Proposed — not yet applied to production. Not executed in
+  the authoring session (same environmental limitation as `0044`).
+- **File**: `migrations/0047_account_deletion_jobs.sql`
+- **Rollback**: `rollbacks/0047_account_deletion_jobs_rollback.sql` —
+  drops the table and its trigger. Destroys any in-flight or historical
+  orchestration records.
+- **Adds**: `public.account_deletion_jobs` (RLS enabled, zero client
+  policies). `former_user_id` is deliberately a plain `uuid`, not a
+  foreign key to `auth.users` — the same "survives its own subject's
+  deletion" pattern `content_reports.target_id`/`moderation_actions.target_id`
+  already use, since this row's entire purpose is to outlive the
+  `auth.users` row it tracks. Reuses the shared `public.set_updated_at()`
+  trigger function (`0001`) rather than defining a new one.
+- **Testing**: `supabase/tests/migration_0047_account_deletion_jobs.test.sql`
+  — written, not executed (see Status above).
+- **Context**: Launch Readiness self-service account deletion. Makes the
+  three-system (Postgres/Auth/Storage) orchestration in
+  `supabase/functions/delete-account` idempotent and recoverable after
+  partial failure.
+
+## 0048_self_delete_account
+
+- **Status**: Proposed — not yet applied to production. Not executed in
+  the authoring session (same environmental limitation as `0044`).
+- **File**: `migrations/0048_self_delete_account.sql`
+- **Rollback**: `rollbacks/0048_self_delete_account_rollback.sql` —
+  drops `self_delete_account()`. Cannot restore any account already
+  deleted through this function — permanent, real data loss by design.
+- **Adds**: `self_delete_account() returns table(job_id uuid,
+  storage_paths text[])` — `SECURITY DEFINER`, `search_path = public,
+  pg_temp`, `EXECUTE` revoked from `public`/`anon`, granted only to
+  `authenticated`. Takes **no parameters** — the caller is derived
+  exclusively from `auth.uid()`, structurally preventing any caller from
+  naming a different account. Checks for an active legal hold first
+  (generic failure, `0046`); captures Storage paths (avatar, revision-
+  media, project-media, excluding legacy `avatar_url`-only rows) before
+  any delete; explicitly deletes the caller's own `builds` (cascading to
+  their `build_revisions`/`revision_media`/etc.) and `profiles` row (no
+  automatic FK does this on production, per `0044`); clears — never
+  deletes — any `build_revisions` row the caller authored on a build
+  they don't own; creates or resumes a durable job row (`0047`);
+  inserts a self-attributed `moderation_actions` audit row exactly once
+  per deletion event, even across a retried call.
+- **Testing**: originally `supabase/tests/migration_0048_self_delete_account.test.sql`
+  (anonymous rejection, no-parameter/security proof, legal-hold
+  rejection with a generic message, Storage-path capture correctness,
+  the authored-but-not-owned `build_revisions` clear-not-delete case,
+  idempotent retry with no duplicate audit row, function identity/
+  `SECURITY DEFINER`/`search_path`/ACL) — written, not executed (see
+  Status above). Since moved, unmodified, to
+  `supabase/tests/superseded/migration_0048_self_delete_account.superseded.sql`
+  (see the `0050` entry below for why).
+- **Context**: Launch Readiness self-service account deletion. The
+  transactional database half of `supabase/functions/delete-account`;
+  see `docs/DEPLOYMENT.md` §8.1 for the full deployment sequence and
+  `docs/OPERATIONS.md` §10 for how this relates to the existing manual
+  procedure. **Superseded by `0049` before this ever shipped** — see
+  that entry below.
+
+## 0049_account_deletion_challenge
+
+- **Status**: Proposed — not yet applied to production. Not executed in
+  the authoring session (same environmental limitation as `0044`-`0048`).
+- **File**: `migrations/0049_account_deletion_challenge.sql`
+- **Rollback**: `rollbacks/0049_account_deletion_challenge_rollback.sql`
+  — WARNING: restores `0048`'s original zero-argument
+  `self_delete_account()`, reintroducing the gap this migration fixes.
+  Drops `account_deletion_challenges` and
+  `request_account_deletion_challenge()`, destroying any outstanding
+  unconsumed challenge (harmless — a caller simply requests a new one).
+- **Security-review fix**: `0048`'s zero-argument `self_delete_account()`
+  relied on the delete-account Edge Function checking the caller's JWT
+  `iat` claim for "recent reauthentication." That check was
+  insufficient — Supabase's own refresh-token grant mints a new access
+  token, with a new `iat`, **without re-verifying the password at all**
+  (confirmed directly against `supabase/auth`'s own source,
+  `internal/models/amr.go`: each `(session_id, authentication_method)`
+  pair is its own row, updated only when that specific method is
+  actually satisfied — a token refresh records its own
+  `token_refresh`-tagged entry and never touches the `password` entry's
+  timestamp for that session). This migration:
+  - Drops `self_delete_account()` (zero-argument) outright — not left
+    callable alongside the fix, which would have left the bypass fully
+    open.
+  - Adds `public.account_deletion_challenges` (RLS enabled, zero client
+    policies) and `request_account_deletion_challenge()` (`SECURITY
+    DEFINER`, no parameters), which checks the caller's own
+    `auth.jwt() -> 'amr'` for a `password` entry within the last 5
+    minutes — the GoTrue-native, refresh-immune signal, read via
+    Supabase's own supported `auth.jwt()` Postgres helper, never
+    decoded or trusted client-side. Fails closed if `amr` is absent
+    entirely. Issues a short-lived (2-minute), single-use token,
+    replacing (not accumulating) any prior unconsumed one.
+  - Adds `self_delete_account(p_challenge_token uuid)`, replacing the
+    dropped zero-argument version. Consumes the challenge atomically via
+    a single `DELETE ... WHERE user_id = auth.uid() AND token = ... AND
+    expires_at > now() RETURNING ...` — the row's absence afterward IS
+    the single-use guarantee. A missing, expired, foreign (another
+    user's), or already-consumed token all fail identically, checked
+    before the (unchanged) legal-hold query. Every other step —
+    Storage-path capture, `builds`/`build_revisions`/`profiles` cleanup,
+    job creation/resumption, the self-attributed audit row exactly once
+    per deletion event — is unchanged from `0048`.
+- **Testing**: `supabase/tests/migration_0049_account_deletion_challenge.test.sql`
+  (zero-argument function confirmed gone; challenge rejected with no
+  `amr` claim and with a stale `password` entry alongside a recent
+  `token_refresh` entry — the exact scenario the old `iat`-only check
+  would have wrongly accepted; a fresh `password` entry issues a real
+  token; a second request supersedes, not accumulates, the first; an
+  invalid/foreign token rejected with no destructive step run; cross-
+  user token binding proven directly; **a legal-hold rejection rolls
+  back challenge consumption along with the rest of the failed
+  transaction, so the same token remains valid for a safe retry until
+  expiration (test 6e/6f, added in a second review pass)**; the full
+  real deletion flow end-to-end; replay of an already-consumed token
+  rejected; function identity/`SECURITY DEFINER`/ACL for both new
+  functions; zero client-readable policies on the new table) — written,
+  not executed (see Status above).
+  `supabase/tests/superseded/migration_0048_self_delete_account.superseded.sql`
+  (moved out of `supabase/tests/` and renamed off the `.test.sql`
+  pattern in the same second review pass — see that file's own header
+  and `supabase/tests/superseded/README.md`) is kept unmodified in its
+  actual test logic as a historical record of `0048`'s own,
+  now-superseded behavior.
+- **Context**: Launch Readiness self-service account deletion, PR
+  review fix. Found and fixed before this feature was deployed anywhere
+  — no production account was ever at risk from this gap.
+
+## 0050_account_deletion_recovery
+
+- **Status**: Proposed — not yet applied to production. Not executed in
+  the authoring session (same environmental limitation as `0044`-`0049`).
+- **File**: `migrations/0050_account_deletion_recovery.sql`
+- **Rollback**: `rollbacks/0050_account_deletion_recovery_rollback.sql`
+  — refuses to proceed if any `account_deletion_jobs` row is currently
+  claimed (`claimed_at is not null`); otherwise drops the three new
+  functions and the three new columns. After rollback,
+  `supabase/functions/account-deletion-recovery` can no longer do
+  anything (its own RPCs are gone).
+- **Second security-review fix** (same PR as `0049`, later review pass):
+  closes a gap that review explicitly disclosed as unaddressed —
+  once `auth.admin.deleteUser()` succeeds, the former user has no valid
+  session, so `delete-account` can never be invoked again on their
+  behalf to resume a failed Storage cleanup or retry a failed Auth
+  deletion. This migration adds the database primitives a restricted
+  recovery worker needs:
+  - `account_deletion_jobs` (`0047`) gains `claimed_at`/`claimed_by` (a
+    lease) and `recovery_attempts` (bounded retry counter for the
+    Auth-deletion phase, mirroring the existing
+    `storage_cleanup_attempts` for the Storage phase).
+  - `claim_account_deletion_jobs(p_worker_id, p_limit, p_lease_seconds,
+    p_max_attempts)` — atomically claims only `'db_prepared'`/
+    `'auth_deleted'` jobs under their own attempt bound and not under a
+    live lease, via `FOR UPDATE SKIP LOCKED`, so two concurrent workers
+    can never claim the same row.
+  - `record_account_deletion_auth_result(p_job_id, p_success,
+    p_error_code, p_max_attempts)` and
+    `record_account_deletion_storage_result(p_job_id,
+    p_remaining_paths, p_error_code, p_max_attempts)` — record a
+    claimed job's outcome, moving it to `'failed'` only once its own
+    bound is exhausted; every update is gated on the job still being in
+    its expected starting state, so a call against a job that already
+    moved on is a safe no-op (`returns boolean`, `false` on no-op).
+  - All three: `revoke all ... from public`, `grant execute ... to
+    service_role` only — never `anon`, never `authenticated`.
+  - Also fixes two real bugs found in the ORIGINAL (non-recovery)
+    `delete-account` Edge Function's own Storage step while building
+    this: it always set `state = 'storage_cleaned'` regardless of
+    whether Storage removal actually succeeded, and hardcoded
+    `storage_cleanup_attempts` to the literal `1` on every call, never
+    truly incrementing it. Both are now fixed at the source — the
+    Edge Function's own bookkeeping now goes through
+    `record_account_deletion_storage_result()`, the single place that
+    decision is made, shared with the recovery worker so the two paths
+    cannot drift apart on what counts as success. Storage removal
+    itself is now attempted one path at a time
+    (`removeStoragePathsIndividually()`,
+    `supabase/functions/delete-account/lib.ts`, shared by both Edge
+    Functions), so one bad path never makes every other path look like
+    it also failed.
+- **Testing**: `supabase/tests/migration_0050_account_deletion_recovery.test.sql`
+  (default column values; only resumable states are ever claimed;
+  a job at its attempt bound is not claimed; claim exclusivity under a
+  live lease and reclaimability once a lease expires; success/failure
+  recording for both phases, including repeated execution against an
+  already-finished or already-moved-on job being a safe no-op; partial
+  Storage-path success preserving only the real remainder rather than
+  marking the job complete; final completion only once nothing remains;
+  `service_role`-only ACL for all three functions) — written, not
+  executed (see Status above). The "already-deleted Auth user counts as
+  idempotent success" classification itself is JS-level logic
+  (`isUserAlreadyDeletedError()`,
+  `supabase/functions/account-deletion-recovery/lib.ts`), covered in
+  that function's own `index.test.ts`, not here — this file only
+  verifies the SQL layer treats a reported success uniformly regardless
+  of which of those two cases produced it.
+- **Context**: Launch Readiness self-service account deletion, second
+  PR review pass (recovery/resume requirement). Found and fixed before
+  this feature was deployed anywhere — no production account was ever
+  at risk from either gap this migration closes.
+
+## 0051_account_deletion_jobs_wall_clock_updated_at
+
+- **Status**: Proposed — not yet applied to production. Not executed in
+  the authoring session (same environmental limitation as `0044`-`0050`).
+  Real local Supabase/Docker testing of `0044`-`0050` (finally performed,
+  this pass) is what actually found the bug this migration fixes.
+- **File**: `migrations/0051_account_deletion_jobs_wall_clock_updated_at.sql`
+- **Rollback**: `rollbacks/0051_account_deletion_jobs_wall_clock_updated_at_rollback.sql`
+  — no data-loss guard needed (no column/row ever dropped or altered,
+  only which trigger function fires); restores the 0047-original shared
+  trigger, reintroducing this bug for this one table.
+- **Real-testing-found fix**: `migration_0047_account_deletion_jobs.test.sql`'s
+  own test 4 failed for real (`updated_at did not advance on UPDATE`,
+  identical before/after timestamps down to the microsecond). Root
+  cause: `public.set_updated_at()` (the SHARED trigger every
+  `updated_at` column in this codebase uses, `0001`) sets `new.updated_at
+  = now()` — and `now()` is `transaction_timestamp()`, constant for the
+  entire transaction regardless of real elapsed time (confirmed:
+  `pg_sleep()` genuinely blocks, but does not advance `now()`'s own
+  return value within the transaction that called it). Latent since
+  `0001`, for every table; `0047`'s own test happened to be the first in
+  this codebase to actually check multi-statement, same-transaction
+  advancement.
+  - **Intended guarantee, decided and documented**: for
+    `account_deletion_jobs` specifically — durable recovery bookkeeping
+    read by operators and the `0050` recovery worker — `updated_at` must
+    reflect real wall-clock time, including across a second UPDATE
+    within the same transaction (a real case in this PR's own code:
+    `record_account_deletion_auth_result()`/
+    `record_account_deletion_storage_result()`, `0050`, can each issue
+    two sequential UPDATEs to the same job row in one call).
+  - **Fix, deliberately scoped to this one table**: a new dedicated
+    trigger function, `set_account_deletion_jobs_updated_at()`, using
+    `clock_timestamp()` (which DOES advance within a transaction), swapped
+    onto `account_deletion_jobs`'s existing trigger. `public.set_updated_at()`
+    itself is left completely untouched — every other table using it
+    (`project_drafts`, `builds`, the catalog tables, `retailers`, etc.,
+    all outside this PR's scope) is unaffected. This same latent bug
+    likely affects some of them too, in principle — disclosed here as a
+    known, NOT-fixed-here systemic finding, not silently ignored and not
+    silently expanded into a global change without its own dedicated
+    review.
+  - `claimed_at` (`0050`) deliberately keeps using `now()` — a batch
+    claim should give every row in one claim call the identical
+    timestamp, and it is never compared against a same-transaction
+    write, only against an already-committed prior transaction's value.
+    `created_at`/`completed_at`/`account_deletion_challenges.expires_at`
+    are each written once per row, never re-compared within the same
+    transaction — all correctly unchanged. Claim ordering uses
+    `created_at`, never `updated_at` — unaffected either way.
+- **Testing**: `supabase/tests/migration_0051_account_deletion_jobs_wall_clock_updated_at.test.sql`
+  (the trigger now calls the dedicated function, confirmed by identity,
+  not just behavior; the dedicated function's own source genuinely
+  references `clock_timestamp()`; `public.set_updated_at()` and an
+  unrelated table's trigger — `project_drafts` — are both confirmed
+  untouched; ACL) — written, not executed (see Status above).
+  `migration_0047_account_deletion_jobs.test.sql`'s own test 4 updated
+  in place (test logic strengthened with a genuine second-UPDATE-same-
+  transaction case, test 4b, using a real `pg_sleep()`, not a weakened
+  assertion) rather than moved — the table and its `updated_at`
+  guarantee are unchanged in kind, only the underlying trigger
+  implementation is, so the original test's own intent still applies
+  and now actually passes.
+- **Context**: Launch Readiness self-service account deletion, third PR
+  review pass — the first pass in this PR to include real local
+  Supabase/Docker execution rather than static review alone. Found and
+  fixed before this feature was deployed anywhere.
+
+## 0052_fix_self_delete_account_column_ambiguity
+
+- **Status**: Proposed — not yet applied to production. Not executed in
+  the authoring session. Real local Supabase/Docker execution of
+  `migration_0049_account_deletion_challenge.test.sql` is what actually
+  found this bug — the first REAL RUNTIME FAILURE this PR has hit
+  (every earlier fix was found by static/structural review alone).
+- **File**: `migrations/0052_fix_self_delete_account_column_ambiguity.sql`
+- **Rollback**: `rollbacks/0052_fix_self_delete_account_column_ambiguity_rollback.sql`
+  — no data-loss guard needed (only a function body changes); explicitly
+  discloses it restores `0049`'s ORIGINAL, KNOWN-BROKEN body verbatim,
+  reintroducing the exact bug described below.
+- **Real-testing-found bug**: `self_delete_account(uuid)`'s retry branch
+  raised `ERROR: column reference "storage_paths" is ambiguous` on
+  every second call for the same account — a genuine function bug, not
+  a test-harness problem. Root cause: `returns table(job_id uuid,
+  storage_paths text[])` implicitly declares `storage_paths` as a
+  PL/pgSQL OUT variable in scope for the whole function body, colliding
+  with `account_deletion_jobs.storage_paths`, a real column of the
+  identical name; the retry branch's `select storage_paths into v_paths
+  from public.account_deletion_jobs where id = v_existing_job_id`
+  had no way to tell Postgres which one it meant.
+  - **Full audit performed, as required by this review**: every table
+    reference in the function now carries an explicit alias, and every
+    `SELECT ... INTO`/`RETURNING ... INTO`/bare column reference is
+    qualified by it — not just the one broken line. `job_id` (the
+    other OUT parameter) was checked explicitly and found NOT at risk
+    (the table's own primary key column is `id`, not `job_id` — no
+    real collision was ever possible there). `state` was checked
+    explicitly and found NOT at risk (never declared as a PL/pgSQL
+    variable in this function; `UPDATE`'s own `SET` target list is
+    always resolved against the target table, never against variables,
+    by Postgres grammar, regardless of naming).
+  - **0050's three recovery functions audited for the same class, as
+    required**: none modified — none were affected.
+    `claim_account_deletion_jobs()` is `LANGUAGE sql` (no declared
+    variables to collide with) and returns whole `account_deletion_jobs`
+    rows directly, never a custom `RETURNS TABLE(name type, ...)` shape
+    — this bug class cannot structurally arise there.
+    `record_account_deletion_auth_result()`/
+    `record_account_deletion_storage_result()` both `RETURNS boolean`
+    (no named OUT parameters at all); their own parameters are all
+    `p_`-prefixed and their locals `v_`-prefixed, matching no real
+    column name (`record_account_deletion_storage_result()`'s parameter
+    is `p_remaining_paths`, deliberately not `storage_paths` — the one
+    detail that would have mattered, and it does not match). `0050`'s
+    own file is untouched.
+- **Testing**: `supabase/tests/migration_0052_self_delete_account_column_ambiguity_fix.test.sql`
+  (new, self-contained, dedicated regression test — seeds its own real
+  non-empty avatar path, executes the first-call branch, then the
+  EXISTING-JOB RETRY branch specifically — the exact call that failed
+  in real local execution — and confirms it both raises no error and
+  returns the exact, unchanged, originally-captured path) — written,
+  not executed (see Status above; disclosed in the test file's own
+  header that testing THIS fix has not itself been run yet, only the
+  bug it fixes was found by real execution).
+  `migration_0049_account_deletion_challenge.test.sql`'s own tests
+  7e/7f already covered this same property conceptually (written
+  before this was known to be a real runtime failure, not just
+  reviewed code) — left unchanged; `0052`'s new file is deliberately
+  its own focused, minimal regression test for this specific fix, not
+  a replacement for that broader coverage.
+- **Context**: Launch Readiness self-service account deletion, fourth PR
+  review pass — real local SQL execution, not static review, is what
+  found this one. Found and fixed before this feature was deployed
+  anywhere; no production account was ever affected (the retry path has
+  never been reachable from production, since this feature has never
+  been deployed).

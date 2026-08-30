@@ -398,6 +398,21 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# account-deletion-recovery (0050) is never invoked with a user's
+# Supabase Auth session at all — its own authorization is a single
+# server-held secret (ACCOUNT_DELETION_RECOVERY_SECRET, checked inside
+# the function itself, see its own index.ts header), not a JWT. Setting
+# verify_jwt = false here is deliberate, not a relaxation: requiring a
+# valid Supabase Auth JWT on top of that secret would suggest a
+# signed-in user's session is a relevant credential for this function,
+# which it is not, for any role. delete-account (the user-facing
+# function) is intentionally left with no entry here, keeping its
+# default verify_jwt = true — every request to it must carry a real
+# user session, checked before this function's own reauthentication
+# logic even begins.
+[functions.account-deletion-recovery]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

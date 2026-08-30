@@ -126,7 +126,15 @@
             '"../../utils/icons.js"': blobUrl(iconsSpySrc),
             '"../../repositories/discordRepository.js"': blobUrl(discordRepoSpySrc),
             '"../../utils/modal.js"': blobUrl(modalMockSrc),
-            '"../../utils/discordAuthErrors.js"': blobUrl(discordAuthErrorsSpySrc)
+            '"../../utils/discordAuthErrors.js"': blobUrl(discordAuthErrorsSpySrc),
+            // Launch Readiness self-service account deletion — deliberately
+            // NOT mocked, same reasoning as discordConnectionTracker.js
+            // above: real, unmocked module. Its own top-level code no-ops
+            // safely when #deleteAccountBtn doesn't exist in this test's DOM
+            // fixture (js/pages/settings/renderDeleteAccountSection.js's own
+            // `if (!deleteBtn) return;` guard), so it has zero effect on
+            // this test's own Discord-focused assertions.
+            '"./renderDeleteAccountSection.js"': absUrl("../js/pages/settings/renderDeleteAccountSection.js")
         };
 
         let rewritten = realSrc;

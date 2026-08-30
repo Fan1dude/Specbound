@@ -125,6 +125,148 @@ Deploying the website **before** the migration is what would have produced the e
 
 Metadata extraction is always best-effort — manual product entry (title, price paid, free toggle, source) works with or without the Edge Function deployed, is never blocked by a fetch failure, and never requires a successful metadata fetch to add or publish a product.
 
+### 8.1 `delete-account` — self-service account deletion (implementation-reviewed, NOT yet deployed to production)
+
+**This is a genuine architectural first for this project: `delete-account` is the first Edge Function — and the first anything in this repository — that requires a service-role key.** `docs/OPERATIONS.md` §5 has stated since Milestone 27A "there is no service-role key... anywhere in this codebase to rotate... If that ever changes... this section will need real secret-management guidance that doesn't exist today." That change has now happened; §5's rotation guidance has been updated accordingly — read it before deploying this function.
+
+**Deploy command** (from the repository root, once linked to the target project):
+
+```
+supabase functions deploy delete-account --project-ref <project-ref>
+```
+
+**Requires one new secret, set once before first deploy:**
+
+```
+supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<the project's actual service-role key, from the Supabase dashboard's API settings> --project-ref <project-ref>
+```
+
+**Never**: paste the service-role key into this repository, a commit, a terminal transcript that gets saved anywhere, a screenshot, or this document. The command above is written with a placeholder deliberately — the real value is entered directly wherever you run the `supabase secrets set` command, from the Supabase dashboard, not copied through any intermediate file. `SUPABASE_URL`/`SUPABASE_ANON_KEY` continue to be auto-provided by Supabase for every deployed function, same as `product-metadata`.
+
+**Required migrations, in order, before this function is deployed** (see `supabase/migrations/0044`-`0049`'s own headers for the full rationale behind each):
+
+1. `0044_normalize_user_deletion_fks.sql` — converges the `profiles`/`builds`/`build_revisions` foreign-key discrepancy between the reconstructed baseline and production's actual, confirmed shape.
+2. `0045_moderation_actions_preserve_audit.sql` — `moderation_actions.actor_id` becomes nullable, `ON DELETE SET NULL` instead of `CASCADE`. **Deploying `delete-account` before this migration is applied would mean every self-deletion's own audit row destroys itself the instant the Auth user is actually removed** — see `0049_account_deletion_challenge.sql`'s own header for why this isn't just a departing-moderator edge case.
+3. `0046_legal_holds.sql` — the private hold table and its two staff-gated RPCs.
+4. `0047_account_deletion_jobs.sql` — the durable orchestration table.
+5. `0049_account_deletion_challenge.sql` — the private, single-use challenge table, `request_account_deletion_challenge()`, and `self_delete_account(uuid)`, the RPC this Edge Function calls. **Supersedes `0048_self_delete_account.sql`** — that migration's zero-argument function is dropped by `0049`, not left callable alongside it; `0048` must still be applied first (`0049` depends on it), but `0049` is what this Edge Function actually targets. See `0049`'s own header for why the zero-argument version was insufficient (it relied on a caller-checked JWT `iat` claim, which Supabase's own routine token-refresh advances without re-verifying the password) and `docs/DEPLOYMENT.md`'s own PR history for the security-review finding that produced this migration.
+6. `0050_account_deletion_recovery.sql` — three new `account_deletion_jobs` columns (`claimed_at`/`claimed_by`/`recovery_attempts`) and the three `service_role`-only functions `§8.2` below's Edge Function calls. Also changes what `delete-account`'s own Step 2/3 job bookkeeping calls (`record_account_deletion_auth_result()`/`record_account_deletion_storage_result()` instead of a raw table update) — deploy `delete-account` itself no earlier than this migration, or its first two RPC calls to those functions will fail (function does not exist yet).
+7. `0051_account_deletion_jobs_wall_clock_updated_at.sql` — not a hard functional blocker for either Edge Function (nothing fails without it), but should be applied before real production use: fixes `account_deletion_jobs.updated_at` so it genuinely reflects wall-clock time across multiple UPDATEs within one transaction (real local testing found the shared, codebase-wide `updated_at` trigger does not — see that migration's own header for the full root cause and why the fix is deliberately scoped to this one table).
+8. `0052_fix_self_delete_account_column_ambiguity.sql` — **hard blocker, do not deploy without it.** Real local execution found `self_delete_account(uuid)`'s RETRY branch (i.e. every self-deletion attempt after the first for the same account — a crash recovery, or a client retry after `admin.deleteUser()` failed) raises `column reference "storage_paths" is ambiguous` and fails outright. This migration recreates the function with every column reference explicitly qualified. See that migration's own header for the full root cause and its audit of the `0050` recovery functions for the same bug class (none found).
+
+**Running the SQL test suite — corrected.** A previous version of this section documented a single loop over `supabase/tests/*.test.sql` as if every file in that glob could run independently against one full `db reset --local`. **That was wrong**, caught by real local testing: three files are NOT independently runnable that way — each requires its own destructive, version-pinned reset plus a specific legacy fixture loaded BEFORE the remaining migrations run, or every assertion in it fails immediately with errors like `relation public._legacy_upgrade_pre_components does not exist`:
+
+- `migration_0020_0033_legacy_upgrade.test.sql` — reset to version `0019`, then `fixtures/legacy_catalog_fixture.sql`.
+- `migration_0042_legacy_upgrade.test.sql` — reset to version `0041`, then `fixtures/legacy_build_status_fixture.sql`.
+- `migration_0044_legacy_upgrade.test.sql` — reset to version `0043`, then `fixtures/production_shaped_user_deletion_fks_fixture.sql`.
+
+Each of those three files' own header already documents its exact required sequence (reset → inject fixture → `migration up` → run the test) — this section does not repeat it, only makes explicit that these three must be run **separately from, and never interleaved with,** the main loop below, and that the main loop must **exclude** them. `migration_0020_0033_fresh_install.test.sql` and `migration_0044_fresh_install.test.sql` are NOT in this category — despite the similar naming, both use a normal full `db reset --local` and belong in the main loop.
+
+**PowerShell (Windows — the primary shell for this repository):**
+
+```powershell
+# 1. Main loop — every test EXCEPT the three legacy-upgrade files above,
+#    against one full db reset (0000-latest).
+npx supabase db reset --local
+$dbUrl = (npx supabase status -o env --local | Where-Object { $_ -match '^DB_URL=' }) -replace '^DB_URL=', '' -replace '"', ''
+
+$mainTests = Get-ChildItem supabase/tests/*.test.sql | Where-Object { $_.Name -notlike '*_legacy_upgrade.test.sql' }
+foreach ($f in $mainTests) {
+    Write-Host "=== $($f.Name) ==="
+    psql $dbUrl -v ON_ERROR_STOP=1 -f $f.FullName
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "FAILED: $($f.Name)"
+        break
+    }
+}
+```
+
+```powershell
+# 2. The three legacy-upgrade files — run separately, each in its own
+#    version-pinned reset + fixture-injection cycle. Requires the local
+#    Supabase Postgres container's name (find it once with
+#    `docker ps --format "{{.Names}}"` -- the one whose image is
+#    supabase/postgres) and psql on PATH (or substitute the equivalent
+#    `docker exec -i <container> psql ...` form each file's own header
+#    already documents, if psql isn't installed locally).
+$container = "<the container name found above>"
+
+$legacyTests = @(
+    @{ Version = "0019"; Fixture = "supabase/tests/fixtures/legacy_catalog_fixture.sql"; Test = "supabase/tests/migration_0020_0033_legacy_upgrade.test.sql" },
+    @{ Version = "0041"; Fixture = "supabase/tests/fixtures/legacy_build_status_fixture.sql"; Test = "supabase/tests/migration_0042_legacy_upgrade.test.sql" },
+    @{ Version = "0043"; Fixture = "supabase/tests/fixtures/production_shaped_user_deletion_fks_fixture.sql"; Test = "supabase/tests/migration_0044_legacy_upgrade.test.sql" }
+)
+
+foreach ($t in $legacyTests) {
+    Write-Host "=== legacy harness: $($t.Test) (reset to $($t.Version)) ==="
+    npx supabase db reset --local --no-seed --version $($t.Version)
+    Get-Content $($t.Fixture) -Raw | docker exec -i $container psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f -
+    npx supabase migration up --local
+    Get-Content $($t.Test) -Raw | docker exec -i $container psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f -
+}
+```
+
+```powershell
+# 3. Restore the local stack to the full, current migration chain
+#    afterward -- step 2 above leaves the database pinned to an old
+#    version plus fixture data, not representative of a real instance.
+npx supabase db reset --local
+```
+
+**A fresh `db reset --local` is required**, not optional — three separate times in the sequence above (once before the main loop; implicitly once per legacy-upgrade file, since each pins to a different historical version; once more at the end to restore full-chain state) — and once again right now regardless, before running any of this, since this PR's own `0051` migration (and everything in this PR) did not exist in whatever local database state was used for the previous test run reported.
+
+**Accuracy correction**: the previous version of this section implied every file under `supabase/tests/*.test.sql` could be executed independently by the same simple loop. That is not true for the three legacy-upgrade files above, and is not claimed here. `supabase/tests/superseded/*.superseded.sql` remains excluded by the glob itself (see that directory's own `README.md`) — those files test an earlier, now-replaced design and are expected to fail if run directly against the current migration chain; that is not a regression.
+
+**Production verification checklist, once deployed** (none of this has been performed yet — this function has not been deployed anywhere beyond implementation review):
+
+- Confirm `verify_jwt` behavior matches this function's own manual JWT check (it verifies the caller itself via `userClient.auth.getUser()`, same pattern as `product-metadata`) — a request with no `Authorization` header returns `401 {"error":"auth_required"}` before any database or Auth Admin call runs.
+- Confirm a request from a session with **no recent password reauthentication** — including a session kept alive purely by Supabase's own automatic token refresh, never re-entering the password — is rejected with `401 {"error":"reauth_required"}` by `request_account_deletion_challenge()` (checked via `auth.jwt() -> 'amr'`, not the JWT's top-level `iat`; see `0049`'s own header), never proceeding to the database-preparation step. This is the specific case a security review found the original `iat`-only design did not actually protect against — verify it directly, not just that *some* reauth check exists.
+- Confirm a stale or already-used deletion-authorization challenge (an old token, someone else's token, or a token already consumed by an earlier successful/attempted call) is rejected by `self_delete_account(uuid)` with the same generic, non-distinguishing failure.
+- Using a genuinely disposable test account only, never a real one: confirm the full success path end-to-end (challenge issued → `self_delete_account()` commits → `auth.admin.deleteUser()` succeeds → Storage cleanup runs → `account_deletion_jobs` reaches `storage_cleaned`), then confirm the same test account can no longer sign in.
+- Confirm a legal hold placed on a disposable test account (via `place_legal_hold()`) blocks deletion with the generic `db_prep_failed`-shaped response, never a response distinguishable from any other failure.
+- Confirm `account_deletion_jobs` **and** `account_deletion_challenges` rows are genuinely unreachable via the anon/publishable key from the browser (RLS enabled, zero policies) — the same kind of direct-REST-API check this document's own Launch Readiness Audit history already establishes as standard practice for a sensitive table.
+
+**Non-atomicity, disclosed explicitly**: this function spans three genuinely separate systems (Postgres, the Supabase Auth Admin API, Storage) with no cross-system transaction — see `supabase/functions/delete-account/index.ts`'s own header and `public.account_deletion_jobs` (`0047`) for the full retry/recovery design. A partial failure never leaves the database half-cleaned with the Auth user still reachable in an inconsistent way; the worst case is a delayed-but-eventually-consistent completion via retry — either the same user's own client retrying `delete-account` (while their session is still valid — see below for the case where it no longer is), or `account-deletion-recovery` (§8.2).
+
+### 8.2 `account-deletion-recovery` — restricted resume worker (implementation-reviewed, NOT yet deployed to production)
+
+Closes a gap `§8.1`'s own original review disclosed: once `auth.admin.deleteUser()` succeeds, the former user has no valid session, so `delete-account` can never be invoked again on their behalf — there was previously no way to resume a Storage cleanup failure, or an Auth-deletion failure, once the client side of that specific attempt was gone. This function has no user-facing caller at all; it is never linked from `js/`, never invoked by `supabase.functions.invoke()`, and carries no user JWT of any kind — see its own `index.ts` header for the full security-boundary reasoning, summarized here only for the deploy procedure.
+
+**Deploy command** (from the repository root, once linked to the target project):
+
+```
+supabase functions deploy account-deletion-recovery --project-ref <project-ref>
+```
+
+**Requires one new secret, set once before first deploy** (independent of `delete-account`'s own `SUPABASE_SERVICE_ROLE_KEY`, which this function also needs and shares):
+
+```
+supabase secrets set ACCOUNT_DELETION_RECOVERY_SECRET=<a long, random value generated for this purpose only> --project-ref <project-ref>
+```
+
+**Never**: reuse any other secret in this codebase for this value, paste it into this repository, a commit, a terminal transcript that gets saved anywhere, a screenshot, or this document. Generate it fresh (e.g. `openssl rand -hex 32`, run locally, output entered directly into `supabase secrets set` — never saved to an intermediate file). Same posture `§8.1` already requires for the service-role key itself.
+
+**Requires migration `0050_account_deletion_recovery.sql`** applied first (see the migration list in `§8.1` above) — this function's every RPC call (`claim_account_deletion_jobs`, `record_account_deletion_auth_result`, `record_account_deletion_storage_result`) will fail with "function does not exist" until it is.
+
+**How it is invoked/scheduled** — two supported options, neither of which is set up yet (this function has not been deployed anywhere beyond implementation review):
+
+1. **Supabase's own scheduled Cron** (`pg_cron` + `pg_net`, configured via the Supabase dashboard's Database → Cron Jobs, or a migration calling `cron.schedule()`) — the recommended option for ongoing production use. The scheduled job calls this function's deployed URL via `net.http_post()`, with `x-recovery-secret` sourced from a Supabase Vault secret, never hardcoded into the cron job definition itself. A reasonable starting cadence is every 15-30 minutes — frequent enough that a failed Storage cleanup or Auth-deletion attempt does not sit unresolved for long, infrequent enough that it is never a meaningful load concern (`JOBS_PER_RUN = 10` per invocation, see the function's own `index.ts`).
+2. **Manual, operator-run invocation** — for a one-off check or before Cron is set up:
+
+```
+curl -X POST "https://<project-ref>.supabase.co/functions/v1/account-deletion-recovery" \
+  -H "x-recovery-secret: <the secret, entered directly, never from a file>"
+```
+
+**Which secret protects it**: `ACCOUNT_DELETION_RECOVERY_SECRET` alone — this function's own `supabase/config.toml` entry sets `verify_jwt = false` deliberately (see that entry's own comment for why a Supabase Auth JWT check would be actively misleading here, not merely redundant). A request missing the header, or presenting the wrong value, is rejected `401` before any database call — see `isAuthorizedRecoveryRequest()`/`timingSafeEqual()` in the function's own `lib.ts`.
+
+**Production verification checklist, once deployed** (none of this has been performed yet):
+
+- Confirm a request with no `x-recovery-secret` header, and a request with a wrong one, both return `401 {"error":"unauthorized"}` with zero database activity (check no new rows/updates in `account_deletion_jobs`, and nothing in Postgres logs for this request).
+- Confirm the correct secret, POSTed with no claimable jobs queued, returns `200 {"claimed":0,"results":[]}`.
+- Using a genuinely disposable test account only: drive it through `delete-account` far enough to land in `'db_prepared'` or `'auth_deleted'` deliberately (e.g. by having Storage cleanup fail — a bucket policy or path that will not remove cleanly on a disposable test project only), then invoke this function manually and confirm the job reaches `'auth_deleted'`/`'storage_cleaned'` as appropriate, with `storage_paths` reduced correctly, not reset to the original list.
+- Confirm `anon`/`authenticated` PostgREST calls to `claim_account_deletion_jobs`/`record_account_deletion_auth_result`/`record_account_deletion_storage_result` are rejected with a permission error, directly against the REST API with a real anon/authenticated key — not just the SQL-level `has_function_privilege()` check `migration_0050_account_deletion_recovery.test.sql` already covers.
+
 ---
 
 ## 9. Discord production configuration
