@@ -2003,3 +2003,72 @@ recorded as applied, not the original application date or actor.
   review pass — the first pass in this PR to include real local
   Supabase/Docker execution rather than static review alone. Found and
   fixed before this feature was deployed anywhere.
+
+## 0052_fix_self_delete_account_column_ambiguity
+
+- **Status**: Proposed — not yet applied to production. Not executed in
+  the authoring session. Real local Supabase/Docker execution of
+  `migration_0049_account_deletion_challenge.test.sql` is what actually
+  found this bug — the first REAL RUNTIME FAILURE this PR has hit
+  (every earlier fix was found by static/structural review alone).
+- **File**: `migrations/0052_fix_self_delete_account_column_ambiguity.sql`
+- **Rollback**: `rollbacks/0052_fix_self_delete_account_column_ambiguity_rollback.sql`
+  — no data-loss guard needed (only a function body changes); explicitly
+  discloses it restores `0049`'s ORIGINAL, KNOWN-BROKEN body verbatim,
+  reintroducing the exact bug described below.
+- **Real-testing-found bug**: `self_delete_account(uuid)`'s retry branch
+  raised `ERROR: column reference "storage_paths" is ambiguous` on
+  every second call for the same account — a genuine function bug, not
+  a test-harness problem. Root cause: `returns table(job_id uuid,
+  storage_paths text[])` implicitly declares `storage_paths` as a
+  PL/pgSQL OUT variable in scope for the whole function body, colliding
+  with `account_deletion_jobs.storage_paths`, a real column of the
+  identical name; the retry branch's `select storage_paths into v_paths
+  from public.account_deletion_jobs where id = v_existing_job_id`
+  had no way to tell Postgres which one it meant.
+  - **Full audit performed, as required by this review**: every table
+    reference in the function now carries an explicit alias, and every
+    `SELECT ... INTO`/`RETURNING ... INTO`/bare column reference is
+    qualified by it — not just the one broken line. `job_id` (the
+    other OUT parameter) was checked explicitly and found NOT at risk
+    (the table's own primary key column is `id`, not `job_id` — no
+    real collision was ever possible there). `state` was checked
+    explicitly and found NOT at risk (never declared as a PL/pgSQL
+    variable in this function; `UPDATE`'s own `SET` target list is
+    always resolved against the target table, never against variables,
+    by Postgres grammar, regardless of naming).
+  - **0050's three recovery functions audited for the same class, as
+    required**: none modified — none were affected.
+    `claim_account_deletion_jobs()` is `LANGUAGE sql` (no declared
+    variables to collide with) and returns whole `account_deletion_jobs`
+    rows directly, never a custom `RETURNS TABLE(name type, ...)` shape
+    — this bug class cannot structurally arise there.
+    `record_account_deletion_auth_result()`/
+    `record_account_deletion_storage_result()` both `RETURNS boolean`
+    (no named OUT parameters at all); their own parameters are all
+    `p_`-prefixed and their locals `v_`-prefixed, matching no real
+    column name (`record_account_deletion_storage_result()`'s parameter
+    is `p_remaining_paths`, deliberately not `storage_paths` — the one
+    detail that would have mattered, and it does not match). `0050`'s
+    own file is untouched.
+- **Testing**: `supabase/tests/migration_0052_self_delete_account_column_ambiguity_fix.test.sql`
+  (new, self-contained, dedicated regression test — seeds its own real
+  non-empty avatar path, executes the first-call branch, then the
+  EXISTING-JOB RETRY branch specifically — the exact call that failed
+  in real local execution — and confirms it both raises no error and
+  returns the exact, unchanged, originally-captured path) — written,
+  not executed (see Status above; disclosed in the test file's own
+  header that testing THIS fix has not itself been run yet, only the
+  bug it fixes was found by real execution).
+  `migration_0049_account_deletion_challenge.test.sql`'s own tests
+  7e/7f already covered this same property conceptually (written
+  before this was known to be a real runtime failure, not just
+  reviewed code) — left unchanged; `0052`'s new file is deliberately
+  its own focused, minimal regression test for this specific fix, not
+  a replacement for that broader coverage.
+- **Context**: Launch Readiness self-service account deletion, fourth PR
+  review pass — real local SQL execution, not static review, is what
+  found this one. Found and fixed before this feature was deployed
+  anywhere; no production account was ever affected (the retry path has
+  never been reachable from production, since this feature has never
+  been deployed).
