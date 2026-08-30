@@ -1935,3 +1935,71 @@ recorded as applied, not the original application date or actor.
   PR review pass (recovery/resume requirement). Found and fixed before
   this feature was deployed anywhere — no production account was ever
   at risk from either gap this migration closes.
+
+## 0051_account_deletion_jobs_wall_clock_updated_at
+
+- **Status**: Proposed — not yet applied to production. Not executed in
+  the authoring session (same environmental limitation as `0044`-`0050`).
+  Real local Supabase/Docker testing of `0044`-`0050` (finally performed,
+  this pass) is what actually found the bug this migration fixes.
+- **File**: `migrations/0051_account_deletion_jobs_wall_clock_updated_at.sql`
+- **Rollback**: `rollbacks/0051_account_deletion_jobs_wall_clock_updated_at_rollback.sql`
+  — no data-loss guard needed (no column/row ever dropped or altered,
+  only which trigger function fires); restores the 0047-original shared
+  trigger, reintroducing this bug for this one table.
+- **Real-testing-found fix**: `migration_0047_account_deletion_jobs.test.sql`'s
+  own test 4 failed for real (`updated_at did not advance on UPDATE`,
+  identical before/after timestamps down to the microsecond). Root
+  cause: `public.set_updated_at()` (the SHARED trigger every
+  `updated_at` column in this codebase uses, `0001`) sets `new.updated_at
+  = now()` — and `now()` is `transaction_timestamp()`, constant for the
+  entire transaction regardless of real elapsed time (confirmed:
+  `pg_sleep()` genuinely blocks, but does not advance `now()`'s own
+  return value within the transaction that called it). Latent since
+  `0001`, for every table; `0047`'s own test happened to be the first in
+  this codebase to actually check multi-statement, same-transaction
+  advancement.
+  - **Intended guarantee, decided and documented**: for
+    `account_deletion_jobs` specifically — durable recovery bookkeeping
+    read by operators and the `0050` recovery worker — `updated_at` must
+    reflect real wall-clock time, including across a second UPDATE
+    within the same transaction (a real case in this PR's own code:
+    `record_account_deletion_auth_result()`/
+    `record_account_deletion_storage_result()`, `0050`, can each issue
+    two sequential UPDATEs to the same job row in one call).
+  - **Fix, deliberately scoped to this one table**: a new dedicated
+    trigger function, `set_account_deletion_jobs_updated_at()`, using
+    `clock_timestamp()` (which DOES advance within a transaction), swapped
+    onto `account_deletion_jobs`'s existing trigger. `public.set_updated_at()`
+    itself is left completely untouched — every other table using it
+    (`project_drafts`, `builds`, the catalog tables, `retailers`, etc.,
+    all outside this PR's scope) is unaffected. This same latent bug
+    likely affects some of them too, in principle — disclosed here as a
+    known, NOT-fixed-here systemic finding, not silently ignored and not
+    silently expanded into a global change without its own dedicated
+    review.
+  - `claimed_at` (`0050`) deliberately keeps using `now()` — a batch
+    claim should give every row in one claim call the identical
+    timestamp, and it is never compared against a same-transaction
+    write, only against an already-committed prior transaction's value.
+    `created_at`/`completed_at`/`account_deletion_challenges.expires_at`
+    are each written once per row, never re-compared within the same
+    transaction — all correctly unchanged. Claim ordering uses
+    `created_at`, never `updated_at` — unaffected either way.
+- **Testing**: `supabase/tests/migration_0051_account_deletion_jobs_wall_clock_updated_at.test.sql`
+  (the trigger now calls the dedicated function, confirmed by identity,
+  not just behavior; the dedicated function's own source genuinely
+  references `clock_timestamp()`; `public.set_updated_at()` and an
+  unrelated table's trigger — `project_drafts` — are both confirmed
+  untouched; ACL) — written, not executed (see Status above).
+  `migration_0047_account_deletion_jobs.test.sql`'s own test 4 updated
+  in place (test logic strengthened with a genuine second-UPDATE-same-
+  transaction case, test 4b, using a real `pg_sleep()`, not a weakened
+  assertion) rather than moved — the table and its `updated_at`
+  guarantee are unchanged in kind, only the underlying trigger
+  implementation is, so the original test's own intent still applies
+  and now actually passes.
+- **Context**: Launch Readiness self-service account deletion, third PR
+  review pass — the first pass in this PR to include real local
+  Supabase/Docker execution rather than static review alone. Found and
+  fixed before this feature was deployed anywhere.

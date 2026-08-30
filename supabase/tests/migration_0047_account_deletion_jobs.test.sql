@@ -74,13 +74,28 @@ end $$;
 rollback to savepoint test_3;
 
 -- ---------------------------------------------------------------------
--- Test 4: updated_at trigger fires on UPDATE.
+-- Test 4: updated_at trigger fires on UPDATE, and genuinely advances
+-- with real wall-clock time -- INCLUDING across a second UPDATE within
+-- the SAME transaction (test 4b).
+--
+-- As of migration 0051_account_deletion_jobs_wall_clock_updated_at.sql,
+-- account_deletion_jobs uses its OWN dedicated trigger function
+-- (set_account_deletion_jobs_updated_at(), clock_timestamp()-based),
+-- not the shared public.set_updated_at() every other updated_at column
+-- in this codebase still uses (that one is transaction_timestamp()-
+-- based -- see 0051's own header for why that matters and why the fix
+-- was scoped to this table only, plus the review finding that produced
+-- it: real local testing caught this test failing exactly because
+-- public.set_updated_at()'s now() does not advance within one
+-- transaction, no matter how much real time -- including a genuine
+-- pg_sleep() -- passes in between).
 -- ---------------------------------------------------------------------
 savepoint test_4;
 do $$
 declare
     v_before timestamptz;
     v_after timestamptz;
+    v_after_2 timestamptz;
 begin
     insert into public.account_deletion_jobs (former_user_id)
     values ('00000000-0000-0000-0000-000000001201');
@@ -94,9 +109,28 @@ begin
     select updated_at into v_after from public.account_deletion_jobs where former_user_id = '00000000-0000-0000-0000-000000001201';
 
     if v_after <= v_before then
-        raise exception 'FAIL (test 4): updated_at did not advance on UPDATE (before=%, after=%)', v_before, v_after using errcode = 'M0047';
+        raise exception 'FAIL (test 4a): updated_at did not advance on UPDATE (before=%, after=%)', v_before, v_after using errcode = 'M0047';
     end if;
-    raise notice 'PASS (test 4): updated_at advances on UPDATE via the shared public.set_updated_at() trigger';
+    raise notice 'PASS (test 4a): updated_at advances on UPDATE via the dedicated set_account_deletion_jobs_updated_at() trigger (0051)';
+
+    -- Test 4b: a SECOND update, still inside this same top-level
+    -- transaction (this whole file runs as one begin/rollback, and
+    -- neither update above opened or closed a transaction of its own)
+    -- -- this is the exact scenario 0051's own header documents as the
+    -- real reason this table needed a wall-clock guarantee: this PR's
+    -- own record_account_deletion_auth_result()/
+    -- record_account_deletion_storage_result() (0050) can each perform
+    -- two sequential UPDATEs against the same job row within one call.
+    perform pg_sleep(0.01);
+
+    update public.account_deletion_jobs set state = 'storage_cleaned' where former_user_id = '00000000-0000-0000-0000-000000001201';
+
+    select updated_at into v_after_2 from public.account_deletion_jobs where former_user_id = '00000000-0000-0000-0000-000000001201';
+
+    if v_after_2 <= v_after then
+        raise exception 'FAIL (test 4b): updated_at did not advance on a SECOND UPDATE within the same transaction (after=%, after_2=%) -- this is exactly the multi-write-per-transaction guarantee 0051 exists to provide', v_after, v_after_2 using errcode = 'M0047';
+    end if;
+    raise notice 'PASS (test 4b): updated_at genuinely advances across a second UPDATE within the same transaction, not just across separate transactions';
 end $$;
 rollback to savepoint test_4;
 

@@ -151,18 +151,70 @@ supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<the project's actual service-rol
 4. `0047_account_deletion_jobs.sql` — the durable orchestration table.
 5. `0049_account_deletion_challenge.sql` — the private, single-use challenge table, `request_account_deletion_challenge()`, and `self_delete_account(uuid)`, the RPC this Edge Function calls. **Supersedes `0048_self_delete_account.sql`** — that migration's zero-argument function is dropped by `0049`, not left callable alongside it; `0048` must still be applied first (`0049` depends on it), but `0049` is what this Edge Function actually targets. See `0049`'s own header for why the zero-argument version was insufficient (it relied on a caller-checked JWT `iat` claim, which Supabase's own routine token-refresh advances without re-verifying the password) and `docs/DEPLOYMENT.md`'s own PR history for the security-review finding that produced this migration.
 6. `0050_account_deletion_recovery.sql` — three new `account_deletion_jobs` columns (`claimed_at`/`claimed_by`/`recovery_attempts`) and the three `service_role`-only functions `§8.2` below's Edge Function calls. Also changes what `delete-account`'s own Step 2/3 job bookkeeping calls (`record_account_deletion_auth_result()`/`record_account_deletion_storage_result()` instead of a raw table update) — deploy `delete-account` itself no earlier than this migration, or its first two RPC calls to those functions will fail (function does not exist yet).
+7. `0051_account_deletion_jobs_wall_clock_updated_at.sql` — not a hard functional blocker for either Edge Function (nothing fails without it), but should be applied before real production use: fixes `account_deletion_jobs.updated_at` so it genuinely reflects wall-clock time across multiple UPDATEs within one transaction (real local testing found the shared, codebase-wide `updated_at` trigger does not — see that migration's own header for the full root cause and why the fix is deliberately scoped to this one table).
 
-**Running the SQL test suite** (all of `0044`-`0050`, against a disposable local stack only — never production):
+**Running the SQL test suite — corrected.** A previous version of this section documented a single loop over `supabase/tests/*.test.sql` as if every file in that glob could run independently against one full `db reset --local`. **That was wrong**, caught by real local testing: three files are NOT independently runnable that way — each requires its own destructive, version-pinned reset plus a specific legacy fixture loaded BEFORE the remaining migrations run, or every assertion in it fails immediately with errors like `relation public._legacy_upgrade_pre_components does not exist`:
 
+- `migration_0020_0033_legacy_upgrade.test.sql` — reset to version `0019`, then `fixtures/legacy_catalog_fixture.sql`.
+- `migration_0042_legacy_upgrade.test.sql` — reset to version `0041`, then `fixtures/legacy_build_status_fixture.sql`.
+- `migration_0044_legacy_upgrade.test.sql` — reset to version `0043`, then `fixtures/production_shaped_user_deletion_fks_fixture.sql`.
+
+Each of those three files' own header already documents its exact required sequence (reset → inject fixture → `migration up` → run the test) — this section does not repeat it, only makes explicit that these three must be run **separately from, and never interleaved with,** the main loop below, and that the main loop must **exclude** them. `migration_0020_0033_fresh_install.test.sql` and `migration_0044_fresh_install.test.sql` are NOT in this category — despite the similar naming, both use a normal full `db reset --local` and belong in the main loop.
+
+**PowerShell (Windows — the primary shell for this repository):**
+
+```powershell
+# 1. Main loop — every test EXCEPT the three legacy-upgrade files above,
+#    against one full db reset (0000-latest).
+npx supabase db reset --local
+$dbUrl = (npx supabase status -o env --local | Where-Object { $_ -match '^DB_URL=' }) -replace '^DB_URL=', '' -replace '"', ''
+
+$mainTests = Get-ChildItem supabase/tests/*.test.sql | Where-Object { $_.Name -notlike '*_legacy_upgrade.test.sql' }
+foreach ($f in $mainTests) {
+    Write-Host "=== $($f.Name) ==="
+    psql $dbUrl -v ON_ERROR_STOP=1 -f $f.FullName
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "FAILED: $($f.Name)"
+        break
+    }
+}
 ```
-supabase db reset --local
-for f in supabase/tests/*.test.sql; do
-    echo "=== $f ==="
-    psql "$(supabase status -o env --local | grep DB_URL | cut -d= -f2- | tr -d '"')" -v ON_ERROR_STOP=1 -f "$f" || { echo "FAILED: $f"; break; }
-done
+
+```powershell
+# 2. The three legacy-upgrade files — run separately, each in its own
+#    version-pinned reset + fixture-injection cycle. Requires the local
+#    Supabase Postgres container's name (find it once with
+#    `docker ps --format "{{.Names}}"` -- the one whose image is
+#    supabase/postgres) and psql on PATH (or substitute the equivalent
+#    `docker exec -i <container> psql ...` form each file's own header
+#    already documents, if psql isn't installed locally).
+$container = "<the container name found above>"
+
+$legacyTests = @(
+    @{ Version = "0019"; Fixture = "supabase/tests/fixtures/legacy_catalog_fixture.sql"; Test = "supabase/tests/migration_0020_0033_legacy_upgrade.test.sql" },
+    @{ Version = "0041"; Fixture = "supabase/tests/fixtures/legacy_build_status_fixture.sql"; Test = "supabase/tests/migration_0042_legacy_upgrade.test.sql" },
+    @{ Version = "0043"; Fixture = "supabase/tests/fixtures/production_shaped_user_deletion_fks_fixture.sql"; Test = "supabase/tests/migration_0044_legacy_upgrade.test.sql" }
+)
+
+foreach ($t in $legacyTests) {
+    Write-Host "=== legacy harness: $($t.Test) (reset to $($t.Version)) ==="
+    npx supabase db reset --local --no-seed --version $($t.Version)
+    Get-Content $($t.Fixture) -Raw | docker exec -i $container psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f -
+    npx supabase migration up --local
+    Get-Content $($t.Test) -Raw | docker exec -i $container psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f -
+}
 ```
 
-This is the complete, documented command — it must run every file under `supabase/tests/*.test.sql` and every one must pass. `supabase/tests/superseded/*.superseded.sql` is deliberately NOT matched by this glob (see that directory's own `README.md`) — those files test an earlier, now-replaced design and are expected to fail if run directly against the current migration chain; that is not a regression and is not part of this command's own success criterion.
+```powershell
+# 3. Restore the local stack to the full, current migration chain
+#    afterward -- step 2 above leaves the database pinned to an old
+#    version plus fixture data, not representative of a real instance.
+npx supabase db reset --local
+```
+
+**A fresh `db reset --local` is required**, not optional — three separate times in the sequence above (once before the main loop; implicitly once per legacy-upgrade file, since each pins to a different historical version; once more at the end to restore full-chain state) — and once again right now regardless, before running any of this, since this PR's own `0051` migration (and everything in this PR) did not exist in whatever local database state was used for the previous test run reported.
+
+**Accuracy correction**: the previous version of this section implied every file under `supabase/tests/*.test.sql` could be executed independently by the same simple loop. That is not true for the three legacy-upgrade files above, and is not claimed here. `supabase/tests/superseded/*.superseded.sql` remains excluded by the glob itself (see that directory's own `README.md`) — those files test an earlier, now-replaced design and are expected to fail if run directly against the current migration chain; that is not a regression.
 
 **Production verification checklist, once deployed** (none of this has been performed yet — this function has not been deployed anywhere beyond implementation review):
 
