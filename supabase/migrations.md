@@ -1778,13 +1778,15 @@ recorded as applied, not the original application date or actor.
   they don't own; creates or resumes a durable job row (`0047`);
   inserts a self-attributed `moderation_actions` audit row exactly once
   per deletion event, even across a retried call.
-- **Testing**: `supabase/tests/migration_0048_self_delete_account.test.sql`
+- **Testing**: originally `supabase/tests/migration_0048_self_delete_account.test.sql`
   (anonymous rejection, no-parameter/security proof, legal-hold
   rejection with a generic message, Storage-path capture correctness,
   the authored-but-not-owned `build_revisions` clear-not-delete case,
   idempotent retry with no duplicate audit row, function identity/
   `SECURITY DEFINER`/`search_path`/ACL) — written, not executed (see
-  Status above).
+  Status above). Since moved, unmodified, to
+  `supabase/tests/superseded/migration_0048_self_delete_account.superseded.sql`
+  (see the `0050` entry below for why).
 - **Context**: Launch Readiness self-service account deletion. The
   transactional database half of `supabase/functions/delete-account`;
   see `docs/DEPLOYMENT.md` §8.1 for the full deployment sequence and

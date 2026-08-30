@@ -5,8 +5,10 @@
 -- (the amr-based, refresh-immune freshness gate), the single-use/
 -- atomic-consumption behavior of account_deletion_challenges, and
 -- self_delete_account(uuid)'s full behavior under its NEW signature —
--- superseding migration_0048_self_delete_account.test.sql's own
--- coverage of the now-dropped zero-argument version. See this file's
+-- superseding supabase/tests/superseded/migration_0048_self_delete_account.superseded.sql's
+-- own coverage of the now-dropped zero-argument version (moved out of
+-- supabase/tests/ in a later review pass — see that file's own header).
+-- See this file's
 -- own security-property tests (2-6) for the exact gaps the review
 -- found and this migration fixes, and test 7e/7f specifically for the
 -- SECOND bug the same review found: 0048's original retry ordering
